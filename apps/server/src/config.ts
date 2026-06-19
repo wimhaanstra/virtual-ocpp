@@ -1,0 +1,73 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { z } from 'zod';
+
+const ConfigSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  HOST: z.string().min(1).default('0.0.0.0'),
+  SQLITE_PATH: z.string().min(1).default('./data/virtual-ocpp.sqlite'),
+  DB_PATH: z.string().min(1).optional(),
+  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+  ADMIN_USERNAME: z.string().min(1).default('admin'),
+  ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD must be at least 8 characters'),
+  OCPP_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
+  OCPP_PUBLIC_URL: z.string().min(1).optional(),
+  COMMUNICATION_LOG_RETENTION_HOURS: z.coerce.number().int().positive().default(24)
+});
+
+export type AppConfig = {
+  nodeEnv: 'development' | 'test' | 'production';
+  port: number;
+  host: string;
+  sqlitePath: string;
+  sessionSecret: string;
+  adminUsername: string;
+  adminPassword: string;
+  ocppBasicAuthPassword?: string;
+  ocppPublicUrl?: string;
+  communicationLogRetentionHours: number;
+};
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  const parsed = ConfigSchema.safeParse(env);
+
+  if (!parsed.success) {
+    throw new Error(
+      `Invalid environment: ${parsed.error.issues.map((issue) => `${issue.path.join('.') || 'env'} ${issue.message}`).join('; ')}`
+    );
+  }
+
+  const sqlitePath = parsed.data.DB_PATH ?? parsed.data.SQLITE_PATH;
+
+  return {
+    nodeEnv: parsed.data.NODE_ENV,
+    port: parsed.data.PORT,
+    host: parsed.data.HOST,
+    sqlitePath,
+    sessionSecret: parsed.data.SESSION_SECRET,
+    adminUsername: parsed.data.ADMIN_USERNAME,
+    adminPassword: parsed.data.ADMIN_PASSWORD,
+    ocppBasicAuthPassword: parsed.data.OCPP_BASIC_AUTH_PASSWORD,
+    ocppPublicUrl: parsed.data.OCPP_PUBLIC_URL,
+    communicationLogRetentionHours: parsed.data.COMMUNICATION_LOG_RETENTION_HOURS
+  };
+}
+
+export function loadConfigFromProcess(): AppConfig {
+  loadEnvFileFromKnownLocations();
+  return loadConfig();
+}
+
+function loadEnvFileFromKnownLocations() {
+  const candidates = [
+    resolve(process.cwd(), '.env'),
+    resolve(process.cwd(), '..', '.env'),
+    resolve(process.cwd(), '..', '..', '.env')
+  ];
+
+  const envPath = candidates.find((candidate) => existsSync(candidate));
+  if (envPath) {
+    process.loadEnvFile(envPath);
+  }
+}

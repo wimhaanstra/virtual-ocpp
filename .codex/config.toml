@@ -1,0 +1,30 @@
+[features]
+multi_agent = true
+
+[agents.backend]
+description = "Node/TypeScript backend, OCPP websocket, API, and persistence work"
+config_file = "agents/backend.toml"
+
+[agents.frontend]
+description = "React/shadcn frontend work"
+config_file = "agents/frontend.toml"
+
+[agents.worker]
+description = "OCPP proxy, reconnect, retry, and background processing work"
+config_file = "agents/worker.toml"
+
+[agents.spec]
+description = "Specs and implementation planning"
+config_file = "agents/spec.toml"
+
+[agents.test]
+description = "Testing and verification"
+config_file = "agents/test.toml"
+
+[agents.documentation]
+description = "Repository documentation"
+config_file = "agents/documentation.toml"
+
+[agents.review]
+description = "Read-only code review"
+config_file = "agents/reviewer.toml"
