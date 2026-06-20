@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Virtual OCPP Brand Directions</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #e7ebef;
+        color: #111827;
+        font-family:
+          "Avenir Next", "Inter", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      .page {
+        display: grid;
+        gap: 28px;
+        padding: 28px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        line-height: 1.1;
+      }
+
+      .intro {
+        max-width: 980px;
+      }
+
+      .intro p,
+      .direction-copy {
+        margin-top: 8px;
+        color: #5b6573;
+      }
+
+      .swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .swatch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #c9d1da;
+        border-radius: 6px;
+        background: #f8fafc;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .dot {
+        width: 18px;
+        height: 18px;
+        border-radius: 4px;
+        background: var(--primary);
+      }
+
+      .direction {
+        display: grid;
+        gap: 14px;
+      }
+
+      .direction-header {
+        display: grid;
+        gap: 4px;
+      }
+
+      .mock-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .mock {
+        --bg: #f3f6f8;
+        --rail: #111827;
+        --rail-text: #dbe4ee;
+        --surface: #ffffff;
+        --surface-2: #edf2f6;
+        --text: #111827;
+        --muted: #607084;
+        --line: #cfd8e3;
+        --primary: #00a7a5;
+        --primary-ink: #062b2b;
+        --primary-soft: #d7f7f4;
+        --good: #12805c;
+        --warn: #b05a00;
+        --bad: #c92828;
+        overflow: hidden;
+        min-height: 520px;
+        border: 1px solid rgba(17, 24, 39, 0.18);
+        border-radius: 5px;
+        background: var(--bg);
+        color: var(--text);
+        box-shadow: 0 22px 54px rgba(15, 23, 42, 0.16);
+      }
+
+      .mock.dark {
+        --bg: #0c1014;
+        --rail: #06080b;
+        --rail-text: #d9e2ec;
+        --surface: #111820;
+        --surface-2: #17222c;
+        --text: #eef4f8;
+        --muted: #92a1b1;
+        --line: rgba(148, 163, 184, 0.2);
+        --primary-soft: color-mix(in srgb, var(--primary) 18%, transparent);
+        --good: #45d391;
+        --warn: #ffb238;
+        --bad: #ff6464;
+        box-shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
+      }
+
+      .cyan {
+        --primary: #00a7a5;
+      }
+
+      .green {
+        --primary: #77b900;
+      }
+
+      .amber {
+        --primary: #ff9d00;
+      }
+
+      .blue {
+        --primary: #2f6bff;
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 56px 172px minmax(0, 1fr);
+        min-height: 520px;
+      }
+
+      .mark-rail {
+        display: grid;
+        align-content: start;
+        justify-items: center;
+        gap: 18px;
+        background: var(--rail);
+        padding: 14px 8px;
+      }
+
+      .logo-mark {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 6px;
+        background: var(--primary);
+        color: var(--primary-ink);
+        font-size: 16px;
+        font-weight: 900;
+      }
+
+      .rail-button {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--rail-text);
+        font-size: 13px;
+      }
+
+      .side {
+        border-right: 1px solid var(--line);
+        background: color-mix(in srgb, var(--surface) 82%, var(--bg));
+        padding: 16px 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 2px;
+        margin-bottom: 24px;
+      }
+
+      .brand strong {
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      .brand span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nav {
+        display: grid;
+        gap: 2px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 32px;
+        border-left: 3px solid transparent;
+        color: var(--muted);
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: 780;
+      }
+
+      .nav-item.active {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+        color: var(--text);
+      }
+
+      .content {
+        display: grid;
+        align-content: start;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .topline {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .topline h3 {
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 30px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface);
+        color: var(--muted);
+        padding: 0 9px;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--primary);
+        border-radius: 4px;
+        background: var(--surface);
+        padding: 8px;
+      }
+
+      .chips,
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .chip,
+      .icon-button,
+      .status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface-2);
+        color: var(--text);
+        padding: 0 8px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .icon-button {
+        width: 30px;
+        padding: 0;
+      }
+
+      .primary {
+        border-color: var(--primary);
+        background: var(--primary);
+        color: var(--primary-ink);
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 12px;
+      }
+
+      .block {
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: var(--surface);
+      }
+
+      .block-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 42px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 10px;
+      }
+
+      .block-head h4 {
+        margin: 0;
+        font-size: 13px;
+      }
+
+      .metric-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        border-top: 4px solid var(--primary);
+      }
+
+      .metric {
+        min-height: 74px;
+        border-right: 1px solid var(--line);
+        padding: 12px;
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 730;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 8px;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 9px 10px;
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .status {
+        min-height: 22px;
+        border-radius: 3px;
+        padding: 0 7px;
+      }
+
+      .good {
+        border-color: color-mix(in srgb, var(--good) 48%, var(--line));
+        background: color-mix(in srgb, var(--good) 12%, transparent);
+        color: var(--good);
+      }
+
+      .warn {
+        border-color: color-mix(in srgb, var(--warn) 48%, var(--line));
+        background: color-mix(in srgb, var(--warn) 12%, transparent);
+        color: var(--warn);
+      }
+
+      .event-list {
+        display: grid;
+      }
+
+      .event {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 8px;
+        border-bottom: 1px solid var(--line);
+        padding: 9px 10px;
+        font-size: 12px;
+      }
+
+      .event:last-child {
+        border-bottom: 0;
+      }
+
+      .event time {
+        color: var(--muted);
+      }
+
+      .event strong {
+        display: block;
+      }
+
+      .form-block {
+        display: grid;
+        gap: 10px;
+        padding: 10px;
+      }
+
+      .form-section {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 10px;
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+
+      .form-section:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .form-section h5 {
+        margin: 0;
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .fields {
+        display: grid;
+        gap: 6px;
+      }
+
+      .input {
+        min-height: 30px;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        background: var(--surface-2);
+        color: var(--muted);
+        padding: 7px 8px;
+        font-size: 12px;
+      }
+
+      @media (max-width: 1150px) {
+        .mock-row,
+        .split {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="intro">
+        <h1>More distinct product directions</h1>
+        <p>
+          These move away from rounded card-heavy defaults: tighter spacing, smaller radii,
+          stronger rails, and a more recognizable primary color. Each option shows a dark dashboard
+          and a light Communication page with events merged in.
+        </p>
+        <div class="swatches">
+          <span class="swatch cyan" style="--primary: #00a7a5"><span class="dot"></span>Ion teal #00A7A5</span>
+          <span class="swatch green" style="--primary: #77b900"><span class="dot"></span>Circuit green #77B900</span>
+          <span class="swatch amber" style="--primary: #ff9d00"><span class="dot"></span>Charge amber #FF9D00</span>
+          <span class="swatch blue" style="--primary: #2f6bff"><span class="dot"></span>Protocol blue #2F6BFF</span>
+        </div>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <h2>Direction 1: Ion Teal</h2>
+          <p class="direction-copy">
+            Product-like without looking like a component library default. Teal fits energy and
+            connectivity, works well in both themes, and keeps warning/error colors clear.
+          </p>
+        </div>
+        <div class="mock-row">
+          <article class="mock dark cyan">
+            <div class="shell">
+              <aside class="mark-rail">
+                <div class="logo-mark">V</div>
+                <div class="rail-button">⌂</div>
+                <div class="rail-button">⇄</div>
+                <div class="rail-button">⚙</div>
+              </aside>
+              <aside class="side">
+                <div class="brand"><strong>Virtual OCPP</strong><span>Charger ops</span></div>
+                <nav class="nav">
+                  <div class="nav-item active"><span>Dashboard</span><span>01</span></div>
+                  <div class="nav-item"><span>Communication</span><span>02</span></div>
+                  <div class="nav-item"><span>Sessions</span><span>03</span></div>
+                  <div class="nav-item"><span>Proxies</span><span>04</span></div>
+                  <div class="nav-item"><span>Tags</span><span>05</span></div>
+                </nav>
+              </aside>
+              <section class="content">
+                <div class="topline">
+                  <div><h3>Dashboard</h3><p class="meta">8881 connected · ws://10.210.15.184:3000/ocpp/8881</p></div>
+                  <button class="switch">◐ Theme</button>
+                </div>
+                <div class="bar">
+                  <div class="chips"><span class="chip primary">Charger 8881</span><span class="chip">24 hours</span><span class="chip">2 proxies</span></div>
+                  <div class="actions"><button class="icon-button">↻</button><button class="icon-button">⋯</button></div>
+                </div>
+                <div class="block">
+                  <div class="block-head"><h4>Live charging</h4><span class="status good">Active</span></div>
+                  <div class="metric-strip">
+                    <div class="metric"><span>Energy</span><strong>7.42</strong><span>kWh</span></div>
+                    <div class="metric"><span>Power</span><strong>10.8</strong><span>kW</span></div>
+                    <div class="metric"><span>Current</span><strong>15.7</strong><span>A</span></div>
+                  </div>
+                </div>
+                <div class="split">
+                  <div class="block">
+                    <div class="block-head"><h4>Proxy health</h4><button class="icon-button">↗</button></div>
+                    <table>
+                      <tr><th>Name</th><th>State</th><th>Last event</th><th></th></tr>
+                      <tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>Heartbeat 12s</td><td><button class="icon-button">⋯</button></td></tr>
+                      <tr><td>evcc</td><td><span class="status warn">Retrying</span></td><td>Backoff 18s</td><td><button class="icon-button">⋯</button></td></tr>
+                    </table>
+                  </div>
+                  <div class="block">
+                    <div class="block-head"><h4>Edit proxy</h4><button class="icon-button">×</button></div>
+                    <div class="form-block">
+                      <div class="form-section"><h5>Identity</h5><div class="fields"><div class="input">Name</div><div class="input">Station ID</div></div></div>
+                      <div class="form-section"><h5>Auth</h5><div class="fields"><div class="input">Username</div><div class="input">Password</div></div></div>
+                      <div class="form-section"><h5>Policy</h5><div class="fields"><div class="input">Deny-capable</div><div class="input">Fail-open</div></div></div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </article>
+          <article class="mock cyan">
+            <div class="shell">
+              <aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⇄</div><div class="rail-button">⌕</div><div class="rail-button">⚙</div></aside>
+              <aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div><nav class="nav"><div class="nav-item"><span>Dashboard</span><span>01</span></div><div class="nav-item active"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside>
+              <section class="content">
+                <div class="topline"><div><h3>Communication</h3><p class="meta">Protocol trace with operational events merged</p></div><button class="switch">◐ Theme</button></div>
+                <div class="bar"><div class="chips"><span class="chip primary">Protocol</span><span class="chip">Events</span><span class="chip">All methods</span><span class="chip">Any source</span></div><div class="actions"><button class="icon-button">⌕</button><button class="icon-button">↻</button></div></div>
+                <div class="split">
+                  <div class="block"><div class="block-head"><h4>Protocol</h4><span class="meta">Retention 24h</span></div><table><tr><th>Time</th><th>Flow</th><th>Method</th><th></th></tr><tr><td>10:22:29</td><td>Server → Charger</td><td>RemoteStopTransaction</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:22:14</td><td>Charger → Server</td><td>MeterValues</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21:08</td><td>Server → Proxy</td><td>Authorize</td><td><button class="icon-button">▸</button></td></tr></table></div>
+                  <div class="block"><div class="block-head"><h4>Events</h4><span class="status good">Merged</span></div><div class="event-list"><div class="event"><time>10:22</time><div><strong>Proxy connected</strong><span class="meta">TapElectric · 8881</span></div></div><div class="event"><time>10:21</time><div><strong>Remote stop accepted</strong><span class="meta">Transaction 9072</span></div></div><div class="event"><time>10:19</time><div><strong>Authorization accepted</strong><span class="meta">Tag 4227105</span></div></div></div></div>
+                </div>
+              </section>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <h2>Direction 2: Circuit Green</h2>
+          <p class="direction-copy">
+            More EV-native and distinctive. The risk is that success states also use green, so
+            status colors need extra labels and border treatment.
+          </p>
+        </div>
+        <div class="mock-row">
+          <article class="mock dark green">
+            <div class="shell"><aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⌂</div><div class="rail-button">⇄</div><div class="rail-button">⚙</div></aside><aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Charger ops</span></div><nav class="nav"><div class="nav-item active"><span>Dashboard</span><span>01</span></div><div class="nav-item"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside><section class="content"><div class="topline"><div><h3>Dashboard</h3><p class="meta">8881 connected · charging</p></div><button class="switch">◐ Theme</button></div><div class="bar"><div class="chips"><span class="chip primary">Charger 8881</span><span class="chip">TapElectric online</span></div><button class="icon-button">↻</button></div><div class="block"><div class="block-head"><h4>Live charging</h4><span class="status good">Active</span></div><div class="metric-strip"><div class="metric"><span>Energy</span><strong>7.42</strong><span>kWh</span></div><div class="metric"><span>Power</span><strong>10.8</strong><span>kW</span></div><div class="metric"><span>Voltage</span><strong>232</strong><span>V</span></div></div></div><div class="block"><div class="block-head"><h4>Proxy health</h4><button class="icon-button">↗</button></div><table><tr><th>Name</th><th>State</th><th>Last event</th><th></th></tr><tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>12s</td><td><button class="icon-button">⋯</button></td></tr><tr><td>evcc</td><td><span class="status warn">Retrying</span></td><td>18s</td><td><button class="icon-button">⋯</button></td></tr></table></div></section></div>
+          </article>
+          <article class="mock green">
+            <div class="shell"><aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⇄</div><div class="rail-button">⌕</div><div class="rail-button">⚙</div></aside><aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div><nav class="nav"><div class="nav-item active"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside><section class="content"><div class="topline"><div><h3>Communication</h3><p class="meta">Protocol trace with operational events merged</p></div><button class="switch">◐ Theme</button></div><div class="bar"><div class="chips"><span class="chip primary">Protocol</span><span class="chip">Events</span><span class="chip">Errors off</span></div><button class="icon-button">⌕</button></div><div class="block"><table><tr><th>Time</th><th>Type</th><th>Message</th><th></th></tr><tr><td>10:22</td><td>Protocol</td><td>MeterValues</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21</td><td>Event</td><td>Remote stop accepted</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:19</td><td>Protocol</td><td>Authorize accepted</td><td><button class="icon-button">▸</button></td></tr></table></div></section></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <h2>Direction 3: Charge Amber</h2>
+          <p class="direction-copy">
+            Strongest brand signal and very recognizable. It feels industrial and charger-specific,
+            but amber must be kept away from warning states to avoid confusion.
+          </p>
+        </div>
+        <div class="mock-row">
+          <article class="mock dark amber">
+            <div class="shell"><aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⌂</div><div class="rail-button">⇄</div><div class="rail-button">⚙</div></aside><aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Charger ops</span></div><nav class="nav"><div class="nav-item active"><span>Dashboard</span><span>01</span></div><div class="nav-item"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside><section class="content"><div class="topline"><div><h3>Dashboard</h3><p class="meta">8881 connected · charging</p></div><button class="switch">◐ Theme</button></div><div class="bar"><div class="chips"><span class="chip primary">Charger 8881</span><span class="chip">24 hours</span></div><button class="icon-button">↻</button></div><div class="block"><div class="block-head"><h4>Live charging</h4><span class="status good">Active</span></div><div class="metric-strip"><div class="metric"><span>Energy</span><strong>7.42</strong><span>kWh</span></div><div class="metric"><span>Power</span><strong>10.8</strong><span>kW</span></div><div class="metric"><span>Current</span><strong>15.7</strong><span>A</span></div></div></div><div class="block"><div class="block-head"><h4>Proxy health</h4><button class="icon-button">↗</button></div><table><tr><th>Name</th><th>State</th><th>Last event</th><th></th></tr><tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>12s</td><td><button class="icon-button">⋯</button></td></tr><tr><td>evcc</td><td><span class="status warn">Retrying</span></td><td>18s</td><td><button class="icon-button">⋯</button></td></tr></table></div></section></div>
+          </article>
+          <article class="mock amber">
+            <div class="shell"><aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⇄</div><div class="rail-button">⌕</div><div class="rail-button">⚙</div></aside><aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div><nav class="nav"><div class="nav-item active"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside><section class="content"><div class="topline"><div><h3>Communication</h3><p class="meta">Protocol trace with operational events merged</p></div><button class="switch">◐ Theme</button></div><div class="bar"><div class="chips"><span class="chip primary">Protocol</span><span class="chip">Events</span><span class="chip">Any source</span></div><button class="icon-button">⌕</button></div><div class="split"><div class="block"><div class="block-head"><h4>Protocol</h4></div><table><tr><th>Time</th><th>Method</th><th></th></tr><tr><td>10:22</td><td>MeterValues</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21</td><td>Authorize</td><td><button class="icon-button">▸</button></td></tr></table></div><div class="block"><div class="block-head"><h4>Events</h4></div><div class="event-list"><div class="event"><time>10:22</time><div><strong>Proxy connected</strong><span class="meta">TapElectric</span></div></div><div class="event"><time>10:21</time><div><strong>Remote stop accepted</strong><span class="meta">Transaction 9072</span></div></div></div></div></div></section></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <h2>Direction 4: Protocol Blue</h2>
+          <p class="direction-copy">
+            Safest technical-product primary. It feels reliable and clear, but it is closest to the
+            default SaaS look unless paired with the sharper rail and tighter density.
+          </p>
+        </div>
+        <div class="mock-row">
+          <article class="mock dark blue">
+            <div class="shell"><aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⌂</div><div class="rail-button">⇄</div><div class="rail-button">⚙</div></aside><aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Charger ops</span></div><nav class="nav"><div class="nav-item active"><span>Dashboard</span><span>01</span></div><div class="nav-item"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside><section class="content"><div class="topline"><div><h3>Dashboard</h3><p class="meta">8881 connected · charging</p></div><button class="switch">◐ Theme</button></div><div class="bar"><div class="chips"><span class="chip primary">Charger 8881</span><span class="chip">24 hours</span></div><button class="icon-button">↻</button></div><div class="block"><div class="block-head"><h4>Live charging</h4><span class="status good">Active</span></div><div class="metric-strip"><div class="metric"><span>Energy</span><strong>7.42</strong><span>kWh</span></div><div class="metric"><span>Power</span><strong>10.8</strong><span>kW</span></div><div class="metric"><span>Current</span><strong>15.7</strong><span>A</span></div></div></div><div class="block"><table><tr><th>Proxy</th><th>Status</th><th>Last event</th><th></th></tr><tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>12s</td><td><button class="icon-button">⋯</button></td></tr><tr><td>evcc</td><td><span class="status warn">Retrying</span></td><td>18s</td><td><button class="icon-button">⋯</button></td></tr></table></div></section></div>
+          </article>
+          <article class="mock blue">
+            <div class="shell"><aside class="mark-rail"><div class="logo-mark">V</div><div class="rail-button">⇄</div><div class="rail-button">⌕</div><div class="rail-button">⚙</div></aside><aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div><nav class="nav"><div class="nav-item active"><span>Communication</span><span>02</span></div><div class="nav-item"><span>Sessions</span><span>03</span></div><div class="nav-item"><span>Proxies</span><span>04</span></div></nav></aside><section class="content"><div class="topline"><div><h3>Communication</h3><p class="meta">Protocol trace with operational events merged</p></div><button class="switch">◐ Theme</button></div><div class="bar"><div class="chips"><span class="chip primary">Protocol</span><span class="chip">Events</span><span class="chip">All methods</span></div><button class="icon-button">⌕</button></div><div class="block"><table><tr><th>Time</th><th>Type</th><th>Message</th><th></th></tr><tr><td>10:22</td><td>Protocol</td><td>RemoteStopTransaction</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21</td><td>Event</td><td>Proxy connected: TapElectric</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:19</td><td>Protocol</td><td>Authorize accepted</td><td><button class="icon-button">▸</button></td></tr></table></div></section></div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
