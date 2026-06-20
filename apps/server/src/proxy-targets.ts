@@ -87,6 +87,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       mode: target.mode,
       outagePolicy: target.outagePolicy
     });
+    await proxyAuthorization?.warmUpTarget(target.chargerId, target.id);
 
     return reply.code(201).send(toPublicProxyTarget(target));
   });
@@ -131,6 +132,9 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       mode: update.mode,
       outagePolicy: update.outagePolicy
     });
+    if (existing.chargerId) {
+      await proxyAuthorization?.warmUpTarget(existing.chargerId, existing.id);
+    }
 
     return toPublicProxyTarget({ ...existing, ...update });
   });

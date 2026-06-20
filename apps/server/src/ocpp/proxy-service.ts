@@ -3,7 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { RPCClient } from 'ocpp-rpc';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { Database } from '../db/client.js';
-import { logs, proxySessionMappings, proxyTargets } from '../db/schema.js';
+import { chargerConnections, chargers, logs, proxySessionMappings, proxyTargets } from '../db/schema.js';
 import type {
   AuthorizeRequest,
   BootNotificationRequest,
@@ -122,6 +122,28 @@ export class ProxyAuthorizationService {
         transactionId: mapping.externalTransactionId
       });
     }
+  }
+
+  async warmUpTarget(chargerId: string, proxyTargetId: string) {
+    const target = this.getEnabledTarget(chargerId, proxyTargetId);
+    if (!target || !this.hasActiveChargerConnection(chargerId)) return;
+
+    const charger = this.db.select().from(chargers).where(eq(chargers.id, chargerId)).limit(1).get();
+    const boot = await this.callTarget(chargerId, target, 'BootNotification', {
+      chargePointVendor: charger?.chargePointVendor ?? 'Virtual OCPP',
+      chargePointModel: charger?.chargePointModel ?? 'Forwarded Charger',
+      firmwareVersion: charger?.firmwareVersion ?? undefined
+    });
+
+    if (!boot.ok) return;
+
+    await this.callTarget(chargerId, target, 'StatusNotification', {
+      connectorId: 1,
+      errorCode: 'NoError',
+      status: 'Available',
+      timestamp: new Date().toISOString()
+    });
+    await this.callTarget(chargerId, target, 'Heartbeat', {});
   }
 
   async close() {
@@ -324,6 +346,17 @@ export class ProxyAuthorizationService {
         )
       )
       .all();
+  }
+
+  private hasActiveChargerConnection(chargerId: string) {
+    return Boolean(
+      this.db
+        .select({ id: chargerConnections.id })
+        .from(chargerConnections)
+        .where(and(eq(chargerConnections.chargerId, chargerId), isNull(chargerConnections.disconnectedAt)))
+        .limit(1)
+        .get()
+    );
   }
 
   private recordProxyLog(input: {

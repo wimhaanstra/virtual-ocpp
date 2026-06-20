@@ -395,6 +395,46 @@ describe('OCPP 1.6 local primary', () => {
     expect(proxy.closedClients).toEqual(['UPSTREAM-DISABLE']);
   });
 
+  it('warms up a newly created proxy target for an already connected charger', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-WARM');
+    cleanup.push(async () => { await charger.close({}); });
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE',
+      firmwareVersion: '3.7'
+    });
+
+    const cookie = await loginAdmin(server.app);
+    const response = await server.app.inject({
+      method: 'POST',
+      url: '/api/proxy-targets',
+      headers: { cookie },
+      payload: {
+        chargerId: 'SMART-EVSE-WARM',
+        name: 'Warm CSMS',
+        url: proxy.endpoint,
+        stationId: 'UPSTREAM-WARM',
+        enabled: true,
+        mode: 'monitor-only',
+        outagePolicy: 'fail-open'
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(proxy.clients).toEqual(['UPSTREAM-WARM']);
+    expect(proxy.calls.map((call) => call.method)).toEqual(['BootNotification', 'StatusNotification', 'Heartbeat']);
+    expect(proxy.calls[0]?.params).toMatchObject({
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE',
+      firmwareVersion: '3.7'
+    });
+  });
+
   it('reconnects on demand after an upstream target disconnects and comes back', async () => {
     const firstProxy = await startRecordingProxyServer();
     const server = await startTestServer();
