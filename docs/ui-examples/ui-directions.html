@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Virtual OCPP UI Directions</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #eef2f6;
+        color: #18212f;
+        font-family:
+          Inter, "Avenir Next", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      .page {
+        display: grid;
+        gap: 28px;
+        padding: 32px;
+      }
+
+      .intro {
+        max-width: 980px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        letter-spacing: 0;
+      }
+
+      .intro p {
+        margin-top: 8px;
+        color: #526071;
+      }
+
+      .direction {
+        display: grid;
+        gap: 14px;
+      }
+
+      .direction-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .direction-header p {
+        max-width: 760px;
+        color: #526071;
+        font-size: 14px;
+      }
+
+      .mock-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .mock {
+        --bg: #f7f9fc;
+        --side: #ffffff;
+        --surface: #ffffff;
+        --surface-2: #f1f5f9;
+        --text: #172033;
+        --muted: #64748b;
+        --line: #d9e2ec;
+        --accent: #2563eb;
+        --accent-soft: #dbeafe;
+        --good: #059669;
+        --warn: #d97706;
+        --bad: #dc2626;
+        --button: #172033;
+        min-height: 560px;
+        overflow: hidden;
+        border: 1px solid rgba(15, 23, 42, 0.12);
+        border-radius: 12px;
+        background: var(--bg);
+        color: var(--text);
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
+      }
+
+      .mock.dark {
+        --bg: #0b1117;
+        --side: #0f1720;
+        --surface: #121c26;
+        --surface-2: #182532;
+        --text: #e7edf3;
+        --muted: #91a1b2;
+        --line: rgba(154, 172, 190, 0.18);
+        --accent: #38bdf8;
+        --accent-soft: rgba(56, 189, 248, 0.14);
+        --good: #34d399;
+        --warn: #f59e0b;
+        --bad: #f87171;
+        --button: #38bdf8;
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+      }
+
+      .warm {
+        --bg: #f3f0ea;
+        --side: #fbfaf7;
+        --surface: #fffdf8;
+        --surface-2: #ebe6dc;
+        --text: #24201b;
+        --muted: #766e63;
+        --line: #ddd4c5;
+        --accent: #0f766e;
+        --accent-soft: #d6f1ea;
+        --good: #15803d;
+        --warn: #b45309;
+        --bad: #b91c1c;
+        --button: #1f2933;
+      }
+
+      .warm.dark {
+        --bg: #151411;
+        --side: #1d1b17;
+        --surface: #25221d;
+        --surface-2: #302b24;
+        --text: #f1ece2;
+        --muted: #b3aa9a;
+        --line: rgba(231, 220, 201, 0.18);
+        --accent: #2dd4bf;
+        --accent-soft: rgba(45, 212, 191, 0.13);
+        --good: #86efac;
+        --warn: #fbbf24;
+        --bad: #fb7185;
+        --button: #2dd4bf;
+      }
+
+      .console {
+        --bg: #f8fafc;
+        --side: #ffffff;
+        --surface: #ffffff;
+        --surface-2: #edf2f7;
+        --text: #05070a;
+        --muted: #475569;
+        --line: #cbd5e1;
+        --accent: #0046ff;
+        --accent-soft: #dbe5ff;
+        --good: #008a4a;
+        --warn: #b45309;
+        --bad: #d00000;
+        --button: #05070a;
+      }
+
+      .console.dark {
+        --bg: #050608;
+        --side: #0a0c10;
+        --surface: #0d1015;
+        --surface-2: #151a22;
+        --text: #f8fafc;
+        --muted: #a2b0c1;
+        --line: #334155;
+        --accent: #4f8cff;
+        --accent-soft: rgba(79, 140, 255, 0.18);
+        --good: #22c55e;
+        --warn: #facc15;
+        --bad: #ff4d4d;
+        --button: #4f8cff;
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        min-height: 560px;
+      }
+
+      .sidebar {
+        border-right: 1px solid var(--line);
+        background: var(--side);
+        padding: 18px 14px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .nav {
+        display: grid;
+        gap: 4px;
+        margin-top: 26px;
+      }
+
+      .nav button {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        min-height: 34px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        padding: 0 9px;
+        text-align: left;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .nav button.active {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .icon {
+        display: grid;
+        width: 18px;
+        height: 18px;
+        place-items: center;
+        font-size: 12px;
+      }
+
+      .content {
+        display: grid;
+        align-content: start;
+        gap: 14px;
+        padding: 18px;
+      }
+
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .top h3 {
+        font-size: 20px;
+      }
+
+      .top-meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 9px;
+      }
+
+      .filter-set {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip,
+      .tool-button,
+      .status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 30px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--text);
+        padding: 0 9px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .tool-button.icon-only {
+        width: 32px;
+        padding: 0;
+      }
+
+      .primary {
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+        background: var(--accent);
+        color: var(--bg);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 12px;
+      }
+
+      .surface {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+      }
+
+      .surface-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+        padding: 12px;
+      }
+
+      .surface-header h4 {
+        margin: 0;
+        font-size: 13px;
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--surface-2);
+        padding: 10px;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 5px;
+        font-size: 18px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 9px 10px;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 10px;
+        text-transform: uppercase;
+      }
+
+      .status {
+        min-height: 24px;
+        border-radius: 999px;
+        padding: 0 8px;
+      }
+
+      .good {
+        border-color: color-mix(in srgb, var(--good) 45%, var(--line));
+        background: color-mix(in srgb, var(--good) 14%, transparent);
+        color: var(--good);
+      }
+
+      .warn {
+        border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+        background: color-mix(in srgb, var(--warn) 14%, transparent);
+        color: var(--warn);
+      }
+
+      .bad {
+        border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+        background: color-mix(in srgb, var(--bad) 14%, transparent);
+        color: var(--bad);
+      }
+
+      .event-list {
+        display: grid;
+        gap: 0;
+      }
+
+      .event {
+        display: grid;
+        grid-template-columns: 84px minmax(0, 1fr);
+        gap: 8px;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 12px;
+        font-size: 12px;
+      }
+
+      .event time {
+        color: var(--muted);
+      }
+
+      .event strong {
+        display: block;
+      }
+
+      .modal-preview {
+        display: grid;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--surface);
+        padding: 12px;
+      }
+
+      .modal-preview .surface-header {
+        padding: 0 0 10px;
+      }
+
+      .form-section {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 10px;
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+
+      .form-section:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .form-section h5 {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+
+      .fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .modal-preview .form-section {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-preview .fields {
+        grid-template-columns: 1fr;
+      }
+
+      .input {
+        min-height: 32px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-2);
+        color: var(--muted);
+        padding: 8px;
+        font-size: 12px;
+      }
+
+      @media (max-width: 1100px) {
+        .mock-row,
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="intro">
+        <h1>Virtual OCPP UI direction examples</h1>
+        <p>
+          Each direction shows the same target UX: no Activity page, operational events folded into
+          Communication, compact filters, icon-only actions, flatter surfaces, cleaner dashboard,
+          and sectioned modal forms.
+        </p>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <div>
+            <h2>Option A: Crisp Ops UI</h2>
+            <p>
+              Neutral slate surfaces with blue/cyan accents. This is the recommended direction:
+              dense enough for troubleshooting, calm enough for daily admin use, and easy to support
+              in both dark and light modes.
+            </p>
+          </div>
+        </div>
+        <div class="mock-row">
+          <article class="mock dark">
+            <div class="app-shell">
+              <aside class="sidebar">
+                <div class="brand"><span class="brand-mark">⚡</span>Virtual OCPP</div>
+                <div class="nav">
+                  <button class="active"><span class="icon">⌂</span>Dashboard</button>
+                  <button><span class="icon">⇄</span>Communication</button>
+                  <button><span class="icon">▣</span>Sessions</button>
+                  <button><span class="icon">◎</span>Proxies</button>
+                  <button><span class="icon">⌁</span>Tags</button>
+                </div>
+              </aside>
+              <section class="content">
+                <div class="top">
+                  <div>
+                    <h3>Dashboard</h3>
+                    <p class="top-meta">Charger 8881 · connected · ws://10.210.15.184:3000/ocpp/8881</p>
+                  </div>
+                  <button class="tool-button icon-only" title="Theme">◐</button>
+                </div>
+                <div class="toolbar">
+                  <div class="filter-set">
+                    <span class="chip">Charger 8881</span>
+                    <span class="chip">Last 24h</span>
+                  </div>
+                  <button class="tool-button icon-only">↻</button>
+                </div>
+                <div class="surface">
+                  <div class="surface-header">
+                    <h4>Live charging</h4>
+                    <span class="status good">Active</span>
+                  </div>
+                  <div class="metric-row">
+                    <div class="metric"><span>Energy</span><strong>7.42 kWh</strong></div>
+                    <div class="metric"><span>Power</span><strong>10.8 kW</strong></div>
+                    <div class="metric"><span>Current</span><strong>15.7 A</strong></div>
+                  </div>
+                </div>
+                <div class="grid">
+                  <div class="surface">
+                    <div class="surface-header"><h4>Proxy health</h4><button class="tool-button icon-only">↗</button></div>
+                    <table>
+                      <tr><th>Name</th><th>State</th><th>Last event</th><th></th></tr>
+                      <tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>Heartbeat 12s ago</td><td><button class="tool-button icon-only">⋯</button></td></tr>
+                      <tr><td>evcc</td><td><span class="status warn">Retrying</span></td><td>Backoff 18s</td><td><button class="tool-button icon-only">⋯</button></td></tr>
+                    </table>
+                  </div>
+                  <div class="modal-preview">
+                    <div class="surface-header"><h4>Edit proxy target</h4><button class="tool-button icon-only">×</button></div>
+                    <div class="form-section"><h5>Identity</h5><div class="fields"><div class="input">Name</div><div class="input">Station ID</div></div></div>
+                    <div class="form-section"><h5>Connection</h5><div class="fields"><div class="input">URL</div><div class="input">Username</div></div></div>
+                    <div class="form-section"><h5>Policy</h5><div class="fields"><div class="input">Mode</div><div class="input">Outage policy</div></div></div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </article>
+          <article class="mock">
+            <div class="app-shell">
+              <aside class="sidebar">
+                <div class="brand"><span class="brand-mark">⚡</span>Virtual OCPP</div>
+                <div class="nav">
+                  <button class="active"><span class="icon">⌂</span>Dashboard</button>
+                  <button><span class="icon">⇄</span>Communication</button>
+                  <button><span class="icon">▣</span>Sessions</button>
+                  <button><span class="icon">◎</span>Proxies</button>
+                  <button><span class="icon">⌁</span>Tags</button>
+                </div>
+              </aside>
+              <section class="content">
+                <div class="top">
+                  <div>
+                    <h3>Communication</h3>
+                    <p class="top-meta">Protocol trace plus operational events</p>
+                  </div>
+                  <button class="tool-button icon-only">◐</button>
+                </div>
+                <div class="toolbar">
+                  <div class="filter-set">
+                    <span class="chip">Protocol</span>
+                    <span class="chip">Events</span>
+                    <span class="chip">Method: All</span>
+                    <span class="chip">Source: Any</span>
+                  </div>
+                  <div><button class="tool-button icon-only">⌕</button><button class="tool-button icon-only">↻</button></div>
+                </div>
+                <div class="grid">
+                  <div class="surface">
+                    <div class="surface-header"><h4>Protocol</h4><span class="top-meta">Retention 24h</span></div>
+                    <table>
+                      <tr><th>Time</th><th>Flow</th><th>Method</th><th></th></tr>
+                      <tr><td>10:22:14</td><td>Charger → Server</td><td>MeterValues</td><td><button class="tool-button icon-only">▸</button></td></tr>
+                      <tr><td>10:22:17</td><td>Server → Proxy</td><td>Heartbeat</td><td><button class="tool-button icon-only">▸</button></td></tr>
+                      <tr><td>10:22:29</td><td>Server → Charger</td><td>RemoteStopTransaction</td><td><button class="tool-button icon-only">▸</button></td></tr>
+                    </table>
+                  </div>
+                  <div class="surface">
+                    <div class="surface-header"><h4>Events</h4><span class="status good">Merged</span></div>
+                    <div class="event-list">
+                      <div class="event"><time>10:22</time><div><strong>Proxy connected</strong><span class="top-meta">TapElectric · charger 8881</span></div></div>
+                      <div class="event"><time>10:21</time><div><strong>Remote stop accepted</strong><span class="top-meta">Transaction 9072</span></div></div>
+                      <div class="event"><time>10:19</time><div><strong>Authorization accepted</strong><span class="top-meta">Tag 4227105</span></div></div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <div>
+            <h2>Option B: Warm Industrial</h2>
+            <p>
+              Softer warm neutrals with teal and amber. More distinctive and less cold, but it may
+              be less immediately readable for dense logs and protocol troubleshooting.
+            </p>
+          </div>
+        </div>
+        <div class="mock-row">
+          <article class="mock warm dark">
+            <div class="app-shell">
+              <aside class="sidebar">
+                <div class="brand"><span class="brand-mark">⚡</span>Virtual OCPP</div>
+                <div class="nav">
+                  <button class="active"><span class="icon">⌂</span>Dashboard</button>
+                  <button><span class="icon">⇄</span>Communication</button>
+                  <button><span class="icon">▣</span>Sessions</button>
+                  <button><span class="icon">◎</span>Proxies</button>
+                  <button><span class="icon">⌁</span>Tags</button>
+                </div>
+              </aside>
+              <section class="content">
+                <div class="top"><div><h3>Dashboard</h3><p class="top-meta">Charger 8881 · connected</p></div><button class="tool-button icon-only">◐</button></div>
+                <div class="surface"><div class="surface-header"><h4>Live charging</h4><span class="status good">Active</span></div><div class="metric-row"><div class="metric"><span>Energy</span><strong>7.42 kWh</strong></div><div class="metric"><span>Power</span><strong>10.8 kW</strong></div><div class="metric"><span>Voltage</span><strong>232 V</strong></div></div></div>
+                <div class="surface"><div class="surface-header"><h4>Proxy health</h4><button class="tool-button icon-only">↻</button></div><table><tr><th>Name</th><th>State</th><th>Last event</th><th></th></tr><tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>Heartbeat 12s ago</td><td><button class="tool-button icon-only">⋯</button></td></tr><tr><td>evcc</td><td><span class="status warn">Retrying</span></td><td>Backoff 18s</td><td><button class="tool-button icon-only">⋯</button></td></tr></table></div>
+              </section>
+            </div>
+          </article>
+          <article class="mock warm">
+            <div class="app-shell">
+              <aside class="sidebar">
+                <div class="brand"><span class="brand-mark">⚡</span>Virtual OCPP</div>
+                <div class="nav"><button class="active"><span class="icon">⇄</span>Communication</button><button><span class="icon">▣</span>Sessions</button><button><span class="icon">◎</span>Proxies</button></div>
+              </aside>
+              <section class="content">
+                <div class="top"><div><h3>Communication</h3><p class="top-meta">Protocol trace plus operational events</p></div><button class="tool-button icon-only">◐</button></div>
+                <div class="toolbar"><div class="filter-set"><span class="chip">Protocol</span><span class="chip">Events</span><span class="chip">Any source</span></div><button class="tool-button icon-only">⌕</button></div>
+                <div class="grid"><div class="surface"><div class="surface-header"><h4>Protocol</h4></div><table><tr><th>Time</th><th>Method</th><th></th></tr><tr><td>10:22</td><td>MeterValues</td><td><button class="tool-button icon-only">▸</button></td></tr><tr><td>10:21</td><td>Authorize</td><td><button class="tool-button icon-only">▸</button></td></tr></table></div><div class="surface"><div class="surface-header"><h4>Events</h4></div><div class="event-list"><div class="event"><time>10:22</time><div><strong>Proxy connected</strong><span class="top-meta">TapElectric</span></div></div><div class="event"><time>10:21</time><div><strong>Remote stop accepted</strong><span class="top-meta">Transaction 9072</span></div></div></div></div></div>
+              </section>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="direction">
+        <div class="direction-header">
+          <div>
+            <h2>Option C: High Contrast Console</h2>
+            <p>
+              Sharper borders, higher contrast, and stronger status color. Fast to scan under
+              pressure, but heavier visually and less polished for everyday configuration work.
+            </p>
+          </div>
+        </div>
+        <div class="mock-row">
+          <article class="mock console dark">
+            <div class="app-shell">
+              <aside class="sidebar"><div class="brand"><span class="brand-mark">⚡</span>Virtual OCPP</div><div class="nav"><button class="active"><span class="icon">⌂</span>Dashboard</button><button><span class="icon">⇄</span>Communication</button><button><span class="icon">▣</span>Sessions</button></div></aside>
+              <section class="content"><div class="top"><div><h3>Dashboard</h3><p class="top-meta">Charger 8881 · connected</p></div><button class="tool-button icon-only">◐</button></div><div class="surface"><div class="surface-header"><h4>Live charging</h4><span class="status good">Active</span></div><div class="metric-row"><div class="metric"><span>Energy</span><strong>7.42 kWh</strong></div><div class="metric"><span>Power</span><strong>10.8 kW</strong></div><div class="metric"><span>Current</span><strong>15.7 A</strong></div></div></div><div class="surface"><table><tr><th>Proxy</th><th>Status</th><th>Last event</th><th></th></tr><tr><td>TapElectric</td><td><span class="status good">Connected</span></td><td>12s ago</td><td><button class="tool-button icon-only">⋯</button></td></tr><tr><td>evcc</td><td><span class="status bad">Offline</span></td><td>2m ago</td><td><button class="tool-button icon-only">⋯</button></td></tr></table></div></section>
+            </div>
+          </article>
+          <article class="mock console">
+            <div class="app-shell">
+              <aside class="sidebar"><div class="brand"><span class="brand-mark">⚡</span>Virtual OCPP</div><div class="nav"><button class="active"><span class="icon">⇄</span>Communication</button><button><span class="icon">▣</span>Sessions</button><button><span class="icon">◎</span>Proxies</button></div></aside>
+              <section class="content"><div class="top"><div><h3>Communication</h3><p class="top-meta">Protocol trace plus operational events</p></div><button class="tool-button icon-only">◐</button></div><div class="toolbar"><div class="filter-set"><span class="chip">Protocol</span><span class="chip">Events</span><span class="chip">Errors only</span></div><button class="tool-button icon-only">⌕</button></div><div class="surface"><table><tr><th>Time</th><th>Type</th><th>Message</th><th></th></tr><tr><td>10:22:29</td><td>Protocol</td><td>RemoteStopTransaction</td><td><button class="tool-button icon-only">▸</button></td></tr><tr><td>10:21:09</td><td>Event</td><td>Proxy connected: TapElectric</td><td><button class="tool-button icon-only">▸</button></td></tr><tr><td>10:19:44</td><td>Protocol</td><td>Authorize accepted</td><td><button class="tool-button icon-only">▸</button></td></tr></table></div></section>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
