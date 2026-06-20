@@ -18,6 +18,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Per-target fail-open and fail-closed outage policy
 - Persistent outbound OCPP mirroring for supported charger calls
 - Per-target external transaction id mapping for mirrored sessions
+- Repo-local OCPP charger simulator for demos and smoke tests
 - Protected operator visibility APIs for charger connections, sessions, and logs
 - Protected home dashboard as the default admin view, showing OCPP connection info, protocol/auth requirements without secrets, charger connection status, summary metrics, and quick links
 - Protected communication journal API/page with redacted charger/server/proxy protocol payloads, source/target filtering, and configurable automatic purge
@@ -62,6 +63,18 @@ npm run build
 Tests should stay focused on the changed behavior for each slice. Future OCPP tests should use fake OCPP clients and external backend stubs rather than live charger hardware.
 
 The OCPP integration tests bind a local ephemeral port. In sandboxed environments they may need approval to run with normal localhost networking permissions.
+
+## Simulator Workflow
+
+Run the repo-local OCPP charger simulator from the root:
+
+```sh
+npm run simulator -- --charger-id SIM-001 --tag-id SIM-TAG-001 --ensure-tag
+```
+
+The simulator uses `ocpp-rpc` as a charger client and sends a full session flow through the real websocket endpoint. `--ensure-tag` uses the protected admin API to create or enable the configured tag and grant access to the simulator charger after the charger has connected. This keeps simulator setup aligned with the same tag access rules used by Smart EVSE traffic.
+
+Use `--keep-open` when you want the dashboard to continue showing the simulator as connected after the demo session. Use `npm run simulator -- --help` to see all CLI options.
 
 ## Tag Workflow
 

@@ -1,0 +1,400 @@
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { RPCClient } from 'ocpp-rpc';
+
+type SimulatorOptions = {
+  url: string;
+  chargerId: string;
+  tagId: string;
+  connectorId: number;
+  meterStartWh: number;
+  meterStepWh: number;
+  meterSamples: number;
+  sampleIntervalMs: number;
+  heartbeatCount: number;
+  heartbeatIntervalMs: number;
+  basicAuthPassword?: string;
+  ensureTag: boolean;
+  adminUrl: string;
+  adminUsername: string;
+  adminPassword: string;
+  keepOpen: boolean;
+  help: boolean;
+};
+
+type TagResponse = {
+  id: string;
+  uuid: string;
+  enabled: boolean;
+  chargerAccess?: Array<{
+    chargerId: string;
+    enabled: boolean;
+  }>;
+};
+
+type OcppClient = InstanceType<typeof RPCClient>;
+
+const DEFAULT_CHARGER_ID = 'SIM-001';
+const DEFAULT_TAG_ID = 'SIM-TAG-001';
+
+export function parseSimulatorArgs(argv: string[], env: NodeJS.ProcessEnv = process.env): SimulatorOptions {
+  const values = new Map<string, string>();
+  const flags = new Set<string>();
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg.startsWith('--')) {
+      throw new Error(`Unexpected positional argument: ${arg}`);
+    }
+
+    const [rawKey, inlineValue] = arg.slice(2).split('=', 2);
+    if (isBooleanFlag(rawKey)) {
+      flags.add(rawKey);
+      continue;
+    }
+
+    const value = inlineValue ?? argv[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Error(`Missing value for --${rawKey}`);
+    }
+    values.set(rawKey, value);
+    if (inlineValue === undefined) index += 1;
+  }
+
+  const url = values.get('url') ?? env.SIMULATOR_OCPP_URL ?? 'ws://localhost:3000/ocpp';
+  const adminUrl = values.get('admin-url') ?? env.SIMULATOR_ADMIN_URL ?? inferAdminUrl(url);
+
+  return {
+    url,
+    chargerId: values.get('charger-id') ?? env.SIMULATOR_CHARGER_ID ?? DEFAULT_CHARGER_ID,
+    tagId: values.get('tag-id') ?? env.SIMULATOR_TAG_ID ?? DEFAULT_TAG_ID,
+    connectorId: parsePositiveInteger(values.get('connector-id') ?? env.SIMULATOR_CONNECTOR_ID ?? '1', 'connector-id'),
+    meterStartWh: parseNonNegativeInteger(values.get('meter-start-wh') ?? env.SIMULATOR_METER_START_WH ?? '1000', 'meter-start-wh'),
+    meterStepWh: parseNonNegativeInteger(values.get('meter-step-wh') ?? env.SIMULATOR_METER_STEP_WH ?? '500', 'meter-step-wh'),
+    meterSamples: parseNonNegativeInteger(values.get('meter-samples') ?? env.SIMULATOR_METER_SAMPLES ?? '3', 'meter-samples'),
+    sampleIntervalMs: parseNonNegativeInteger(values.get('sample-interval-ms') ?? env.SIMULATOR_SAMPLE_INTERVAL_MS ?? '1000', 'sample-interval-ms'),
+    heartbeatCount: parseNonNegativeInteger(values.get('heartbeat-count') ?? env.SIMULATOR_HEARTBEAT_COUNT ?? '1', 'heartbeat-count'),
+    heartbeatIntervalMs: parseNonNegativeInteger(values.get('heartbeat-interval-ms') ?? env.SIMULATOR_HEARTBEAT_INTERVAL_MS ?? '60000', 'heartbeat-interval-ms'),
+    basicAuthPassword: values.get('basic-auth-password') ?? env.SIMULATOR_BASIC_AUTH_PASSWORD ?? env.OCPP_BASIC_AUTH_PASSWORD,
+    ensureTag: flags.has('ensure-tag') || env.SIMULATOR_ENSURE_TAG === 'true',
+    adminUrl,
+    adminUsername: values.get('admin-username') ?? env.SIMULATOR_ADMIN_USERNAME ?? env.ADMIN_USERNAME ?? 'admin',
+    adminPassword: values.get('admin-password') ?? env.SIMULATOR_ADMIN_PASSWORD ?? env.ADMIN_PASSWORD ?? '',
+    keepOpen: flags.has('keep-open') || env.SIMULATOR_KEEP_OPEN === 'true',
+    help: flags.has('help')
+  };
+}
+
+export function inferAdminUrl(ocppUrl: string) {
+  const parsed = new URL(ocppUrl);
+  parsed.protocol = parsed.protocol === 'wss:' ? 'https:' : 'http:';
+  parsed.pathname = '';
+  parsed.search = '';
+  parsed.hash = '';
+  return parsed.toString().replace(/\/$/, '');
+}
+
+export function usage() {
+  return `OCPP charger simulator
+
+Usage:
+  npm run simulator --workspace=@virtual-ocpp/server -- [options]
+  npm run simulator -- [options]
+
+Options:
+  --url <ws-url>                  OCPP websocket endpoint. Default: ws://localhost:3000/ocpp
+  --charger-id <id>               Charger identity. Default: ${DEFAULT_CHARGER_ID}
+  --tag-id <id>                   RFID/tag id used for Authorize and StartTransaction. Default: ${DEFAULT_TAG_ID}
+  --connector-id <number>         Connector id. Default: 1
+  --meter-start-wh <number>       Start meter value. Default: 1000
+  --meter-step-wh <number>        Wh added per meter sample. Default: 500
+  --meter-samples <number>        Number of MeterValues calls. Default: 3
+  --sample-interval-ms <number>   Delay between meter samples. Default: 1000
+  --heartbeat-count <number>      Heartbeats before authorization. Default: 1
+  --heartbeat-interval-ms <num>   Delay used by --keep-open heartbeats. Default: 60000
+  --basic-auth-password <value>   OCPP Basic Auth password when the server requires it.
+  --ensure-tag                    Login to admin API, create/enable tag, and grant charger access.
+  --admin-url <http-url>          Admin API base URL. Default: inferred from --url
+  --admin-username <value>        Admin username. Default: ADMIN_USERNAME or admin
+  --admin-password <value>        Admin password. Default: ADMIN_PASSWORD
+  --keep-open                     Keep the websocket open and continue Heartbeat calls.
+  --help                          Show this help text.
+
+Environment aliases use SIMULATOR_* names, for example SIMULATOR_CHARGER_ID and SIMULATOR_ENSURE_TAG=true.
+`;
+}
+
+async function runSimulator(options: SimulatorOptions) {
+  if (options.help) {
+    console.log(usage());
+    return;
+  }
+
+  const client = new RPCClient({
+    endpoint: options.url,
+    identity: options.chargerId,
+    password: options.basicAuthPassword,
+    protocols: ['ocpp1.6'],
+    strictMode: true
+  } as ConstructorParameters<typeof RPCClient>[0]) as OcppClient;
+
+  console.log(`Connecting ${options.chargerId} to ${options.url}`);
+  await client.connect();
+
+  try {
+    const boot = await call(client, 'BootNotification', {
+      chargePointVendor: 'Virtual OCPP',
+      chargePointModel: 'Simulator',
+      firmwareVersion: 'simulator-1'
+    });
+    console.log(`BootNotification: ${JSON.stringify(boot)}`);
+
+    await call(client, 'StatusNotification', {
+      connectorId: options.connectorId,
+      errorCode: 'NoError',
+      status: 'Available',
+      timestamp: new Date().toISOString()
+    });
+
+    for (let index = 0; index < options.heartbeatCount; index += 1) {
+      const heartbeat = await call(client, 'Heartbeat', {});
+      console.log(`Heartbeat ${index + 1}/${options.heartbeatCount}: ${JSON.stringify(heartbeat)}`);
+    }
+
+    if (options.ensureTag) {
+      await ensureTagAccess(options);
+    }
+
+    const authorization = await call(client, 'Authorize', { idTag: options.tagId }) as { idTagInfo?: { status?: string } };
+    const authorizationStatus = authorization.idTagInfo?.status ?? 'Unknown';
+    console.log(`Authorize ${options.tagId}: ${authorizationStatus}`);
+
+    const start = await call(client, 'StartTransaction', {
+      connectorId: options.connectorId,
+      idTag: options.tagId,
+      meterStart: options.meterStartWh,
+      timestamp: new Date().toISOString()
+    }) as { transactionId?: number; idTagInfo?: { status?: string } };
+    const startStatus = start.idTagInfo?.status ?? 'Unknown';
+    console.log(`StartTransaction: ${startStatus}, transactionId=${start.transactionId ?? 'none'}`);
+
+    if (startStatus !== 'Accepted' || typeof start.transactionId !== 'number') {
+      console.log('Transaction was not accepted. MeterValues and StopTransaction were skipped.');
+      return;
+    }
+
+    await call(client, 'StatusNotification', {
+      connectorId: options.connectorId,
+      errorCode: 'NoError',
+      status: 'Charging',
+      timestamp: new Date().toISOString()
+    });
+
+    let meterWh = options.meterStartWh;
+    for (let index = 0; index < options.meterSamples; index += 1) {
+      meterWh += options.meterStepWh;
+      if (index > 0 && options.sampleIntervalMs > 0) await sleep(options.sampleIntervalMs);
+      await call(client, 'MeterValues', {
+        connectorId: options.connectorId,
+        transactionId: start.transactionId,
+        meterValue: [
+          {
+            timestamp: new Date().toISOString(),
+            sampledValue: [
+              {
+                value: String(meterWh),
+                measurand: 'Energy.Active.Import.Register',
+                unit: 'Wh',
+                context: 'Sample.Periodic'
+              }
+            ]
+          }
+        ]
+      });
+      console.log(`MeterValues ${index + 1}/${options.meterSamples}: ${meterWh} Wh`);
+    }
+
+    const stop = await call(client, 'StopTransaction', {
+      transactionId: start.transactionId,
+      meterStop: meterWh,
+      timestamp: new Date().toISOString(),
+      reason: 'Local'
+    });
+    console.log(`StopTransaction: ${JSON.stringify(stop)}`);
+
+    await call(client, 'StatusNotification', {
+      connectorId: options.connectorId,
+      errorCode: 'NoError',
+      status: 'Available',
+      timestamp: new Date().toISOString()
+    });
+
+    if (options.keepOpen) {
+      console.log(`Keeping ${options.chargerId} online. Press Ctrl+C to stop.`);
+      await keepHeartbeatLoop(client, options.heartbeatIntervalMs);
+    }
+  } finally {
+    if (!options.keepOpen) {
+      await client.close({});
+      console.log('Simulator disconnected.');
+    }
+  }
+}
+
+async function call(client: OcppClient, method: string, params: Record<string, unknown>) {
+  console.log(`> ${method}`);
+  return client.call(method, params);
+}
+
+async function ensureTagAccess(options: SimulatorOptions) {
+  if (!options.adminPassword) {
+    throw new Error('--ensure-tag requires --admin-password or ADMIN_PASSWORD in the environment');
+  }
+
+  const cookie = await loginAdmin(options);
+  let tags = await adminRequest<TagResponse[]>(options, '/api/tags', { cookie });
+  let tag = tags.find((candidate) => candidate.uuid === options.tagId);
+
+  if (!tag) {
+    tag = await adminRequest<TagResponse>(options, '/api/tags', {
+      method: 'POST',
+      cookie,
+      body: {
+        uuid: options.tagId,
+        label: `Simulator ${options.tagId}`,
+        enabled: true
+      }
+    });
+    console.log(`Created simulator tag ${options.tagId}`);
+  } else if (!tag.enabled) {
+    tag = await adminRequest<TagResponse>(options, `/api/tags/${encodeURIComponent(tag.id)}`, {
+      method: 'PATCH',
+      cookie,
+      body: {
+        enabled: true
+      }
+    });
+    console.log(`Enabled simulator tag ${options.tagId}`);
+  }
+
+  tags = await adminRequest<TagResponse[]>(options, '/api/tags', { cookie });
+  tag = tags.find((candidate) => candidate.uuid === options.tagId);
+  if (!tag) throw new Error(`Tag ${options.tagId} was not found after creation`);
+
+  const existingAccess = tag.chargerAccess?.find((access) => access.chargerId === options.chargerId);
+  if (existingAccess?.enabled) {
+    console.log(`Tag ${options.tagId} already has access to ${options.chargerId}`);
+    return;
+  }
+
+  await adminRequest(options, `/api/tags/${encodeURIComponent(tag.id)}/chargers/${encodeURIComponent(options.chargerId)}`, {
+    method: 'PUT',
+    cookie,
+    body: {
+      enabled: true
+    }
+  });
+  console.log(`Granted ${options.tagId} access to ${options.chargerId}`);
+}
+
+async function loginAdmin(options: SimulatorOptions) {
+  const response = await fetch(`${options.adminUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      username: options.adminUsername,
+      password: options.adminPassword
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Admin login failed with HTTP ${response.status}`);
+  }
+
+  const cookie = response.headers.get('set-cookie');
+  if (!cookie) throw new Error('Admin login did not return a session cookie');
+  return cookie.split(';')[0];
+}
+
+async function adminRequest<T = unknown>(
+  options: SimulatorOptions,
+  path: string,
+  request: {
+    method?: string;
+    cookie: string;
+    body?: unknown;
+  }
+): Promise<T> {
+  const response = await fetch(`${options.adminUrl}${path}`, {
+    method: request.method ?? 'GET',
+    headers: {
+      cookie: request.cookie,
+      ...(request.body === undefined ? {} : { 'content-type': 'application/json' })
+    },
+    body: request.body === undefined ? undefined : JSON.stringify(request.body)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Admin request ${request.method ?? 'GET'} ${path} failed with HTTP ${response.status}: ${text}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function keepHeartbeatLoop(client: OcppClient, intervalMs: number) {
+  let count = 0;
+  while (true) {
+    if (intervalMs > 0) await sleep(intervalMs);
+    count += 1;
+    const heartbeat = await call(client, 'Heartbeat', {});
+    console.log(`Heartbeat keep-open ${count}: ${JSON.stringify(heartbeat)}`);
+  }
+}
+
+function parsePositiveInteger(value: string, name: string) {
+  const parsed = parseNonNegativeInteger(value, name);
+  if (parsed < 1) throw new Error(`--${name} must be at least 1`);
+  return parsed;
+}
+
+function parseNonNegativeInteger(value: string, name: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`--${name} must be a non-negative integer`);
+  }
+  return parsed;
+}
+
+function isBooleanFlag(key: string) {
+  return ['ensure-tag', 'keep-open', 'help'].includes(key);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadEnvFileFromKnownLocations() {
+  const candidates = [
+    resolve(process.cwd(), '.env'),
+    resolve(process.cwd(), '..', '.env'),
+    resolve(process.cwd(), '..', '..', '.env')
+  ];
+  const envPath = candidates.find((candidate) => existsSync(candidate));
+  if (envPath) process.loadEnvFile(envPath);
+}
+
+function isMainModule() {
+  return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+if (isMainModule()) {
+  loadEnvFileFromKnownLocations();
+  runSimulator(parseSimulatorArgs(process.argv.slice(2))).catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

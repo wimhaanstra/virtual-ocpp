@@ -15,26 +15,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Communication journal: separate protected protocol trace table/API/page for redacted charger/server/proxy OCPP communication, source/target filtering, expandable payloads, and configurable automatic purge.
 - Charger context and per-charger access: auto-register chargers, select charger context in the frontend, scope proxy targets to one charger, and require explicit per-charger tag access.
 - Persistent proxy connections: reuse one upstream OCPP websocket connection per charger/proxy target, evict failed connections, and apply in-memory reconnect backoff while preserving fail-open/fail-closed behavior.
+- OCPP charger simulator: repo-local CLI fake charger for demos and smoke tests, configurable charger/tag/meter values, optional tag seeding through the admin API, and full session flow.
 
 ## Next Candidate Slices
-
-### Slice 5.1c: OCPP Charger Simulator
-
-Goal: provide a built-in or repo-local simulator for development and demos without physical charger hardware.
-
-Scope:
-
-- Add a simulator that can connect to the local OCPP websocket endpoint as a fake charger.
-- Support scripted `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `MeterValues`, `StatusNotification`, and `StopTransaction` flows.
-- Allow setting charger id, tag id, connector id, meter values, and timing.
-- Document simulator usage for local development and deployment smoke tests.
-- Keep simulator traffic clearly labeled in logs or configured charger ids.
-
-Acceptance criteria:
-
-- A developer can run one command and see a fake charger connect, start a session, emit meter values, and stop the session.
-- Simulator sessions appear in the admin sessions/activity pages.
-- The simulator can test accepted and rejected tag paths.
 
 ### Slice 5.4: Per-Proxy Tag Mapping
 

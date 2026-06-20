@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, persistent outbound OCPP mirroring, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. Per-proxy tag mapping, the OCPP charger simulator, and the production Docker image are planned but not implemented yet.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. Per-proxy tag mapping and the production Docker image are planned but not implemented yet.
 
 ## Stack
 
@@ -48,6 +48,7 @@ npm run dev          # run server and web dev processes
 npm run dev:server   # run Fastify server only
 npm run dev:web      # run Vite frontend only
 npm run dev:stop     # stop Virtual OCPP dev server processes
+npm run simulator     # run the local OCPP charger simulator
 npm run build        # build all workspaces
 npm test             # run all workspace tests
 npm run lint         # typecheck all workspaces
@@ -115,6 +116,30 @@ When an upstream target returns its own transaction id from `StartTransaction`, 
 
 Charging sessions, meter samples, charger connection events, authorization decisions, and status notifications are persisted to SQLite.
 
+## OCPP Charger Simulator
+
+The simulator connects as a fake OCPP 1.6j charger and runs a full demo flow: `BootNotification`, `StatusNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `MeterValues`, `StopTransaction`, and final `StatusNotification`.
+
+Run it against a local server:
+
+```sh
+npm run simulator -- --charger-id SIM-001 --tag-id SIM-TAG-001 --ensure-tag
+```
+
+`--ensure-tag` logs into the admin API using `ADMIN_USERNAME` and `ADMIN_PASSWORD`, creates/enables the tag if needed, and grants it access to the simulator charger. Without `--ensure-tag`, unknown tags are expected to be rejected by local authorization.
+
+Useful options:
+
+- `--url ws://localhost:3000/ocpp`: OCPP websocket endpoint.
+- `--charger-id SIM-001`: charger identity.
+- `--tag-id SIM-TAG-001`: tag id used for authorization and session start.
+- `--meter-samples 3`: number of meter samples to emit.
+- `--sample-interval-ms 1000`: delay between meter samples.
+- `--basic-auth-password ...`: charger Basic Auth password when `OCPP_BASIC_AUTH_PASSWORD` is configured.
+- `--keep-open`: keep the websocket connected and continue heartbeats after the demo session.
+
+The simulator also supports `SIMULATOR_*` environment variables, for example `SIMULATOR_CHARGER_ID`, `SIMULATOR_TAG_ID`, and `SIMULATOR_ENSURE_TAG=true`.
+
 ## Admin Management
 
 The whole frontend interface is protected by the local admin session. Unauthenticated users only see the sign-in screen.
@@ -140,7 +165,6 @@ Tag access and proxy target changes affect OCPP behavior immediately because the
 
 ## Planned V1 Features
 
-- OCPP charger simulator for local development, demos, and deployment smoke tests.
 - Exact per-proxy tag ID mappings for outbound `Authorize` and `StartTransaction`.
 - Single Docker image with persistent SQLite volume.
 
