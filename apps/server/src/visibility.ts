@@ -1,9 +1,10 @@
-import { desc, eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargerConnections, chargingSessions, logs } from './db/schema.js';
+import { chargerConnections, chargingSessions, logs, proxySessionMappings } from './db/schema.js';
 
 const RECENT_LIMIT = 50;
 const RECENT_LOG_LIMIT = 100;
@@ -45,6 +46,61 @@ export function registerVisibilityRoutes(app: FastifyInstance, db: Database) {
       : query.orderBy(desc(chargingSessions.startedAt)).limit(RECENT_LIMIT).all();
 
     return rows.map(toPublicChargingSession);
+  });
+
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/close', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    if (session.status !== 'active') {
+      return toPublicChargingSession(session);
+    }
+
+    const stoppedAt = new Date();
+    db.update(chargingSessions)
+      .set({
+        stoppedAt,
+        stopReason: 'OperatorClosed',
+        status: 'stopped'
+      })
+      .where(eq(chargingSessions.id, session.id))
+      .run();
+
+    db.update(proxySessionMappings)
+      .set({ stoppedAt })
+      .where(
+        and(
+          eq(proxySessionMappings.chargerId, session.chargerId),
+          eq(proxySessionMappings.localTransactionId, session.transactionId),
+          isNull(proxySessionMappings.stoppedAt)
+        )
+      )
+      .run();
+
+    db.insert(logs).values({
+      id: randomUUID(),
+      level: 'warn',
+      category: 'session',
+      message: 'charging session manually closed',
+      chargerId: session.chargerId,
+      transactionId: session.transactionId,
+      metadata: JSON.stringify({
+        connectorId: session.connectorId,
+        reason: 'OperatorClosed'
+      }),
+      createdAt: stoppedAt
+    }).run();
+
+    return toPublicChargingSession({
+      ...session,
+      stoppedAt,
+      stopReason: 'OperatorClosed',
+      status: 'stopped'
+    });
   });
 
   app.get('/api/logs', async (request, reply) => {

@@ -174,10 +174,13 @@ The current frontend includes global tag management, selected-charger tag access
 - View whether a proxy target has stored credentials without exposing the username or password.
 - Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, active charging energy/power/current/voltage when available, summary metrics, and quick links to operational pages.
 - View recent charging sessions.
+- Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
 - View charger connection activity and recent logs.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.
 
 Tag access and proxy target changes affect OCPP behavior immediately because the server reads current SQLite state during authorization and proxied calls. Proxy target edits and deletes are rejected while that charger/target has an active mirrored transaction mapping, so in-flight upstream sessions are not silently orphaned.
+
+When a charger starts a new accepted transaction on a connector, Virtual OCPP automatically closes any older active local session on that same charger connector with reason `ReplacedByNewTransaction`. Other connectors on the same charger are left untouched.
 
 ## Planned V1 Features
 

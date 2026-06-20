@@ -637,6 +637,99 @@ describe('app', () => {
     expect(rows.find((row) => row.id === activeConnectionId)?.disconnectedAt).toBeNull();
   });
 
+  it('closes stale active sessions on the same connector before creating a new session', () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const repository = new OcppRepository(tempDb.db);
+
+    repository.createSession({
+      chargerId: 'SMART-EVSE-SESSION',
+      connectorId: 1,
+      transactionId: 100,
+      idTag: 'TAG-1',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      meterStart: 1000
+    });
+
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'mapping-stale',
+      chargerId: 'SMART-EVSE-SESSION',
+      proxyTargetId: 'proxy-1',
+      localTransactionId: 100,
+      externalTransactionId: 200,
+      createdAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null
+    }).run();
+
+    repository.createSession({
+      chargerId: 'SMART-EVSE-SESSION',
+      connectorId: 1,
+      transactionId: 101,
+      idTag: 'TAG-1',
+      startedAt: new Date('2026-06-19T09:15:00.000Z'),
+      meterStart: 1100
+    });
+
+    const rows = tempDb.db.select().from(chargingSessions).all();
+    expect(rows.find((row) => row.transactionId === 100)).toMatchObject({
+      status: 'stopped',
+      stopReason: 'ReplacedByNewTransaction',
+      stoppedAt: new Date('2026-06-19T09:15:00.000Z')
+    });
+    expect(rows.find((row) => row.transactionId === 101)).toMatchObject({ status: 'active' });
+    expect(tempDb.db.select().from(proxySessionMappings).get()?.stoppedAt).toEqual(new Date('2026-06-19T09:15:00.000Z'));
+  });
+
+  it('allows operators to manually close lingering active sessions', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-lingering',
+      chargerId: 'SMART-EVSE-LINGER',
+      connectorId: 1,
+      transactionId: 300,
+      idTag: 'TAG-1',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'mapping-lingering',
+      chargerId: 'SMART-EVSE-LINGER',
+      proxyTargetId: 'proxy-1',
+      localTransactionId: 300,
+      externalTransactionId: 400,
+      createdAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null
+    }).run();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-lingering/close',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: 'session-lingering',
+      status: 'stopped',
+      active: false,
+      stopReason: 'OperatorClosed'
+    });
+    expect(tempDb.db.select().from(chargingSessions).get()?.status).toBe('stopped');
+    expect(tempDb.db.select().from(proxySessionMappings).get()?.stoppedAt).toBeInstanceOf(Date);
+
+    await app.close();
+  });
+
   it('upgrades existing meter sample tables with normalized columns and indexes', () => {
     const sqlite = new Database(':memory:');
     try {

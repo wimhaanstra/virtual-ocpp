@@ -733,6 +733,29 @@ export default function App() {
     setChargingStatsStatus("ready");
   }
 
+  async function closeChargingSession(session: ChargingSession) {
+    setBusy(true);
+    setMessage(`Closing session ${session.transactionId}...`);
+    try {
+      const response = await fetch(`/api/sessions/${session.id}/close`, {
+        method: "POST",
+        credentials: "include"
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        setMessage("Could not close charging session.");
+        return;
+      }
+
+      setMessage(`Closed session ${session.transactionId}.`);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadLogs(selectedChargerId)]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadLogs(chargerId = selectedChargerId) {
     const data = await fetchAdminJson<LogEntry[]>(withChargerContext("/api/logs", chargerId));
     if (data === null) return;
@@ -1528,6 +1551,7 @@ export default function App() {
                       <th>Stopped</th>
                       <th>Meter Wh</th>
                       <th>Reason</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1550,6 +1574,22 @@ export default function App() {
                           {session.stopMeterWh ?? "-"}
                         </td>
                         <td>{session.stopReason || "-"}</td>
+                        <td>
+                          {session.active ? (
+                            <Button
+                              type="button"
+                              className="button-secondary icon-button"
+                              onClick={() => void closeChargingSession(session)}
+                              disabled={busy}
+                              title="Close lingering session"
+                              aria-label={`Close lingering session ${session.transactionId}`}
+                            >
+                              <PowerOff aria-hidden="true" />
+                            </Button>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
-import { chargerConnections, chargers, chargingSessions, logs, meterSamples, tagChargerAccess, tags } from '../db/schema.js';
+import {
+  chargerConnections,
+  chargers,
+  chargingSessions,
+  logs,
+  meterSamples,
+  proxySessionMappings,
+  tagChargerAccess,
+  tags
+} from '../db/schema.js';
 
 export class OcppRepository {
   constructor(
@@ -133,6 +142,8 @@ export class OcppRepository {
     startedAt: Date;
     meterStart?: number;
   }) {
+    this.closeActiveSessionsForConnector(input.chargerId, input.connectorId, input.startedAt, 'ReplacedByNewTransaction');
+
     this.db.insert(chargingSessions).values({
       id: randomUUID(),
       chargerId: input.chargerId,
@@ -218,6 +229,50 @@ export class OcppRepository {
       location: input.location,
       format: input.format
     }).run();
+  }
+
+  private closeActiveSessionsForConnector(chargerId: string, connectorId: number, stoppedAt: Date, reason: string) {
+    const staleSessions = this.db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, chargerId), eq(chargingSessions.connectorId, connectorId), eq(chargingSessions.status, 'active')))
+      .all();
+
+    for (const session of staleSessions) {
+      this.db
+        .update(chargingSessions)
+        .set({
+          stoppedAt,
+          stopReason: reason,
+          status: 'stopped'
+        })
+        .where(eq(chargingSessions.id, session.id))
+        .run();
+
+      this.db
+        .update(proxySessionMappings)
+        .set({ stoppedAt })
+        .where(
+          and(
+            eq(proxySessionMappings.chargerId, chargerId),
+            eq(proxySessionMappings.localTransactionId, session.transactionId),
+            isNull(proxySessionMappings.stoppedAt)
+          )
+        )
+        .run();
+
+      this.recordLog({
+        level: 'warn',
+        category: 'session',
+        message: 'stale charging session closed',
+        chargerId,
+        transactionId: session.transactionId,
+        metadata: {
+          connectorId,
+          reason
+        }
+      });
+    }
   }
 
   private upsertChargerSeen(chargerId: string, seenAt = new Date()) {

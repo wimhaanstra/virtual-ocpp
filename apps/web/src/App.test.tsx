@@ -1090,6 +1090,7 @@ describe("App", () => {
   });
 
   it("shows sessions and activity pages after authentication", async () => {
+    let sessionClosed = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
@@ -1120,14 +1121,35 @@ describe("App", () => {
               transactionId: 42,
               idTag: "TAG-1",
               startedAt: "2026-06-19T09:05:00.000Z",
-              stoppedAt: null,
+              stoppedAt: sessionClosed ? "2026-06-19T09:30:00.000Z" : null,
               startMeterWh: 1000,
               stopMeterWh: null,
-              stopReason: null,
-              status: "active",
-              active: true
+              stopReason: sessionClosed ? "OperatorClosed" : null,
+              status: sessionClosed ? "stopped" : "active",
+              active: !sessionClosed
             }
           ]),
+          { status: 200 }
+        );
+      }
+
+      if (url === "/api/sessions/session-1/close" && method === "POST") {
+        sessionClosed = true;
+        return new Response(
+          JSON.stringify({
+            id: "session-1",
+            chargerId: "SMART-EVSE-1",
+            connectorId: 1,
+            transactionId: 42,
+            idTag: "TAG-1",
+            startedAt: "2026-06-19T09:05:00.000Z",
+            stoppedAt: "2026-06-19T09:30:00.000Z",
+            startMeterWh: 1000,
+            stopMeterWh: null,
+            stopReason: "OperatorClosed",
+            status: "stopped",
+            active: false
+          }),
           { status: 200 }
         );
       }
@@ -1204,6 +1226,10 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close lingering session 42" }));
+    await screen.findByText("Closed session 42.");
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/close" && init?.method === "POST")).toBe(true);
+    expect(await screen.findByText("OperatorClosed")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Activity" }));
     expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
