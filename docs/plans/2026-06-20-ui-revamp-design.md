@@ -57,6 +57,7 @@ Use restrained Charge Amber:
 - Light shell background: cool neutral gray, not beige.
 - Surfaces: flat neutral panels with small radii.
 - Borders: visible but quiet, used for structure instead of heavy shadows.
+- Shadows: minimal or absent; use only subtle 1-2px separation when needed.
 - Detail treatment: Dense Console.
 - Radius: `2px` for buttons, inputs, tables, and panels.
 - Table density: compact by default, with expanded details on demand.
