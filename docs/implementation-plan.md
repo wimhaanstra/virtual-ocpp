@@ -14,6 +14,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Slice 5.1 Home Dashboard: protected default admin view with OCPP connection info, protocol/auth requirements without secrets, charger connection status, summary metrics, and quick links.
 - Communication journal: separate protected protocol trace table/API/page for redacted charger/server/proxy OCPP communication, source/target filtering, expandable payloads, and configurable automatic purge.
 - Charger context and per-charger access: auto-register chargers, select charger context in the frontend, scope proxy targets to one charger, and require explicit per-charger tag access.
+- Persistent proxy connections: reuse one upstream OCPP websocket connection per charger/proxy target, evict failed connections, and apply in-memory reconnect backoff while preserving fail-open/fail-closed behavior.
 
 ## Next Candidate Slices
 
@@ -34,24 +35,6 @@ Acceptance criteria:
 - A developer can run one command and see a fake charger connect, start a session, emit meter values, and stop the session.
 - Simulator sessions appear in the admin sessions/activity pages.
 - The simulator can test accepted and rejected tag paths.
-
-### Slice 5.2: Persistent Proxy Connections
-
-Goal: replace per-call outbound proxy connections with managed upstream connection lifecycles.
-
-Scope:
-
-- Maintain enabled proxy target connections per charger/target identity.
-- Add reconnect/backoff behavior.
-- Log proxy connect/disconnect/reconnect events.
-- Avoid leaking credentials in logs.
-- Keep authorization behavior deterministic during outage windows.
-
-Acceptance criteria:
-
-- Enabled proxy targets are connected once per charger/target identity and reused across mirrored calls.
-- Disconnects are logged.
-- Fail-open/fail-closed behavior remains covered by tests.
 
 ### Slice 5.4: Per-Proxy Tag Mapping
 

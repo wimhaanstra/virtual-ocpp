@@ -225,6 +225,12 @@ a {
     background-color 0.16s ease;
 }
 
+.field small {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .field input::placeholder {
   color: #64748b;
 }
@@ -288,6 +294,13 @@ a {
 .button svg {
   width: 16px;
   height: 16px;
+}
+
+.icon-button {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
 }
 
 .button-secondary {
@@ -507,6 +520,11 @@ nav button:hover {
   color: var(--success);
 }
 
+.status-tile.warning .tile-icon {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--warning);
+}
+
 .status-tile p {
   margin: 0 0 4px;
   color: var(--muted);
@@ -577,6 +595,19 @@ nav button:hover {
   top: 0;
   z-index: 5;
   backdrop-filter: blur(14px);
+}
+
+.compact-filter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.compact-filter-heading > svg {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
 }
 
 .modal-backdrop {
@@ -673,12 +704,54 @@ td {
 }
 
 .communication-filters {
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.communication-filter-form {
+  display: grid;
+  gap: 12px;
+}
+
+.communication-filter-primary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
   align-items: end;
 }
 
 .communication-filter-actions {
   align-self: end;
+}
+
+.advanced-filters {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.advanced-filters summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #dbe4f0;
+  cursor: pointer;
+  font-weight: 700;
+  list-style: none;
+}
+
+.advanced-filters summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-filters summary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.advanced-filters[open] summary {
+  margin-bottom: 12px;
 }
 
 .communication-table-wrap {
@@ -695,7 +768,7 @@ td {
 }
 
 .communication-toggle {
-  width: fit-content;
+  flex: 0 0 auto;
 }
 
 .communication-expanded {
@@ -794,6 +867,56 @@ td {
   color: #dbe4f0;
 }
 
+.proxy-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.proxy-health-item {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 14px;
+}
+
+.proxy-health-item h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.proxy-health-item__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.proxy-health-item__header .mono {
+  word-break: break-all;
+}
+
+.connection-preview {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 14px;
+}
+
+.connection-preview .mono {
+  word-break: break-all;
+}
+
+.connection-preview-warning {
+  border-color: rgba(251, 191, 36, 0.42);
+  background: rgba(251, 191, 36, 0.1);
+}
+
 @media (max-width: 980px) {
   .auth-layout,
   .dashboard-grid,
@@ -845,6 +968,7 @@ td {
   }
 
   .communication-filters,
+  .communication-filter-primary,
   .modal-form-grid,
   .communication-expanded__grid {
     grid-template-columns: 1fr;

@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, basic outbound OCPP mirroring, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. Per-proxy tag mapping, persistent upstream connection management, the OCPP charger simulator, and the production Docker image are planned but not implemented yet.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, persistent outbound OCPP mirroring, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. Per-proxy tag mapping, the OCPP charger simulator, and the production Docker image are planned but not implemented yet.
 
 ## Stack
 
@@ -102,6 +102,8 @@ Authorization uses the SQLite `tags` allowlist and `tag_charger_access`. Known e
 
 Proxy targets are scoped directly to one charger. A charger with no enabled proxy targets does not mirror traffic. `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction` are forwarded to enabled proxy targets for the active charger.
 
+Virtual OCPP keeps one upstream OCPP websocket connection per charger and proxy target. The connection uses the target `stationId` as the upstream OCPP identity when configured, otherwise it uses the local charger id. If a proxy call or connection fails, the connection is closed, a short exponential reconnect backoff is recorded in memory, and the next eligible outbound call reconnects after that backoff window. Proxy connect, reconnect, close, and outage events are written to activity logs without exposing passwords.
+
 Enabled deny-capable proxy targets are also checked during `Authorize` and `StartTransaction`. If any deny-capable target returns a non-`Accepted` tag status, Virtual OCPP rejects the local authorization. If a deny-capable target is unavailable, its outage policy controls the local decision:
 
 - `fail-open`: continue allowing locally accepted tags.
@@ -126,9 +128,10 @@ The current frontend includes global tag management, selected-charger tag access
 - Edit, toggle, or delete tags.
 - Grant or revoke a global tag's access to the selected charger.
 - Add unlimited proxy targets per charger with name, URL, optional credentials, station id, mode, outage policy, and enabled state.
+- Enter the proxy target URL as the upstream base websocket URL. Virtual OCPP appends the configured station id, or the local charger id when station id is blank, as the OCPP websocket identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 - Edit, toggle, or delete proxy targets.
 - View whether a proxy target has stored credentials without exposing the username or password.
-- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, summary metrics, and quick links to operational pages.
+- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, summary metrics, and quick links to operational pages.
 - View recent charging sessions.
 - View charger connection activity and recent logs.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.
@@ -139,7 +142,6 @@ Tag access and proxy target changes affect OCPP behavior immediately because the
 
 - OCPP charger simulator for local development, demos, and deployment smoke tests.
 - Exact per-proxy tag ID mappings for outbound `Authorize` and `StartTransaction`.
-- Persistent upstream proxy connections with reconnect/backoff state.
 - Single Docker image with persistent SQLite volume.
 
 ## Security Notes

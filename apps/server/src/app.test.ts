@@ -465,13 +465,15 @@ describe('app', () => {
     closeDb = tempDb.close;
     const repository = new OcppRepository(tempDb.db);
 
-    repository.recordConnected('SMART-EVSE-STALE');
-    repository.recordConnected('SMART-EVSE-STALE');
+    const staleConnectionId = repository.recordConnected('SMART-EVSE-STALE');
+    const activeConnectionId = repository.recordConnected('SMART-EVSE-STALE');
+    repository.recordDisconnected('SMART-EVSE-STALE', staleConnectionId);
 
     const rows = tempDb.db.select().from(chargerConnections).all();
     expect(rows).toHaveLength(2);
     expect(rows.filter((row) => row.disconnectedAt === null)).toHaveLength(1);
     expect(rows.filter((row) => row.disconnectedAt !== null)).toHaveLength(1);
+    expect(rows.find((row) => row.id === activeConnectionId)?.disconnectedAt).toBeNull();
   });
 });
 

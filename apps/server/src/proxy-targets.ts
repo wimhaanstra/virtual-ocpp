@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
 import { chargers, logs, proxySessionMappings, proxyTargets } from './db/schema.js';
+import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 
 const ModeSchema = z.enum(['monitor-only', 'deny-capable']);
 const OutagePolicySchema = z.enum(['fail-open', 'fail-closed']);
@@ -37,7 +38,7 @@ const ListProxyTargetsQuerySchema = z.object({
   chargerId: z.string().trim().min(1)
 });
 
-export function registerProxyTargetRoutes(app: FastifyInstance, db: Database) {
+export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, proxyAuthorization?: ProxyAuthorizationService) {
   app.get('/api/proxy-targets', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -121,6 +122,9 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database) {
     };
 
     db.update(proxyTargets).set(update).where(eq(proxyTargets.id, request.params.id)).run();
+    if (existing.chargerId) {
+      await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after update');
+    }
     recordProxyLog(db, 'proxy target updated', {
       proxyTargetId: request.params.id,
       chargerId: existing.chargerId,
@@ -144,6 +148,9 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database) {
     }
 
     db.delete(proxyTargets).where(eq(proxyTargets.id, request.params.id)).run();
+    if (existing.chargerId) {
+      await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after delete');
+    }
     recordProxyLog(db, 'proxy target deleted', { proxyTargetId: request.params.id, chargerId: existing.chargerId });
 
     return { ok: true };

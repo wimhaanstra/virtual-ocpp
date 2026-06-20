@@ -100,6 +100,8 @@ describe("App", () => {
   });
 
   it("shows the home dashboard with charger connection guidance after authentication", async () => {
+    window.history.replaceState({}, "", "/?chargerId=SMART-EVSE-1");
+
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
@@ -108,7 +110,7 @@ describe("App", () => {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
       }
 
-      if (url === "/api/tags" && method === "GET") {
+      if (url.startsWith("/api/tags") && method === "GET") {
         return new Response(
           JSON.stringify([
             {
@@ -123,7 +125,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/proxy-targets" && method === "GET") {
+      if (url.startsWith("/api/proxy-targets") && method === "GET") {
         return new Response(
           JSON.stringify([
             {
@@ -156,7 +158,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/sessions" && method === "GET") {
+      if (url.startsWith("/api/sessions") && method === "GET") {
         return new Response(
           JSON.stringify([
             {
@@ -202,8 +204,25 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/logs" && method === "GET") {
-        return new Response(JSON.stringify([]), { status: 200 });
+      if (url.startsWith("/api/logs") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "log-1",
+              level: "info",
+              category: "proxy",
+              message: "proxy target connection established",
+              chargerId: "SMART-EVSE-1",
+              transactionId: null,
+              createdAt: "2026-06-19T10:00:00.000Z",
+              hasMetadata: true,
+              context: {
+                proxyTargetId: "proxy-1"
+              }
+            }
+          ]),
+          { status: 200 }
+        );
       }
 
       if (url.startsWith("/api/communication-journal") && method === "GET") {
@@ -225,6 +244,11 @@ describe("App", () => {
     expect(screen.getByText(/Secrets are never shown in this dashboard\./)).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getByText("Chargers connected now")).toBeInTheDocument();
+    expect(screen.getByText("Proxy targets connected")).toBeInTheDocument();
+    expect(await screen.findByText("1/1")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Upstream targets" })).toBeInTheDocument();
+    expect(screen.getByText("wss://tap.example/ocpp/STATION-1")).toBeInTheDocument();
+    expect(screen.getByText(/proxy target connection established at /)).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
   });
 

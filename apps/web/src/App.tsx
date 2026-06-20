@@ -1,5 +1,23 @@
 import { Fragment, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import { ArrowRight, Clock3, KeyRound, ListChecks, PlugZap, Plus, RefreshCcw, Trash2, X } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronDown,
+  Clock3,
+  Eye,
+  EyeOff,
+  KeyRound,
+  ListChecks,
+  LogOut,
+  Pencil,
+  PlugZap,
+  Plus,
+  Power,
+  PowerOff,
+  RefreshCcw,
+  SlidersHorizontal,
+  Trash2,
+  X
+} from "lucide-react";
 import { Button } from "./components/ui/button";
 
 type Tag = {
@@ -321,6 +339,83 @@ function buildCommunicationJournalQuery(filters: CommunicationJournalFilters, ch
   return query ? `/api/communication-journal?${query}` : "/api/communication-journal";
 }
 
+function getProxyTargetUpstreamIdentity(target: ProxyTarget, chargerId: string) {
+  return target.stationId?.trim() || chargerId || target.chargerId || "";
+}
+
+function buildProxyTargetConnectionUrl(url: string, stationId: string) {
+  const trimmedUrl = url.trim().replace(/\/+$/, "");
+  const trimmedStationId = stationId.trim().replace(/^\/+/, "");
+  if (!trimmedUrl) return "";
+  return trimmedStationId ? `${trimmedUrl}/${encodeURIComponent(trimmedStationId)}` : trimmedUrl;
+}
+
+function proxyUrlIncludesStationId(url: string, stationId: string) {
+  const trimmedUrl = url.trim().replace(/\/+$/, "");
+  const trimmedStationId = stationId.trim().replace(/^\/+|\/+$/g, "");
+  return Boolean(trimmedUrl && trimmedStationId && trimmedUrl.endsWith(`/${trimmedStationId}`));
+}
+
+function getProxyHealth(target: ProxyTarget, logs: LogEntry[]) {
+  if (!target.enabled) {
+    return {
+      label: "Disabled",
+      tone: "warning" as const,
+      detail: "Target is disabled.",
+      at: null as string | null
+    };
+  }
+
+  const latest = logs.find((entry) => entry.category === "proxy" && entry.context?.proxyTargetId === target.id);
+  if (!latest) {
+    return {
+      label: "Unknown",
+      tone: "neutral" as const,
+      detail: "No proxy activity logged yet.",
+      at: null as string | null
+    };
+  }
+
+  const connectedMessages = new Set([
+    "proxy target connection established",
+    "proxy target connection reconnected",
+    "proxy target call accepted"
+  ]);
+  const failingMessages = new Set([
+    "proxy target connection failed",
+    "proxy target connection reconnect failed",
+    "proxy target connection disconnected",
+    "proxy target unavailable, failing open",
+    "proxy target unavailable, failing closed",
+    "proxy target connection reset after call failure"
+  ]);
+
+  if (connectedMessages.has(latest.message)) {
+    return {
+      label: "Connected",
+      tone: "good" as const,
+      detail: latest.message,
+      at: latest.createdAt
+    };
+  }
+
+  if (failingMessages.has(latest.message) || latest.level === "error" || latest.level === "warn") {
+    return {
+      label: "Failing",
+      tone: "warning" as const,
+      detail: latest.message,
+      at: latest.createdAt
+    };
+  }
+
+  return {
+    label: "Active",
+    tone: "neutral" as const,
+    detail: latest.message,
+    at: latest.createdAt
+  };
+}
+
 export default function App() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -357,6 +452,26 @@ export default function App() {
     [chargers, selectedChargerId]
   );
   const selectedChargerLabel = selectedCharger ? getChargerDisplayLabel(selectedCharger) : "All chargers";
+  const proxyTargetHealth = useMemo(
+    () =>
+      proxyTargets.map((target) => ({
+        target,
+        health: getProxyHealth(target, logs),
+        connectionUrl: buildProxyTargetConnectionUrl(target.url, getProxyTargetUpstreamIdentity(target, selectedChargerId))
+      })),
+    [logs, proxyTargets, selectedChargerId]
+  );
+  const proxyHealthCounts = useMemo(
+    () => ({
+      connected: proxyTargetHealth.filter((entry) => entry.health.label === "Connected").length,
+      failing: proxyTargetHealth.filter((entry) => entry.health.label === "Failing").length,
+      enabled: proxyTargetHealth.filter((entry) => entry.target.enabled).length
+    }),
+    [proxyTargetHealth]
+  );
+  const proxyTargetFormIdentity = proxyTargetForm.stationId.trim() || selectedChargerId;
+  const proxyTargetFormConnectionUrl = buildProxyTargetConnectionUrl(proxyTargetForm.url, proxyTargetFormIdentity);
+  const proxyTargetFormHasDuplicatedStationPath = proxyUrlIncludesStationId(proxyTargetForm.url, proxyTargetFormIdentity);
 
   const isEditingTag = tagForm.id !== null;
   const isEditingProxyTarget = proxyTargetForm.id !== null;
@@ -1055,7 +1170,8 @@ export default function App() {
               </select>
             </label>
             <Button type="button" className="button-secondary" onClick={() => void logout()} disabled={busy}>
-              Sign out
+              <LogOut aria-hidden="true" />
+              <span className="button-label">Sign out</span>
             </Button>
           </div>
         </header>
@@ -1077,7 +1193,7 @@ export default function App() {
                   </div>
                   <Button type="button" className="button-secondary" onClick={() => void loadAdminData()} disabled={busy}>
                     <RefreshCcw aria-hidden="true" />
-                    Refresh
+                    <span className="button-label">Refresh</span>
                   </Button>
                 </div>
 
@@ -1137,6 +1253,7 @@ export default function App() {
                   <StatusTile icon={<KeyRound />} label="Enabled tags" value={String(enabledTagCount)} tone={enabledTagCount > 0 ? "good" : "neutral"} />
                   <StatusTile icon={<ListChecks />} label="Active sessions" value={String(activeSessionCount)} tone={activeSessionCount > 0 ? "good" : "neutral"} />
                   <StatusTile icon={<ListChecks />} label="Enabled proxy targets" value={String(enabledProxyCount)} tone={enabledProxyCount > 0 ? "good" : "neutral"} />
+                  <StatusTile icon={<PlugZap />} label="Proxy targets connected" value={`${proxyHealthCounts.connected}/${proxyHealthCounts.enabled}`} tone={proxyHealthCounts.failing > 0 ? "warning" : proxyHealthCounts.connected > 0 ? "good" : "neutral"} />
                 </section>
 
                 <div className="current-state">
@@ -1165,6 +1282,45 @@ export default function App() {
             </section>
 
             <section className="panel table-panel">
+              <div className="topbar-actions page-section-header">
+                <div>
+                  <p className="eyebrow">Proxy health</p>
+                  <h2>Upstream targets</h2>
+                  <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
+                </div>
+                <Button type="button" className="button-secondary" onClick={() => navigateToView("Proxy targets")}>
+                  Proxy targets
+                  <ArrowRight aria-hidden="true" />
+                </Button>
+              </div>
+              {!selectedChargerId ? (
+                <p>Select a charger context to view upstream proxy health.</p>
+              ) : proxyTargetHealth.length === 0 ? (
+                <p>No proxy targets configured for this charger.</p>
+              ) : (
+                <div className="proxy-health-grid">
+                  {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
+                    <article className="proxy-health-item" key={target.id}>
+                      <div className="proxy-health-item__header">
+                        <div>
+                          <h3>{target.name}</h3>
+                          <p className="mono">{connectionUrl}</p>
+                        </div>
+                        <span className={`pill ${health.tone === "good" ? "pill-good" : health.tone === "warning" ? "pill-warning" : "pill-neutral"}`}>
+                          {health.label}
+                        </span>
+                      </div>
+                      <p className="status-copy">
+                        {health.detail}
+                        {health.at ? ` at ${formatDateTime(health.at)}` : ""}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="panel table-panel">
               <div className="topbar-actions">
                 <div>
                   <p className="eyebrow">Chargers</p>
@@ -1172,7 +1328,7 @@ export default function App() {
                 </div>
                 <Button type="button" className="button-secondary" onClick={() => void loadChargers()} disabled={busy}>
                   <RefreshCcw aria-hidden="true" />
-                  Refresh
+                  <span className="button-label">Refresh</span>
                 </Button>
               </div>
               {recentChargers.length === 0 ? (
@@ -1221,7 +1377,7 @@ export default function App() {
               </div>
               <Button type="button" className="button-secondary" onClick={() => void loadChargingSessions(selectedChargerId)} disabled={busy}>
                 <RefreshCcw aria-hidden="true" />
-                Refresh
+                <span className="button-label">Refresh</span>
               </Button>
             </div>
             {chargingSessions.length === 0 ? (
@@ -1280,7 +1436,7 @@ export default function App() {
                 </div>
                 <Button type="button" className="button-secondary" onClick={() => void loadChargerConnections(selectedChargerId)} disabled={busy}>
                   <RefreshCcw aria-hidden="true" />
-                  Refresh
+                  <span className="button-label">Refresh</span>
                 </Button>
               </div>
               {chargerConnections.length === 0 ? (
@@ -1324,7 +1480,7 @@ export default function App() {
                   </div>
                   <Button type="button" className="button-secondary" onClick={() => void loadLogs(selectedChargerId)} disabled={busy}>
                     <RefreshCcw aria-hidden="true" />
-                    Refresh
+                    <span className="button-label">Refresh</span>
                   </Button>
                 </div>
               {logs.length === 0 ? (
@@ -1364,122 +1520,134 @@ export default function App() {
         ) : activeView === "Communication" ? (
           <section className="communication-layout">
             <section className="panel communication-filters-panel">
-              <div>
-                <p className="eyebrow">Journal</p>
-                <h2>Filters</h2>
-              </div>
-              <p className="status-copy">
-                Showing the last 24 hours by default, newest first, limit 200. Rows older than{" "}
-                {communicationRetentionHours ?? 24} hours are automatically purged.
-              </p>
-              <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-              <form className="form-grid communication-filters" onSubmit={applyCommunicationFilters}>
-                <label className="field">
-                  <span>From</span>
-                  <input
-                    value={communicationFilters.from}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, from: event.target.value }))}
-                    type="datetime-local"
-                  />
-                </label>
-                <label className="field">
-                  <span>To</span>
-                  <input
-                    value={communicationFilters.to}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, to: event.target.value }))}
-                    type="datetime-local"
-                  />
-                </label>
-                <label className="field">
-                  <span>Source type</span>
-                  <select
-                    value={communicationFilters.sourceType}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, sourceType: event.target.value }))}
-                  >
-                    <option value="">Any</option>
-                    <option value="charger">Charger</option>
-                    <option value="server">Server</option>
-                    <option value="proxy">Proxy</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Source id</span>
-                  <input
-                    value={communicationFilters.sourceId}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, sourceId: event.target.value }))}
-                    placeholder="SMART-EVSE-1"
-                  />
-                </label>
-                <label className="field">
-                  <span>Target type</span>
-                  <select
-                    value={communicationFilters.targetType}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, targetType: event.target.value }))}
-                  >
-                    <option value="">Any</option>
-                    <option value="charger">Charger</option>
-                    <option value="server">Server</option>
-                    <option value="proxy">Proxy</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Target id</span>
-                  <input
-                    value={communicationFilters.targetId}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, targetId: event.target.value }))}
-                    placeholder="server"
-                  />
-                </label>
-                <label className="field">
-                  <span>Charger id</span>
-                  {selectedChargerId ? (
-                    <input value={communicationFilters.chargerId} disabled />
-                  ) : (
-                    <input
-                      value={communicationFilters.chargerId}
-                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, chargerId: event.target.value }))}
-                      placeholder="SMART-EVSE-1"
-                    />
-                  )}
-                </label>
-                <label className="field">
-                  <span>Proxy target id</span>
-                  <input
-                    value={communicationFilters.proxyTargetId}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, proxyTargetId: event.target.value }))}
-                    placeholder="proxy-1"
-                  />
-                </label>
-                <label className="field">
-                  <span>OCPP method</span>
-                  <input
-                    value={communicationFilters.ocppMethod}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, ocppMethod: event.target.value }))}
-                    placeholder="BootNotification"
-                  />
-                </label>
-                <label className="field">
-                  <span>Message type</span>
-                  <select
-                    value={communicationFilters.messageType}
-                    onChange={(event) => setCommunicationFilters((current) => ({ ...current, messageType: event.target.value }))}
-                  >
-                    <option value="">Any</option>
-                    <option value="call">Call</option>
-                    <option value="callResult">Call result</option>
-                    <option value="callError">Call error</option>
-                    <option value="connection">Connection</option>
-                    <option value="disconnect">Disconnect</option>
-                  </select>
-                </label>
-                <div className="action-row communication-filter-actions">
-                  <Button type="submit" disabled={busy}>
-                    Apply filters
-                  </Button>
-                  <Button type="button" className="button-secondary" onClick={() => void resetCommunicationFilters()} disabled={busy}>
-                    Reset
-                  </Button>
+              <div className="compact-filter-heading">
+                <div>
+                  <p className="eyebrow">Journal</p>
+                  <h2>Filters</h2>
+                  <p className="status-copy">
+                    Showing the last 24 hours by default, newest first, limit 200. Retention is {communicationRetentionHours ?? 24} hours. Scoped to {selectedChargerLabel}.
+                  </p>
                 </div>
+                <SlidersHorizontal aria-hidden="true" />
+              </div>
+              <form className="communication-filter-form" onSubmit={applyCommunicationFilters}>
+                <div className="communication-filter-primary">
+                  <label className="field">
+                    <span>OCPP method</span>
+                    <input
+                      value={communicationFilters.ocppMethod}
+                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, ocppMethod: event.target.value }))}
+                      placeholder="BootNotification"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Message type</span>
+                    <select
+                      value={communicationFilters.messageType}
+                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, messageType: event.target.value }))}
+                    >
+                      <option value="">Any</option>
+                      <option value="call">Call</option>
+                      <option value="callResult">Call result</option>
+                      <option value="callError">Call error</option>
+                      <option value="connection">Connection</option>
+                      <option value="disconnect">Disconnect</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>From</span>
+                    <input
+                      value={communicationFilters.from}
+                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, from: event.target.value }))}
+                      type="datetime-local"
+                    />
+                  </label>
+                  <label className="field">
+                    <span>To</span>
+                    <input
+                      value={communicationFilters.to}
+                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, to: event.target.value }))}
+                      type="datetime-local"
+                    />
+                  </label>
+                  <div className="action-row communication-filter-actions">
+                    <Button type="submit" disabled={busy}>
+                      Apply filters
+                    </Button>
+                    <Button type="button" className="button-secondary" onClick={() => void resetCommunicationFilters()} disabled={busy}>
+                      Reset
+                    </Button>
+                  </div>
+                </div>
+
+                <details className="advanced-filters">
+                  <summary>
+                    <span>Advanced filters</span>
+                    <ChevronDown aria-hidden="true" />
+                  </summary>
+                  <div className="communication-filters">
+                    <label className="field">
+                      <span>Source type</span>
+                      <select
+                        value={communicationFilters.sourceType}
+                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, sourceType: event.target.value }))}
+                      >
+                        <option value="">Any</option>
+                        <option value="charger">Charger</option>
+                        <option value="server">Server</option>
+                        <option value="proxy">Proxy</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Source id</span>
+                      <input
+                        value={communicationFilters.sourceId}
+                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, sourceId: event.target.value }))}
+                        placeholder="SMART-EVSE-1"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Target type</span>
+                      <select
+                        value={communicationFilters.targetType}
+                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, targetType: event.target.value }))}
+                      >
+                        <option value="">Any</option>
+                        <option value="charger">Charger</option>
+                        <option value="server">Server</option>
+                        <option value="proxy">Proxy</option>
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Target id</span>
+                      <input
+                        value={communicationFilters.targetId}
+                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, targetId: event.target.value }))}
+                        placeholder="server"
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Charger id</span>
+                      {selectedChargerId ? (
+                        <input value={communicationFilters.chargerId} disabled />
+                      ) : (
+                        <input
+                          value={communicationFilters.chargerId}
+                          onChange={(event) => setCommunicationFilters((current) => ({ ...current, chargerId: event.target.value }))}
+                          placeholder="SMART-EVSE-1"
+                        />
+                      )}
+                    </label>
+                    <label className="field">
+                      <span>Proxy target id</span>
+                      <input
+                        value={communicationFilters.proxyTargetId}
+                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, proxyTargetId: event.target.value }))}
+                        placeholder="proxy-1"
+                      />
+                    </label>
+                  </div>
+                </details>
               </form>
             </section>
 
@@ -1492,11 +1660,11 @@ export default function App() {
                 <div className="action-row">
                   <Button type="button" className="button-secondary" onClick={() => void loadCommunicationJournal(selectedChargerId, communicationFilters)} disabled={busy}>
                     <RefreshCcw aria-hidden="true" />
-                    Refresh
+                    <span className="button-label">Refresh</span>
                   </Button>
                   <Button type="button" className="button-ghost button-danger" onClick={() => void purgeCommunicationJournal()} disabled={busy}>
                     <Trash2 aria-hidden="true" />
-                    Purge
+                    <span className="button-label">Purge</span>
                   </Button>
                 </div>
               </div>
@@ -1543,14 +1711,16 @@ export default function App() {
                                 <div className="communication-summary">
                                   <Button
                                     type="button"
-                                    className="button-secondary communication-toggle"
+                                    className="button-secondary icon-button communication-toggle"
                                     onClick={() =>
                                       setExpandedCommunicationJournalId(isExpanded ? null : item.id)
                                     }
                                     aria-expanded={isExpanded}
                                     aria-controls={`journal-payload-${item.id}`}
+                                    aria-label={isExpanded ? "Hide payload" : "Show payload"}
+                                    title={isExpanded ? "Hide payload" : "Show payload"}
                                   >
-                                    {isExpanded ? "Hide payload" : "Show payload"}
+                                    {isExpanded ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
                                   </Button>
                                   <p>{buildCommunicationSummary(item)}</p>
                                 </div>
@@ -1658,10 +1828,12 @@ export default function App() {
                           <td>
                             <div className="action-row">
                               <Button type="button" className="button-secondary" onClick={() => startTagEdit(tag)} disabled={busy}>
-                                Edit
+                                <Pencil aria-hidden="true" />
+                                <span className="button-label">Edit</span>
                               </Button>
                               <Button type="button" onClick={() => void toggleTag(tag)} disabled={busy}>
-                                {tag.enabled ? "Disable" : "Enable"}
+                                {tag.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
+                                <span className="button-label">{tag.enabled ? "Disable" : "Enable"}</span>
                               </Button>
                               <Button
                                 type="button"
@@ -1673,7 +1845,7 @@ export default function App() {
                               </Button>
                               <Button type="button" className="button-ghost" onClick={() => void deleteTag(tag)} disabled={busy}>
                                 <Trash2 aria-hidden="true" />
-                                Delete
+                                <span className="button-label">Delete</span>
                               </Button>
                             </div>
                           </td>
@@ -1789,14 +1961,16 @@ export default function App() {
                             <td>
                               <div className="action-row">
                                 <Button type="button" className="button-secondary" onClick={() => startProxyTargetEdit(target)} disabled={busy}>
-                                  Edit
+                                  <Pencil aria-hidden="true" />
+                                  <span className="button-label">Edit</span>
                                 </Button>
                                 <Button type="button" onClick={() => void toggleProxyTarget(target)} disabled={busy}>
-                                  {target.enabled ? "Disable" : "Enable"}
+                                  {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
+                                  <span className="button-label">{target.enabled ? "Disable" : "Enable"}</span>
                                 </Button>
                                 <Button type="button" className="button-ghost" onClick={() => void deleteProxyTarget(target)} disabled={busy}>
                                   <Trash2 aria-hidden="true" />
-                                  Delete
+                                  <span className="button-label">Delete</span>
                                 </Button>
                               </div>
                             </td>
@@ -1833,10 +2007,12 @@ export default function App() {
                     <label className="field">
                       <span>URL</span>
                       <input
+                        aria-label="URL"
                         value={proxyTargetForm.url}
                         onChange={(event) => setProxyTargetForm((current) => ({ ...current, url: event.target.value }))}
-                        placeholder="wss://csms.example/ocpp"
+                        placeholder="ws://evcc.local:8887"
                       />
+                      <small>Use the upstream base URL. The station ID is appended as the OCPP identity path.</small>
                     </label>
                     <label className="field">
                       <span>Username</span>
@@ -1855,11 +2031,22 @@ export default function App() {
                     <label className="field">
                       <span>Station ID</span>
                       <input
+                        aria-label="Station ID"
                         value={proxyTargetForm.stationId}
                         onChange={(event) => setProxyTargetForm((current) => ({ ...current, stationId: event.target.value }))}
                         placeholder="Defaults to charger ID"
                       />
+                      <small>Example: URL <span className="mono">ws://10.210.1.1:8887</span> and Station ID <span className="mono">8889</span> connects to <span className="mono">/8889</span>.</small>
                     </label>
+                    <div className={`connection-preview ${proxyTargetFormHasDuplicatedStationPath ? "connection-preview-warning" : ""}`}>
+                      <p className="eyebrow">Computed upstream URL</p>
+                      <p className="mono">{proxyTargetFormConnectionUrl || "Enter a URL to preview the connection path."}</p>
+                      {proxyTargetFormHasDuplicatedStationPath ? (
+                        <p className="status-copy">
+                          The URL already ends with the station ID. This would duplicate the path. Put the station only in Station ID.
+                        </p>
+                      ) : null}
+                    </div>
                     <label className="field">
                       <span>Password</span>
                       <input
@@ -1983,7 +2170,7 @@ function StatusTile({
   icon: ReactNode;
   label: string;
   value: string;
-  tone: "good" | "neutral";
+  tone: "good" | "neutral" | "warning";
 }) {
   return (
     <article className={`status-tile ${tone}`}>

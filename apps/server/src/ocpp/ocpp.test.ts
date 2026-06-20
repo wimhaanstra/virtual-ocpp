@@ -72,8 +72,10 @@ async function startProxyServer(status: 'Accepted' | 'Invalid') {
   };
 }
 
-async function startRecordingProxyServer() {
+async function startRecordingProxyServer(port = 0) {
   const calls: Array<{ identity?: string; method: string; params: Record<string, unknown> }> = [];
+  const clients: string[] = [];
+  const closedClients: string[] = [];
   const server = new RPCServer({
     protocols: ['ocpp1.6'],
     strictMode: false
@@ -81,6 +83,13 @@ async function startRecordingProxyServer() {
 
   server.auth((accept) => accept());
   server.on('client', (client) => {
+    clients.push(client.identity ?? '');
+    const recordClose = () => {
+      if (closedClients.includes(client.identity ?? '')) return;
+      closedClients.push(client.identity ?? '');
+    };
+    client.on('close', recordClose);
+    client.on('disconnect', recordClose);
     client.handle(({ method, params }: { method: string; params: unknown }) => {
       calls.push({ identity: client.identity, method, params: params as Record<string, unknown> });
 
@@ -103,7 +112,7 @@ async function startRecordingProxyServer() {
     });
   });
 
-  const httpServer = (await server.listen(0, '127.0.0.1')) as Server;
+  const httpServer = (await server.listen(port, '127.0.0.1')) as Server;
   const address = httpServer.address();
   if (!address || typeof address === 'string') {
     throw new Error('Expected proxy server to listen on a TCP port');
@@ -111,9 +120,30 @@ async function startRecordingProxyServer() {
 
   return {
     calls,
+    clients,
+    closedClients,
+    port: address.port,
     endpoint: `ws://127.0.0.1:${address.port}`,
     close: () => server.close({})
   };
+}
+
+async function loginAdmin(app: Awaited<ReturnType<typeof buildApp>>) {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/login',
+    payload: {
+      username: 'admin',
+      password: 'correct-password'
+    }
+  });
+
+  const cookie = response.headers['set-cookie'];
+  if (!cookie) {
+    throw new Error('Expected login response to set a cookie');
+  }
+
+  return Array.isArray(cookie) ? cookie[0] : cookie;
 }
 
 function insertProxyTarget(
@@ -293,6 +323,178 @@ describe('OCPP 1.6 local primary', () => {
     expect(proxy.calls).toHaveLength(0);
   });
 
+  it('reuses one persistent upstream proxy connection for repeated calls', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-REUSE',
+      name: 'Persistent CSMS',
+      url: proxy.endpoint,
+      basicAuthPassword: 'proxy-secret',
+      stationId: 'UPSTREAM-REUSE',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-REUSE');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE'
+    });
+    await charger.call('Heartbeat', {});
+
+    expect(proxy.calls.map((call) => call.method)).toEqual(['BootNotification', 'Heartbeat']);
+    expect(proxy.clients).toEqual(['UPSTREAM-REUSE']);
+    expect(JSON.stringify(server.db.select().from(logs).all())).not.toContain('proxy-secret');
+  });
+
+  it('closes the cached upstream connection when a proxy target is disabled', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const targetId = randomUUID();
+    insertProxyTarget(server.db, {
+      id: targetId,
+      chargerId: 'SMART-EVSE-DISABLE',
+      name: 'Disable CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-DISABLE',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-DISABLE');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE'
+    });
+    expect(proxy.clients).toEqual(['UPSTREAM-DISABLE']);
+
+    const cookie = await loginAdmin(server.app);
+    const response = await server.app.inject({
+      method: 'PATCH',
+      url: `/api/proxy-targets/${targetId}`,
+      headers: { cookie },
+      payload: { enabled: false }
+    });
+
+    expect(response.statusCode).toBe(200);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(proxy.closedClients).toEqual(['UPSTREAM-DISABLE']);
+  });
+
+  it('reconnects on demand after an upstream target disconnects and comes back', async () => {
+    const firstProxy = await startRecordingProxyServer();
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-RECONNECT',
+      name: 'Reconnect CSMS',
+      url: firstProxy.endpoint,
+      stationId: 'UPSTREAM-RECONNECT',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-RECONNECT');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE'
+    });
+
+    await firstProxy.close();
+    const secondProxy = await startRecordingProxyServer(firstProxy.port);
+    cleanup.push(secondProxy.close);
+
+    const heartbeat = await charger.call('Heartbeat', {});
+
+    expect(heartbeat).toHaveProperty('currentTime');
+    expect(secondProxy.clients).toEqual(['UPSTREAM-RECONNECT']);
+    expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target connection reconnected')).toBe(true);
+    expect(JSON.stringify(server.db.select().from(logs).all())).not.toContain('proxy-secret');
+  });
+
+  it('fails open when an established deny-capable proxy connection is unavailable', async () => {
+    const proxy = await startRecordingProxyServer();
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'FAIL-OPEN-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-FAIL-OPEN' });
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-FAIL-OPEN',
+      name: 'Unavailable fail-open CSMS',
+      url: proxy.endpoint,
+      enabled: true,
+      mode: 'deny-capable',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-FAIL-OPEN');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE'
+    });
+    await proxy.close();
+
+    const response = await charger.call('Authorize', { idTag: 'FAIL-OPEN-TAG' });
+
+    expect(response).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target unavailable, failing open')).toBe(true);
+  });
+
+  it('fails closed when an established deny-capable proxy connection is unavailable', async () => {
+    const proxy = await startRecordingProxyServer();
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'FAIL-CLOSED-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-FAIL-CLOSED' });
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-FAIL-CLOSED',
+      name: 'Unavailable fail-closed CSMS',
+      url: proxy.endpoint,
+      enabled: true,
+      mode: 'deny-capable',
+      outagePolicy: 'fail-closed'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-FAIL-CLOSED');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE'
+    });
+    await proxy.close();
+
+    const response = await charger.call('Authorize', { idTag: 'FAIL-CLOSED-TAG' });
+
+    expect(response).toEqual({ idTagInfo: { status: 'Invalid' } });
+    expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target unavailable, failing closed')).toBe(true);
+  });
+
   it('mirrors session traffic to charger-scoped proxy targets', async () => {
     const proxy = await startRecordingProxyServer();
     cleanup.push(proxy.close);
@@ -357,6 +559,7 @@ describe('OCPP 1.6 local primary', () => {
       'StopTransaction'
     ]);
     expect(proxy.calls.find((call) => call.method === 'StartTransaction')?.identity).toBe('UPSTREAM-STATION-1');
+    expect(proxy.clients).toEqual(['UPSTREAM-STATION-1']);
     expect(proxy.calls.find((call) => call.method === 'StartTransaction')?.params).toMatchObject({
       idTag: 'MIRROR-TAG',
       meterStart: 100

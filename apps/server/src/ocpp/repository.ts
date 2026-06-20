@@ -32,6 +32,7 @@ export class OcppRepository {
 
   recordConnected(chargerId: string) {
     this.upsertChargerSeen(chargerId);
+    const connectionId = randomUUID();
 
     this.db
       .update(chargerConnections)
@@ -40,7 +41,7 @@ export class OcppRepository {
       .run();
 
     this.db.insert(chargerConnections).values({
-      id: randomUUID(),
+      id: connectionId,
       chargerId,
       connectedAt: new Date()
     }).run();
@@ -52,6 +53,8 @@ export class OcppRepository {
     });
 
     this.communicationJournal?.recordChargerConnection(chargerId);
+
+    return connectionId;
   }
 
   recordBootNotification(
@@ -82,13 +85,21 @@ export class OcppRepository {
     this.upsertChargerSeen(chargerId);
   }
 
-  recordDisconnected(chargerId: string) {
+  recordDisconnected(chargerId: string, connectionId?: string) {
     const now = new Date();
-    this.db
-      .update(chargerConnections)
-      .set({ disconnectedAt: now })
-      .where(and(eq(chargerConnections.chargerId, chargerId), isNull(chargerConnections.disconnectedAt)))
-      .run();
+    const result = connectionId
+      ? this.db
+          .update(chargerConnections)
+          .set({ disconnectedAt: now })
+          .where(and(eq(chargerConnections.id, connectionId), isNull(chargerConnections.disconnectedAt)))
+          .run()
+      : this.db
+          .update(chargerConnections)
+          .set({ disconnectedAt: now })
+          .where(and(eq(chargerConnections.chargerId, chargerId), isNull(chargerConnections.disconnectedAt)))
+          .run();
+
+    if (result.changes === 0) return;
 
     this.recordLog({
       category: 'charger',

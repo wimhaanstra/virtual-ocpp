@@ -7,6 +7,7 @@ import { CommunicationJournalService } from './communication-journal.js';
 import { registerCommunicationJournalRoutes } from './communication-journal-routes.js';
 import { registerChargerRoutes } from './chargers.js';
 import { registerDashboardConfigRoutes } from './dashboard-config.js';
+import { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import { registerOcppServer } from './ocpp/server.js';
 import { registerProxyTargetRoutes } from './proxy-targets.js';
 import { registerVisibilityRoutes } from './visibility.js';
@@ -19,6 +20,7 @@ type BuildAppOptions = {
 
 export async function buildApp({ config, db }: BuildAppOptions): Promise<FastifyInstance> {
   const communicationJournal = new CommunicationJournalService(db, config.communicationLogRetentionHours);
+  const proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal);
   const app = Fastify({
     logger: {
       level: config.nodeEnv === 'test' ? 'silent' : 'info',
@@ -40,10 +42,10 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<Fastify
   registerDashboardConfigRoutes(app, config, db);
   registerChargerRoutes(app, db);
   registerTagRoutes(app, db);
-  registerProxyTargetRoutes(app, db);
+  registerProxyTargetRoutes(app, db, proxyAuthorization);
   registerCommunicationJournalRoutes(app, db, communicationJournal);
   registerVisibilityRoutes(app, db);
-  await registerOcppServer(app, config, db, communicationJournal);
+  await registerOcppServer(app, config, db, communicationJournal, proxyAuthorization);
 
   return app;
 }

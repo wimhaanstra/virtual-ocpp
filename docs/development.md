@@ -16,7 +16,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Protected proxy target CRUD APIs
 - Deny-capable proxy authorization checks for `Authorize` and `StartTransaction`
 - Per-target fail-open and fail-closed outage policy
-- Outbound OCPP mirroring for supported charger calls
+- Persistent outbound OCPP mirroring for supported charger calls
 - Per-target external transaction id mapping for mirrored sessions
 - Protected operator visibility APIs for charger connections, sessions, and logs
 - Protected home dashboard as the default admin view, showing OCPP connection info, protocol/auth requirements without secrets, charger connection status, summary metrics, and quick links
@@ -26,7 +26,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Global tags with explicit per-charger access controls
 - Frontend tag, proxy target, sessions, activity, home dashboard, and communication pages as the active admin pages
 
-Per-proxy tag mapping and persistent upstream connection pooling are intentionally not part of this slice.
+Per-proxy tag mapping is intentionally not part of this slice.
 
 ## Local Run
 
@@ -106,7 +106,9 @@ Mirrored calls are sent to each enabled proxy target for the active charger:
 - `MeterValues`
 - `StopTransaction`
 
-Each mirrored call currently opens an outbound OCPP client connection, sends the call, records a log entry, and closes the connection. If target `stationId` is configured, it is used as the upstream OCPP identity; otherwise the local charger id is used. When a proxy target returns a transaction id from `StartTransaction`, the server stores it in `proxy_session_mappings`. Later `MeterValues` and `StopTransaction` calls for the local transaction are sent to that target with the mapped external transaction id.
+Virtual OCPP keeps one outbound OCPP client connection per local charger and proxy target. If target `stationId` is configured, it is used as the upstream OCPP identity; otherwise the local charger id is used. Connections are reused across mirrored calls, closed when target configuration changes or the target is no longer enabled, and closed on server shutdown. If a call fails, the connection is evicted and an in-memory exponential reconnect backoff is scheduled; the next eligible mirrored call reconnects after that backoff window. Connect, reconnect, close, and outage decisions are logged without exposing credentials.
+
+When a proxy target returns a transaction id from `StartTransaction`, the server stores it in `proxy_session_mappings`. Later `MeterValues` and `StopTransaction` calls for the local transaction are sent to that target with the mapped external transaction id.
 
 ## Home Dashboard Workflow
 
@@ -119,6 +121,8 @@ The protected default admin view is the home dashboard. It is read-only and give
 - quick links to sessions, activity, tags, and proxy targets
 
 The dashboard reads this setup information from `GET /api/dashboard-config`. That protected endpoint returns the charger URL template, the OCPP websocket subprotocol, and whether charger Basic Auth is required. It never returns the Basic Auth password. By default the displayed URL uses the backend `PORT`; set `OCPP_PUBLIC_URL` when the charger should connect through a reverse proxy or TLS hostname.
+
+The dashboard also shows selected-charger proxy target health from recent safe proxy activity logs. Proxy target forms treat `url` as the upstream base websocket URL and append `stationId`, or the local charger id when `stationId` is blank, as the upstream OCPP identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 
 ## Communication Journal Workflow
 

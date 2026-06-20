@@ -25,10 +25,11 @@ export async function registerOcppServer(
   app: FastifyInstance,
   config: AppConfig,
   db: Database,
-  communicationJournal?: CommunicationJournalService
+  communicationJournal?: CommunicationJournalService,
+  proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal)
 ) {
   const repository = new OcppRepository(db, communicationJournal);
-  const handlers = new OcppHandlers(repository, new ProxyAuthorizationService(db, communicationJournal));
+  const handlers = new OcppHandlers(repository, proxyAuthorization);
   const rpcServer = new RPCServer({
     protocols: ['ocpp1.6'],
     strictMode: false,
@@ -54,7 +55,7 @@ export async function registerOcppServer(
 
   rpcServer.on('client', (client: RpcClient) => {
     const context = { chargerId: client.session?.chargerId ?? client.identity };
-    repository.recordConnected(context.chargerId);
+    const connectionId = repository.recordConnected(context.chargerId);
 
     registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'BootNotification', (params: Parameters<typeof handlers.bootNotification>[1]) =>
       handlers.bootNotification(context, params)
@@ -111,7 +112,7 @@ export async function registerOcppServer(
     });
 
     client.on('close', () => {
-      repository.recordDisconnected(context.chargerId);
+      repository.recordDisconnected(context.chargerId, connectionId);
     });
   });
 
@@ -121,6 +122,7 @@ export async function registerOcppServer(
   });
 
   app.addHook('onClose', async () => {
+    await proxyAuthorization.close();
     await rpcServer.close({ code: 1001, reason: 'Server shutting down' });
   });
 }
