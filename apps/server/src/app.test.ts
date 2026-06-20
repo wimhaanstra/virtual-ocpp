@@ -170,7 +170,33 @@ describe('app', () => {
     });
     expect(blockedDelete.statusCode).toBe(409);
 
-    tempDb.db.update(proxySessionMappings).set({ stoppedAt: new Date() }).where(eq(proxySessionMappings.id, 'active-mapping')).run();
+    const blockedUrlEdit = await app.inject({
+      method: 'PATCH',
+      url: `/api/proxy-targets/${targetId}`,
+      headers: { cookie },
+      payload: {
+        url: 'ws://127.0.0.1:9001/ocpp'
+      }
+    });
+    expect(blockedUrlEdit.statusCode).toBe(409);
+
+    const disabled = await app.inject({
+      method: 'PATCH',
+      url: `/api/proxy-targets/${targetId}`,
+      headers: { cookie },
+      payload: {
+        enabled: false
+      }
+    });
+    expect(disabled.statusCode).toBe(200);
+    expect(disabled.json()).toMatchObject({ enabled: false });
+    expect(
+      tempDb.db
+        .select()
+        .from(proxySessionMappings)
+        .where(eq(proxySessionMappings.id, 'active-mapping'))
+        .get()?.stoppedAt
+    ).toBeInstanceOf(Date);
 
     const deleted = await app.inject({
       method: 'DELETE',

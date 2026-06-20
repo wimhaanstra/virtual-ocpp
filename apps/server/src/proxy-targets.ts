@@ -105,10 +105,6 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       return reply.code(404).send({ error: 'proxy_target_not_found' });
     }
 
-    if (hasActiveProxyMappings(db, existing.chargerId, existing.id)) {
-      return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
-    }
-
     const update = {
       name: body.data.name ?? existing.name,
       url: body.data.url ?? existing.url,
@@ -121,8 +117,16 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
         body.data.basicAuthPassword === undefined ? existing.basicAuthPassword : body.data.basicAuthPassword || null,
       updatedAt: new Date()
     };
+    const hasActiveMappings = hasActiveProxyMappings(db, existing.chargerId, existing.id);
+    const disablingTarget = existing.enabled && !update.enabled;
+    if (hasActiveMappings && !disablingTarget && hasDisruptiveProxyTargetUpdate(existing, update)) {
+      return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
+    }
 
     db.update(proxyTargets).set(update).where(eq(proxyTargets.id, request.params.id)).run();
+    if (disablingTarget) {
+      closeActiveProxyMappings(db, existing.chargerId, existing.id);
+    }
     if (existing.chargerId) {
       await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after update');
     }
@@ -194,6 +198,31 @@ function hasActiveProxyMappings(db: Database, chargerId: string | null, proxyTar
       )
       .limit(1)
       .get()
+  );
+}
+
+function closeActiveProxyMappings(db: Database, chargerId: string | null, proxyTargetId: string) {
+  if (!chargerId) return;
+
+  db
+    .update(proxySessionMappings)
+    .set({ stoppedAt: new Date() })
+    .where(
+      and(
+        eq(proxySessionMappings.chargerId, chargerId),
+        eq(proxySessionMappings.proxyTargetId, proxyTargetId),
+        isNull(proxySessionMappings.stoppedAt)
+      )
+    )
+    .run();
+}
+
+function hasDisruptiveProxyTargetUpdate(existing: typeof proxyTargets.$inferSelect, update: Partial<typeof proxyTargets.$inferSelect>) {
+  return (
+    update.url !== existing.url ||
+    update.username !== existing.username ||
+    update.stationId !== existing.stationId ||
+    update.basicAuthPassword !== existing.basicAuthPassword
   );
 }
 
