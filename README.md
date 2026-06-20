@@ -135,8 +135,16 @@ Useful options:
 - `--tag-id SIM-TAG-001`: tag id used for authorization and session start.
 - `--meter-samples 3`: number of meter samples to emit.
 - `--sample-interval-ms 1000`: delay between meter samples.
+- `--run-time 15m`: run a timed charging session instead of a fixed sample count. Supports `ms`, `s`, `m`, and `h`.
+- `--power-kw 11`: charging power used with `--run-time`; defaults to `11` kW when timed mode is enabled.
 - `--basic-auth-password ...`: charger Basic Auth password when `OCPP_BASIC_AUTH_PASSWORD` is configured.
 - `--keep-open`: keep the websocket connected and continue heartbeats after the demo session.
+
+Example timed session:
+
+```sh
+npm run simulator -- --charger-id SIM-001 --tag-id SIM-TAG-001 --ensure-tag --run-time=15m --power-kw=11
+```
 
 The simulator also supports `SIMULATOR_*` environment variables, for example `SIMULATOR_CHARGER_ID`, `SIMULATOR_TAG_ID`, and `SIMULATOR_ENSURE_TAG=true`.
 

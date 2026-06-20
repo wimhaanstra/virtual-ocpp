@@ -74,6 +74,8 @@ npm run simulator -- --charger-id SIM-001 --tag-id SIM-TAG-001 --ensure-tag
 
 The simulator uses `ocpp-rpc` as a charger client and sends a full session flow through the real websocket endpoint. `--ensure-tag` uses the protected admin API to create or enable the configured tag and grant access to the simulator charger after the charger has connected. This keeps simulator setup aligned with the same tag access rules used by Smart EVSE traffic.
 
+Use `--run-time=15m --power-kw=11` to simulate a timed charging session at 11 kW. `--run-time` accepts `ms`, `s`, `m`, and `h` units, including combined values such as `1h30m`. In timed mode the simulator calculates energy from elapsed time and power, then emits periodic meter values.
+
 Use `--keep-open` when you want the dashboard to continue showing the simulator as connected after the demo session. Use `npm run simulator -- --help` to see all CLI options.
 
 ## Tag Workflow

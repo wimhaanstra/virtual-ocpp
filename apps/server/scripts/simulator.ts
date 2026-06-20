@@ -12,6 +12,8 @@ type SimulatorOptions = {
   meterStepWh: number;
   meterSamples: number;
   sampleIntervalMs: number;
+  runTimeMs: number | null;
+  powerKw: number | null;
   heartbeatCount: number;
   heartbeatIntervalMs: number;
   basicAuthPassword?: string;
@@ -64,6 +66,9 @@ export function parseSimulatorArgs(argv: string[], env: NodeJS.ProcessEnv = proc
 
   const url = values.get('url') ?? env.SIMULATOR_OCPP_URL ?? 'ws://localhost:3000/ocpp';
   const adminUrl = values.get('admin-url') ?? env.SIMULATOR_ADMIN_URL ?? inferAdminUrl(url);
+  const runTimeRaw = values.get('run-time') ?? env.SIMULATOR_RUN_TIME;
+  const hasSampleInterval = values.has('sample-interval-ms') || env.SIMULATOR_SAMPLE_INTERVAL_MS !== undefined;
+  const sampleIntervalDefault = runTimeRaw && !hasSampleInterval ? '60000' : '1000';
 
   return {
     url,
@@ -73,7 +78,9 @@ export function parseSimulatorArgs(argv: string[], env: NodeJS.ProcessEnv = proc
     meterStartWh: parseNonNegativeInteger(values.get('meter-start-wh') ?? env.SIMULATOR_METER_START_WH ?? '1000', 'meter-start-wh'),
     meterStepWh: parseNonNegativeInteger(values.get('meter-step-wh') ?? env.SIMULATOR_METER_STEP_WH ?? '500', 'meter-step-wh'),
     meterSamples: parseNonNegativeInteger(values.get('meter-samples') ?? env.SIMULATOR_METER_SAMPLES ?? '3', 'meter-samples'),
-    sampleIntervalMs: parseNonNegativeInteger(values.get('sample-interval-ms') ?? env.SIMULATOR_SAMPLE_INTERVAL_MS ?? '1000', 'sample-interval-ms'),
+    sampleIntervalMs: parsePositiveInteger(values.get('sample-interval-ms') ?? env.SIMULATOR_SAMPLE_INTERVAL_MS ?? sampleIntervalDefault, 'sample-interval-ms'),
+    runTimeMs: runTimeRaw ? parseDurationMs(runTimeRaw, 'run-time') : null,
+    powerKw: parseOptionalPositiveNumber(values.get('power-kw') ?? env.SIMULATOR_POWER_KW, 'power-kw'),
     heartbeatCount: parseNonNegativeInteger(values.get('heartbeat-count') ?? env.SIMULATOR_HEARTBEAT_COUNT ?? '1', 'heartbeat-count'),
     heartbeatIntervalMs: parseNonNegativeInteger(values.get('heartbeat-interval-ms') ?? env.SIMULATOR_HEARTBEAT_INTERVAL_MS ?? '60000', 'heartbeat-interval-ms'),
     basicAuthPassword: values.get('basic-auth-password') ?? env.SIMULATOR_BASIC_AUTH_PASSWORD ?? env.OCPP_BASIC_AUTH_PASSWORD,
@@ -111,6 +118,8 @@ Options:
   --meter-step-wh <number>        Wh added per meter sample. Default: 500
   --meter-samples <number>        Number of MeterValues calls. Default: 3
   --sample-interval-ms <number>   Delay between meter samples. Default: 1000
+  --run-time <duration>           Run charging for a duration, for example 15m, 90s, or 1h.
+  --power-kw <number>             Charging power in kW for --run-time mode, for example 11.
   --heartbeat-count <number>      Heartbeats before authorization. Default: 1
   --heartbeat-interval-ms <num>   Delay used by --keep-open heartbeats. Default: 60000
   --basic-auth-password <value>   OCPP Basic Auth password when the server requires it.
@@ -191,29 +200,7 @@ async function runSimulator(options: SimulatorOptions) {
       timestamp: new Date().toISOString()
     });
 
-    let meterWh = options.meterStartWh;
-    for (let index = 0; index < options.meterSamples; index += 1) {
-      meterWh += options.meterStepWh;
-      if (index > 0 && options.sampleIntervalMs > 0) await sleep(options.sampleIntervalMs);
-      await call(client, 'MeterValues', {
-        connectorId: options.connectorId,
-        transactionId: start.transactionId,
-        meterValue: [
-          {
-            timestamp: new Date().toISOString(),
-            sampledValue: [
-              {
-                value: String(meterWh),
-                measurand: 'Energy.Active.Import.Register',
-                unit: 'Wh',
-                context: 'Sample.Periodic'
-              }
-            ]
-          }
-        ]
-      });
-      console.log(`MeterValues ${index + 1}/${options.meterSamples}: ${meterWh} Wh`);
-    }
+    const meterWh = await emitMeterValues(client, options, start.transactionId);
 
     const stop = await call(client, 'StopTransaction', {
       transactionId: start.transactionId,
@@ -245,6 +232,61 @@ async function runSimulator(options: SimulatorOptions) {
 async function call(client: OcppClient, method: string, params: Record<string, unknown>) {
   console.log(`> ${method}`);
   return client.call(method, params);
+}
+
+async function emitMeterValues(client: OcppClient, options: SimulatorOptions, transactionId: number) {
+  if (options.runTimeMs !== null) {
+    return emitTimedMeterValues(client, options, transactionId);
+  }
+
+  let meterWh = options.meterStartWh;
+  for (let index = 0; index < options.meterSamples; index += 1) {
+    meterWh += options.meterStepWh;
+    if (index > 0) await sleep(options.sampleIntervalMs);
+    await emitMeterValue(client, options, transactionId, meterWh);
+    console.log(`MeterValues ${index + 1}/${options.meterSamples}: ${meterWh} Wh`);
+  }
+  return meterWh;
+}
+
+async function emitTimedMeterValues(client: OcppClient, options: SimulatorOptions, transactionId: number) {
+  const powerKw = options.powerKw ?? 11;
+  const sampleCount = Math.max(1, Math.ceil((options.runTimeMs ?? 0) / options.sampleIntervalMs));
+  let elapsedMs = 0;
+  let meterWh = options.meterStartWh;
+
+  console.log(`Running timed charge for ${formatDuration(options.runTimeMs ?? 0)} at ${powerKw} kW.`);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const nextElapsedMs = Math.min(options.runTimeMs ?? 0, elapsedMs + options.sampleIntervalMs);
+    const intervalMs = nextElapsedMs - elapsedMs;
+    await sleep(intervalMs);
+    meterWh += Math.round(powerKw * 1000 * (intervalMs / 3_600_000));
+    elapsedMs = nextElapsedMs;
+    await emitMeterValue(client, options, transactionId, meterWh);
+    console.log(`MeterValues ${index + 1}/${sampleCount}: ${meterWh} Wh after ${formatDuration(elapsedMs)}`);
+  }
+
+  return meterWh;
+}
+
+async function emitMeterValue(client: OcppClient, options: SimulatorOptions, transactionId: number, meterWh: number) {
+  await call(client, 'MeterValues', {
+    connectorId: options.connectorId,
+    transactionId,
+    meterValue: [
+      {
+        timestamp: new Date().toISOString(),
+        sampledValue: [
+          {
+            value: String(meterWh),
+            measurand: 'Energy.Active.Import.Register',
+            unit: 'Wh',
+            context: 'Sample.Periodic'
+          }
+        ]
+      }
+    ]
+  });
 }
 
 async function ensureTagAccess(options: SimulatorOptions) {
@@ -367,6 +409,49 @@ function parseNonNegativeInteger(value: string, name: string) {
     throw new Error(`--${name} must be a non-negative integer`);
   }
   return parsed;
+}
+
+function parseOptionalPositiveNumber(value: string | undefined, name: string) {
+  if (value === undefined) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`--${name} must be a positive number`);
+  }
+  return parsed;
+}
+
+export function parseDurationMs(value: string, name: string) {
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error(`--${name} must be a duration like 15m, 90s, or 1h`);
+  if (/^\d+$/.test(trimmed)) return parsePositiveInteger(trimmed, name);
+
+  const matches = [...trimmed.matchAll(/(\d+(?:\.\d+)?)(ms|s|m|h)/g)];
+  if (matches.length === 0 || matches.map((match) => match[0]).join('') !== trimmed) {
+    throw new Error(`--${name} must be a duration like 15m, 90s, or 1h`);
+  }
+
+  const totalMs = matches.reduce((total, match) => {
+    const amount = Number(match[1]);
+    const unit = match[2];
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error(`--${name} duration parts must be positive`);
+    }
+    const multiplier = unit === 'ms' ? 1 : unit === 's' ? 1000 : unit === 'm' ? 60_000 : 3_600_000;
+    return total + amount * multiplier;
+  }, 0);
+
+  if (!Number.isInteger(totalMs) || totalMs <= 0) {
+    throw new Error(`--${name} must resolve to a positive whole number of milliseconds`);
+  }
+  return totalMs;
+}
+
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
+  if (ms % 60_000 === 0) return `${ms / 60_000}m`;
+  if (ms % 1000 === 0) return `${ms / 1000}s`;
+  return `${ms}ms`;
 }
 
 function isBooleanFlag(key: string) {
