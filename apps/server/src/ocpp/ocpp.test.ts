@@ -947,4 +947,66 @@ describe('OCPP 1.6 local primary', () => {
     });
     expect(server.db.select().from(proxySessionMappings).where(eq(proxySessionMappings.id, 'mapping-force-close')).get()?.stoppedAt).toBeInstanceOf(Date);
   });
+
+  it('sends StopTransaction to proxies when a new session replaces an active session on the same connector', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'REPLACE-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-REPLACE' });
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-REPLACE',
+      name: 'Replace CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-REPLACE',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-REPLACE');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const first = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'REPLACE-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { transactionId: number; idTagInfo: { status: string } };
+    await charger.call('MeterValues', {
+      connectorId: 1,
+      transactionId: first.transactionId,
+      meterValue: [
+        {
+          timestamp: '2026-06-19T10:05:00.000Z',
+          sampledValue: [{ value: '2.75', measurand: 'Energy.Active.Import.Register', unit: 'kWh' }]
+        }
+      ]
+    });
+    await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'REPLACE-TAG',
+      meterStart: 2750,
+      timestamp: '2026-06-19T10:06:00.000Z'
+    });
+
+    const stopCall = proxy.calls.find((call) => call.method === 'StopTransaction');
+    expect(stopCall?.params).toMatchObject({
+      transactionId: 4242,
+      idTag: 'REPLACE-TAG',
+      meterStop: 2750,
+      timestamp: '2026-06-19T10:05:00.000Z',
+      reason: 'Other'
+    });
+    const sessions = server.db.select().from(chargingSessions).where(eq(chargingSessions.chargerId, 'SMART-EVSE-REPLACE')).all();
+    expect(sessions.find((session) => session.transactionId === first.transactionId)).toMatchObject({
+      status: 'stopped',
+      stopMeterWh: 2750,
+      stopReason: 'ReplacedByNewTransaction'
+    });
+    expect(server.db.select().from(proxySessionMappings).where(eq(proxySessionMappings.localTransactionId, first.transactionId)).get()?.stoppedAt).toBeInstanceOf(Date);
+  });
 });

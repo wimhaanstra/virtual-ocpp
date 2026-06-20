@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import {
@@ -12,6 +12,7 @@ import {
   tagChargerAccess,
   tags
 } from '../db/schema.js';
+import type { StopTransactionRequest } from './types.js';
 
 export class OcppRepository {
   constructor(
@@ -167,6 +168,33 @@ export class OcppRepository {
     });
   }
 
+  getActiveSessionsForConnector(chargerId: string, connectorId: number) {
+    return this.db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, chargerId), eq(chargingSessions.connectorId, connectorId), eq(chargingSessions.status, 'active')))
+      .all();
+  }
+
+  buildReplacementStopTransaction(session: typeof chargingSessions.$inferSelect, stoppedAt: Date): StopTransactionRequest {
+    const latestEnergy = this.findLatestEnergySampleForSession(session);
+    const meterStop = latestEnergy?.meterWh ?? session.startMeterWh ?? undefined;
+    const payload: StopTransactionRequest = {
+      transactionId: session.transactionId,
+      timestamp: (latestEnergy?.sampledAt ?? stoppedAt).toISOString(),
+      reason: 'Other'
+    };
+
+    if (typeof session.idTag === 'string' && session.idTag.trim()) {
+      payload.idTag = session.idTag;
+    }
+    if (typeof meterStop === 'number') {
+      payload.meterStop = Math.round(meterStop);
+    }
+
+    return payload;
+  }
+
   stopSession(input: {
     chargerId: string;
     transactionId: number;
@@ -275,6 +303,31 @@ export class OcppRepository {
     }
   }
 
+  private findLatestEnergySampleForSession(session: typeof chargingSessions.$inferSelect) {
+    const rows = this.db
+      .select()
+      .from(meterSamples)
+      .where(and(eq(meterSamples.chargerId, session.chargerId), eq(meterSamples.connectorId, session.connectorId)))
+      .orderBy(desc(meterSamples.sampledAt))
+      .all();
+
+    for (const sample of rows) {
+      if (sample.sampledAt < session.startedAt) continue;
+      if (typeof sample.transactionId === 'number' && sample.transactionId !== session.transactionId) continue;
+      if (!isEnergySample(sample)) continue;
+
+      const meterWh = normalizeEnergyWh(sample);
+      if (meterWh === null) continue;
+
+      return {
+        sampledAt: sample.sampledAt,
+        meterWh
+      };
+    }
+
+    return null;
+  }
+
   private upsertChargerSeen(chargerId: string, seenAt = new Date()) {
     const existing = this.db.select().from(chargers).where(eq(chargers.id, chargerId)).limit(1).get();
     if (existing) {
@@ -298,4 +351,15 @@ export class OcppRepository {
       updatedAt: seenAt
     }).run();
   }
+}
+
+function isEnergySample(sample: typeof meterSamples.$inferSelect) {
+  return sample.measurand === 'Energy.Active.Import.Register' || sample.measurand === null || sample.measurand === '';
+}
+
+function normalizeEnergyWh(sample: typeof meterSamples.$inferSelect) {
+  if (sample.normalizedUnit === 'Wh' && typeof sample.normalizedValue === 'number') return sample.normalizedValue;
+  const value = typeof sample.normalizedValue === 'number' ? sample.normalizedValue : typeof sample.numericValue === 'number' ? sample.numericValue : Number.parseFloat(sample.value);
+  if (!Number.isFinite(value)) return null;
+  return sample.unit?.trim().toLowerCase() === 'kwh' ? value * 1000 : value;
 }

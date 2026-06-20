@@ -112,12 +112,25 @@ export class OcppHandlers {
     }
 
     if (idTagStatus === 'Accepted') {
+      const startedAt = parseOcppDate(params.timestamp);
+      const replacedSessions = this.repository.getActiveSessionsForConnector(context.chargerId, params.connectorId ?? 0);
+      for (const session of replacedSessions) {
+        const stopTransaction = this.repository.buildReplacementStopTransaction(session, startedAt);
+        await this.proxyAuthorization.forceStopTransaction(context.chargerId, stopTransaction);
+        this.repository.stopSession({
+          chargerId: context.chargerId,
+          transactionId: session.transactionId,
+          stoppedAt: startedAt,
+          meterStop: stopTransaction.meterStop,
+          reason: 'ReplacedByNewTransaction'
+        });
+      }
       this.repository.createSession({
         chargerId: context.chargerId,
         connectorId: params.connectorId ?? 0,
         transactionId,
         idTag: params.idTag,
-        startedAt: parseOcppDate(params.timestamp),
+        startedAt,
         meterStart: params.meterStart
       });
     } else {
