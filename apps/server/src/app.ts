@@ -14,6 +14,7 @@ import { registerOcppServer } from './ocpp/server.js';
 import { registerProxyTargetRoutes } from './proxy-targets.js';
 import { registerVisibilityRoutes } from './visibility.js';
 import { registerTagRoutes } from './tags.js';
+import { closeStaleChargerConnections } from './startup-maintenance.js';
 
 type BuildAppOptions = {
   config: AppConfig;
@@ -40,6 +41,7 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<Fastify
   }));
 
   communicationJournal.purgeExpired();
+  closeStaleChargerConnections(db);
 
   registerAuthRoutes(app, config, db);
   registerDashboardConfigRoutes(app, config, db);

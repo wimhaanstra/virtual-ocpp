@@ -95,6 +95,33 @@ describe('app', () => {
     await app.close();
   });
 
+  it('marks stale open charger connections disconnected on startup', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+
+    tempDb.db.insert(chargerConnections).values({
+      id: 'stale-connection-1',
+      chargerId: 'SMART-EVSE-STALE-STARTUP',
+      connectedAt: new Date('2026-06-19T09:00:00.000Z')
+    }).run();
+
+    const app = await buildApp({ config, db: tempDb.db });
+
+    const connection = tempDb.db.select().from(chargerConnections).where(eq(chargerConnections.id, 'stale-connection-1')).limit(1).get();
+    expect(connection?.disconnectedAt).toBeInstanceOf(Date);
+    expect(tempDb.db.select().from(logs).all()).toEqual([
+      expect.objectContaining({
+        level: 'warn',
+        category: 'charger',
+        message: 'stale charger connection closed on startup',
+        chargerId: 'SMART-EVSE-STALE-STARTUP'
+      })
+    ]);
+
+    await app.close();
+  });
+
   it('creates, lists, masks, and deletes charger-scoped proxy targets', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();
