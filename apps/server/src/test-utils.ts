@@ -103,10 +103,20 @@ export function createTestDatabase() {
       connector_id integer NOT NULL,
       sampled_at integer NOT NULL,
       value text NOT NULL,
+      numeric_value real,
+      normalized_value real,
+      normalized_unit text,
       measurand text,
       unit text,
-      context text
+      context text,
+      phase text,
+      location text,
+      format text
     );
+
+    CREATE INDEX meter_samples_session_idx ON meter_samples (charger_id, transaction_id, sampled_at);
+
+    CREATE INDEX meter_samples_measurand_idx ON meter_samples (measurand);
 
     CREATE TABLE proxy_targets (
       id text PRIMARY KEY NOT NULL,

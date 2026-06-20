@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AppConfig } from './config.js';
 import type { Database } from './db/client.js';
 import { registerAuthRoutes } from './auth.js';
+import { registerChargingStatsRoutes } from './charging-stats.js';
 import { CommunicationJournalService } from './communication-journal.js';
 import { registerCommunicationJournalRoutes } from './communication-journal-routes.js';
 import { registerChargerRoutes } from './chargers.js';
@@ -40,6 +41,7 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<Fastify
 
   registerAuthRoutes(app, config, db);
   registerDashboardConfigRoutes(app, config, db);
+  registerChargingStatsRoutes(app, db);
   registerChargerRoutes(app, db);
   registerTagRoutes(app, db);
   registerProxyTargetRoutes(app, db, proxyAuthorization);

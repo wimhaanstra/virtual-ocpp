@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
@@ -75,9 +75,15 @@ export const meterSamples = sqliteTable('meter_samples', {
   connectorId: integer('connector_id').notNull(),
   sampledAt: integer('sampled_at', { mode: 'timestamp_ms' }).notNull(),
   value: text('value').notNull(),
+  numericValue: real('numeric_value'),
+  normalizedValue: real('normalized_value'),
+  normalizedUnit: text('normalized_unit'),
   measurand: text('measurand'),
   unit: text('unit'),
-  context: text('context')
+  context: text('context'),
+  phase: text('phase'),
+  location: text('location'),
+  format: text('format')
 });
 
 export const proxyTargets = sqliteTable('proxy_targets', {

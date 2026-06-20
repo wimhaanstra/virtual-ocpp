@@ -191,9 +191,15 @@ export class OcppRepository {
     transactionId?: number;
     sampledAt: Date;
     value: string;
+    numericValue?: number | null;
+    normalizedValue?: number | null;
+    normalizedUnit?: string | null;
     measurand?: string;
     unit?: string;
     context?: string;
+    phase?: string;
+    location?: string;
+    format?: string;
   }) {
     this.db.insert(meterSamples).values({
       id: randomUUID(),
@@ -202,9 +208,15 @@ export class OcppRepository {
       transactionId: input.transactionId,
       sampledAt: input.sampledAt,
       value: input.value,
+      numericValue: input.numericValue,
+      normalizedValue: input.normalizedValue,
+      normalizedUnit: input.normalizedUnit,
       measurand: input.measurand,
       unit: input.unit,
-      context: input.context
+      context: input.context,
+      phase: input.phase,
+      location: input.location,
+      format: input.format
     }).run();
   }
 

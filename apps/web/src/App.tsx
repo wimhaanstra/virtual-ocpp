@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ChevronDown,
   Clock3,
+  Gauge,
   Eye,
   EyeOff,
   KeyRound,
@@ -82,6 +83,25 @@ type ChargingSession = {
   stopReason: string | null;
   status: string;
   active: boolean;
+};
+
+type ChargingStats = {
+  sessionId: string;
+  chargerId: string;
+  connectorId: number;
+  transactionId: number;
+  idTag: string | null;
+  startedAt: string;
+  elapsedSeconds: number;
+  startMeterWh: number | null;
+  latestMeterWh: number | null;
+  energyUsedWh: number | null;
+  latestPowerW: number | null;
+  latestCurrentA: number | null;
+  latestVoltageV: number | null;
+  latestSampleAt: string | null;
+  latestEnergyContext: string | null;
+  latestPowerContext: string | null;
 };
 
 type LogEntry = {
@@ -291,6 +311,32 @@ function formatDateTime(value: string | null) {
   return new Date(value).toLocaleString();
 }
 
+function formatEnergyWh(value: number | null) {
+  if (value === null) return "-";
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)} kWh`;
+  return `${Math.round(value)} Wh`;
+}
+
+function formatPowerW(value: number | null) {
+  if (value === null) return "-";
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)} kW`;
+  return `${Math.round(value)} W`;
+}
+
+function formatDecimalUnit(value: number | null, unit: string) {
+  if (value === null) return "-";
+  const rounded = Math.round(value * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} ${unit}`;
+}
+
+function formatDuration(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 function stringifyPayload(payload: unknown) {
   const serialized = JSON.stringify(payload, null, 2);
   if (serialized !== undefined) return serialized;
@@ -426,6 +472,8 @@ export default function App() {
   const [chargers, setChargers] = useState<ChargerRegistryRow[]>([]);
   const [chargerConnections, setChargerConnections] = useState<ChargerConnection[]>([]);
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
+  const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
+  const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [communicationJournal, setCommunicationJournal] = useState<CommunicationJournalItem[]>([]);
   const [communicationRetentionHours, setCommunicationRetentionHours] = useState<number | null>(null);
@@ -528,6 +576,11 @@ export default function App() {
     void loadChargerConnections(selectedChargerId);
   }, [authenticated, activeView, selectedChargerId]);
 
+  useEffect(() => {
+    if (!authenticated || activeView !== "Home") return;
+    void loadChargingStats(selectedChargerId);
+  }, [authenticated, activeView, selectedChargerId]);
+
   async function loadSession() {
     const response = await fetch("/api/auth/session", { credentials: "include" });
     if (!response.ok) return;
@@ -553,6 +606,8 @@ export default function App() {
     setChargers([]);
     setChargerConnections([]);
     setChargingSessions([]);
+    setChargingStats([]);
+    setChargingStatsStatus("idle");
     setLogs([]);
     setDashboardConfig(null);
     setTagForm(emptyTagForm());
@@ -658,6 +713,24 @@ export default function App() {
       return;
     }
     setChargingSessions(data);
+  }
+
+  async function loadChargingStats(chargerId = selectedChargerId) {
+    let data: ChargingStats[] | null | undefined;
+    setChargingStatsStatus("loading");
+    try {
+      data = await fetchAdminJson<ChargingStats[]>(withChargerContext("/api/charging-stats", chargerId));
+    } catch {
+      setChargingStatsStatus("error");
+      return;
+    }
+    if (data === null) return;
+    if (data === undefined) {
+      setChargingStatsStatus("error");
+      return;
+    }
+    setChargingStats(data);
+    setChargingStatsStatus("ready");
   }
 
   async function loadLogs(chargerId = selectedChargerId) {
@@ -1278,6 +1351,65 @@ export default function App() {
                     <p className="status-copy">No charger registry rows have been loaded yet.</p>
                   )}
                 </div>
+
+                <section className="charging-stats-panel" aria-label="Live charging stats">
+                  <div className="current-state__header">
+                    <div>
+                      <p className="eyebrow">Live charging</p>
+                      <h3>
+                        {chargingStatsStatus === "error"
+                          ? "Stats unavailable"
+                          : chargingStats.length > 1
+                            ? `${chargingStats.length} active sessions`
+                            : chargingStats[0]
+                              ? `Transaction ${chargingStats[0].transactionId}`
+                              : chargingStatsStatus === "loading"
+                                ? "Loading stats"
+                                : "No active session"}
+                      </h3>
+                    </div>
+                    <Gauge aria-hidden="true" />
+                  </div>
+                  {chargingStatsStatus === "error" ? (
+                    <p className="status-copy">Live meter stats could not be loaded. Recent sessions may still show active charging state.</p>
+                  ) : chargingStats.length > 0 ? (
+                    <div className="charging-session-stack">
+                      {chargingStats.map((stats) => (
+                        <article className="charging-session-card" key={stats.sessionId}>
+                          {chargingStats.length > 1 ? (
+                            <p className="mono charging-session-card__title">
+                              {stats.chargerId} / tx {stats.transactionId}
+                            </p>
+                          ) : null}
+                          <div className="charging-stats-grid">
+                            <div>
+                              <span>Energy used</span>
+                              <strong>{formatEnergyWh(stats.energyUsedWh)}</strong>
+                            </div>
+                            <div>
+                              <span>Charging power</span>
+                              <strong>{formatPowerW(stats.latestPowerW)}</strong>
+                            </div>
+                            <div>
+                              <span>Current</span>
+                              <strong>{formatDecimalUnit(stats.latestCurrentA, "A")}</strong>
+                            </div>
+                            <div>
+                              <span>Voltage</span>
+                              <strong>{formatDecimalUnit(stats.latestVoltageV, "V")}</strong>
+                            </div>
+                          </div>
+                          <p className="status-copy">
+                            Started {formatDuration(stats.elapsedSeconds)} ago on connector {stats.connectorId}
+                            {stats.latestSampleAt ? `; last meter sample ${formatDateTime(stats.latestSampleAt)}` : "; no meter sample yet"}.
+                          </p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="status-copy">Start a charging session to see live meter values from OCPP MeterValues.</p>
+                  )}
+                </section>
               </section>
             </section>
 

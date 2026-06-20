@@ -58,7 +58,9 @@ type TestCommunicationJournalItem = {
 };
 
 const emptyVisibilityResponses = (url: string, method: string) => {
-  if (url === "/api/dashboard-config" && method === "GET") {
+  const path = new URL(url, "http://localhost").pathname;
+
+  if (path === "/api/dashboard-config" && method === "GET") {
     return new Response(
       JSON.stringify({
         ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
@@ -70,11 +72,18 @@ const emptyVisibilityResponses = (url: string, method: string) => {
     );
   }
 
-  if ((url === "/api/chargers" || url === "/api/charger-connections" || url === "/api/sessions" || url === "/api/logs") && method === "GET") {
+  if (
+    (path === "/api/chargers" ||
+      path === "/api/charger-connections" ||
+      path === "/api/sessions" ||
+      path === "/api/charging-stats" ||
+      path === "/api/logs") &&
+    method === "GET"
+  ) {
     return new Response(JSON.stringify([]), { status: 200 });
   }
 
-  if (url.startsWith("/api/communication-journal") && method === "GET") {
+  if (path === "/api/communication-journal" && method === "GET") {
     return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
   }
   return null;
@@ -180,6 +189,32 @@ describe("App", () => {
         );
       }
 
+      if (url.startsWith("/api/charging-stats") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              sessionId: "session-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              elapsedSeconds: 1860,
+              startMeterWh: 1000,
+              latestMeterWh: 2650,
+              energyUsedWh: 1650,
+              latestPowerW: 7200,
+              latestCurrentA: 31.3,
+              latestVoltageV: 230,
+              latestSampleAt: "2026-06-19T09:36:00.000Z",
+              latestEnergyContext: "Sample.Periodic",
+              latestPowerContext: "Sample.Periodic"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
       if (url === "/api/chargers" && method === "GET") {
         return new Response(
           JSON.stringify([
@@ -245,6 +280,11 @@ describe("App", () => {
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getByText("Chargers connected now")).toBeInTheDocument();
     expect(screen.getByText("Proxy targets connected")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Transaction 42" })).toBeInTheDocument();
+    expect(screen.getByText("1.65 kWh")).toBeInTheDocument();
+    expect(screen.getByText("7.2 kW")).toBeInTheDocument();
+    expect(screen.getByText("31.3 A")).toBeInTheDocument();
+    expect(screen.getByText("230 V")).toBeInTheDocument();
     expect(await screen.findByText("1/1")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upstream targets" })).toBeInTheDocument();
     expect(screen.getByText("wss://tap.example/ocpp/STATION-1")).toBeInTheDocument();

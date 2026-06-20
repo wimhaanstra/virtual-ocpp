@@ -33,17 +33,22 @@ export type StatusNotificationRequest = {
   timestamp?: string;
 };
 
+export type SampledValue = {
+  value?: string;
+  measurand?: string;
+  unit?: string;
+  context?: string;
+  phase?: string;
+  location?: string;
+  format?: string;
+};
+
 export type MeterValuesRequest = {
   connectorId?: number;
   transactionId?: number;
   meterValue?: Array<{
     timestamp?: string;
-    sampledValue?: Array<{
-      value?: string;
-      measurand?: string;
-      unit?: string;
-      context?: string;
-    }>;
+    sampledValue?: SampledValue[];
   }>;
 };
 

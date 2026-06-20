@@ -44,9 +44,15 @@ CREATE TABLE IF NOT EXISTS `meter_samples` (
   `connector_id` integer NOT NULL,
   `sampled_at` integer NOT NULL,
   `value` text NOT NULL,
+  `numeric_value` real,
+  `normalized_value` real,
+  `normalized_unit` text,
   `measurand` text,
   `unit` text,
-  `context` text
+  `context` text,
+  `phase` text,
+  `location` text,
+  `format` text
 );
 
 CREATE TABLE IF NOT EXISTS `proxy_targets` (

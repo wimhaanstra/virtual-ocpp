@@ -135,9 +135,12 @@ The protected default admin view is the home dashboard. It is read-only and give
 - expected websocket protocol
 - optional Basic Auth requirement without exposing secrets
 - charger connection status and recent activity summary
+- active charging energy, power, current, and voltage from normalized `MeterValues` when the charger supplies them
 - quick links to sessions, activity, tags, and proxy targets
 
 The dashboard reads this setup information from `GET /api/dashboard-config`. That protected endpoint returns the charger URL template, the OCPP websocket subprotocol, and whether charger Basic Auth is required. It never returns the Basic Auth password. By default the displayed URL uses the backend `PORT`; set `OCPP_PUBLIC_URL` when the charger should connect through a reverse proxy or TLS hostname.
+
+Live charging stats are read from `GET /api/charging-stats`, scoped with the same optional `chargerId` query parameter as the other visibility endpoints. The endpoint derives active-session values from `charging_sessions` and `meter_samples`: energy import register samples are normalized to Wh, power import samples to W, and aggregate/no-phase current/voltage are returned when present. Phase-scoped current/voltage samples are stored for later detail views but are not displayed as total charger current or voltage. If a charger does not send periodic `MeterValues`, the dashboard still shows the active transaction but leaves live meter fields blank until data arrives.
 
 The dashboard also shows selected-charger proxy target health from recent safe proxy activity logs. Proxy target forms treat `url` as the upstream base websocket URL and append `stationId`, or the local charger id when `stationId` is blank, as the upstream OCPP identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 
@@ -165,6 +168,7 @@ Retention is configured with `COMMUNICATION_LOG_RETENTION_HOURS`, defaulting to 
 The authenticated frontend exposes read-only operational views for sessions and activity:
 
 - `GET /api/sessions` returns recent charging sessions.
+- `GET /api/charging-stats` returns active session meter summaries with normalized energy and power values.
 - `GET /api/chargers` and `GET /api/charger-connections` return recent charger connection records.
 - `GET /api/logs` returns recent logs with `hasMetadata` and a whitelisted context subset, but never raw metadata.
 

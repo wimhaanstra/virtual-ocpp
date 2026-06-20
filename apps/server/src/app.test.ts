@@ -1,11 +1,14 @@
 import { eq } from 'drizzle-orm';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import { applyMigrations } from './db/client.js';
 import {
   chargerConnections,
   chargers,
   chargingSessions,
   logs,
+  meterSamples,
   proxySessionMappings,
   proxyTargets,
   sessions,
@@ -76,6 +79,7 @@ describe('app', () => {
       '/api/tags',
       '/api/charger-connections',
       '/api/sessions',
+      '/api/charging-stats',
       '/api/logs',
       '/api/communication-journal'
     ];
@@ -347,6 +351,111 @@ describe('app', () => {
       }
     ]).run();
 
+    tempDb.db.insert(meterSamples).values([
+      {
+        id: 'sample-energy',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:10:00.000Z'),
+        value: '3.75',
+        numericValue: 3.75,
+        normalizedValue: 3750,
+        normalizedUnit: 'Wh',
+        measurand: 'Energy.Active.Import.Register',
+        unit: 'kWh',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'sample-power',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:10:00.000Z'),
+        value: '7.2',
+        numericValue: 7.2,
+        normalizedValue: 7200,
+        normalizedUnit: 'W',
+        measurand: 'Power.Active.Import',
+        unit: 'kW',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'sample-current',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:10:00.000Z'),
+        value: '31.3',
+        numericValue: 31.3,
+        normalizedValue: 31.3,
+        normalizedUnit: 'A',
+        measurand: 'Current.Import',
+        unit: 'A',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'sample-current-phase',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:11:00.000Z'),
+        value: '99',
+        numericValue: 99,
+        normalizedValue: 99,
+        normalizedUnit: 'A',
+        measurand: 'Current.Import',
+        unit: 'A',
+        context: 'Sample.Periodic',
+        phase: 'L1',
+        location: null,
+        format: null
+      },
+      {
+        id: 'sample-voltage',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:10:00.000Z'),
+        value: '230',
+        numericValue: 230,
+        normalizedValue: 230,
+        normalizedUnit: 'V',
+        measurand: 'Voltage',
+        unit: 'V',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'sample-voltage-phase',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:11:00.000Z'),
+        value: '240',
+        numericValue: 240,
+        normalizedValue: 240,
+        normalizedUnit: 'V',
+        measurand: 'Voltage',
+        unit: 'V',
+        context: 'Sample.Periodic',
+        phase: 'L1',
+        location: null,
+        format: null
+      }
+    ]).run();
+
     tempDb.db.insert(logs).values([
       {
         id: 'log-old',
@@ -483,6 +592,32 @@ describe('app', () => {
     ]);
     expect(logsResponse.body).not.toContain('also-hidden');
 
+    const statsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/charging-stats?chargerId=CHARGER-ACTIVE',
+      headers: { cookie }
+    });
+    expect(statsResponse.statusCode).toBe(200);
+    expect(statsResponse.json()).toEqual([
+      expect.objectContaining({
+        sessionId: 'session-active',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        idTag: 'ACTIVE-TAG',
+        startedAt: '2026-06-19T09:05:00.000Z',
+        startMeterWh: 3000,
+        latestMeterWh: 3750,
+        energyUsedWh: 750,
+        latestPowerW: 7200,
+        latestCurrentA: 31.3,
+        latestVoltageV: 230,
+        latestSampleAt: '2026-06-19T09:10:00.000Z',
+        latestEnergyContext: 'Sample.Periodic',
+        latestPowerContext: 'Sample.Periodic'
+      })
+    ]);
+
     await app.close();
   });
 
@@ -500,6 +635,37 @@ describe('app', () => {
     expect(rows.filter((row) => row.disconnectedAt === null)).toHaveLength(1);
     expect(rows.filter((row) => row.disconnectedAt !== null)).toHaveLength(1);
     expect(rows.find((row) => row.id === activeConnectionId)?.disconnectedAt).toBeNull();
+  });
+
+  it('upgrades existing meter sample tables with normalized columns and indexes', () => {
+    const sqlite = new Database(':memory:');
+    try {
+      sqlite.exec(`
+        CREATE TABLE meter_samples (
+          id text PRIMARY KEY NOT NULL,
+          charger_id text NOT NULL,
+          transaction_id integer,
+          connector_id integer NOT NULL,
+          sampled_at integer NOT NULL,
+          value text NOT NULL,
+          measurand text,
+          unit text,
+          context text
+        );
+      `);
+
+      applyMigrations(sqlite);
+
+      const columns = sqlite.prepare('PRAGMA table_info(meter_samples)').all() as Array<{ name: string }>;
+      expect(columns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(['numeric_value', 'normalized_value', 'normalized_unit', 'phase', 'location', 'format'])
+      );
+
+      const indexes = sqlite.prepare('PRAGMA index_list(meter_samples)').all() as Array<{ name: string }>;
+      expect(indexes.map((index) => index.name)).toEqual(expect.arrayContaining(['meter_samples_session_idx', 'meter_samples_measurand_idx']));
+    } finally {
+      sqlite.close();
+    }
   });
 });
 

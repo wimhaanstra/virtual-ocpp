@@ -619,7 +619,16 @@ describe('OCPP 1.6 local primary', () => {
       localTransactionId: start.transactionId,
       externalTransactionId: 4242
     });
-    expect(server.db.select().from(meterSamples).all()).toHaveLength(1);
+    const recordedSamples = server.db.select().from(meterSamples).all();
+    expect(recordedSamples).toHaveLength(1);
+    expect(recordedSamples[0]).toMatchObject({
+      value: '2.5',
+      numericValue: 2.5,
+      normalizedValue: 2500,
+      normalizedUnit: 'Wh',
+      measurand: 'Energy.Active.Import.Register',
+      unit: 'kWh'
+    });
     expect(server.db.select().from(chargingSessions).all()).toHaveLength(1);
   });
 });

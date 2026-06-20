@@ -24,7 +24,15 @@ export function applyMigrations(client: Database.Database) {
     client.exec(migration);
   }
   ensureColumn(client, 'proxy_targets', 'charger_id', 'ALTER TABLE proxy_targets ADD COLUMN charger_id text');
+  ensureColumn(client, 'meter_samples', 'numeric_value', 'ALTER TABLE meter_samples ADD COLUMN numeric_value real');
+  ensureColumn(client, 'meter_samples', 'normalized_value', 'ALTER TABLE meter_samples ADD COLUMN normalized_value real');
+  ensureColumn(client, 'meter_samples', 'normalized_unit', 'ALTER TABLE meter_samples ADD COLUMN normalized_unit text');
+  ensureColumn(client, 'meter_samples', 'phase', 'ALTER TABLE meter_samples ADD COLUMN phase text');
+  ensureColumn(client, 'meter_samples', 'location', 'ALTER TABLE meter_samples ADD COLUMN location text');
+  ensureColumn(client, 'meter_samples', 'format', 'ALTER TABLE meter_samples ADD COLUMN format text');
   client.exec('CREATE INDEX IF NOT EXISTS proxy_targets_charger_id_idx ON proxy_targets (charger_id)');
+  client.exec('CREATE INDEX IF NOT EXISTS meter_samples_session_idx ON meter_samples (charger_id, transaction_id, sampled_at)');
+  client.exec('CREATE INDEX IF NOT EXISTS meter_samples_measurand_idx ON meter_samples (measurand)');
 }
 
 function ensureColumn(client: Database.Database, table: string, column: string, statement: string) {

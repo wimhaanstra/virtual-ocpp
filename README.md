@@ -114,7 +114,13 @@ Monitor-only targets receive mirrored calls but never affect the local charger d
 
 When an upstream target returns its own transaction id from `StartTransaction`, Virtual OCPP stores a per-target transaction mapping. Later `MeterValues` and `StopTransaction` calls are forwarded with that upstream transaction id while the charger continues using the local transaction id.
 
-Charging sessions, meter samples, charger connection events, authorization decisions, and status notifications are persisted to SQLite.
+Charging sessions, meter samples, charger connection events, authorization decisions, and status notifications are persisted to SQLite. Raw OCPP meter sample values are retained, and supported numeric samples are also normalized for dashboard use:
+
+- `Energy.Active.Import.Register` is normalized to Wh, including kWh samples.
+- `Power.Active.Import` is normalized to W, including kW samples.
+- Aggregate/no-phase `Current.Import` and `Voltage` are exposed as amps and volts when supplied by the charger.
+
+The dashboard can show live energy used and charging speed only when the charger emits periodic `MeterValues`. Chargers that only send `StartTransaction.meterStart` and `StopTransaction.meterStop` still produce session totals once stopped, but live power/current/voltage remain unavailable. Phase-scoped current/voltage samples are stored but not collapsed into a fake total on the dashboard.
 
 ## OCPP Charger Simulator
 
@@ -166,7 +172,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Enter the proxy target URL as the upstream base websocket URL. Virtual OCPP appends the configured station id, or the local charger id when station id is blank, as the OCPP websocket identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 - Edit, toggle, or delete proxy targets.
 - View whether a proxy target has stored credentials without exposing the username or password.
-- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, summary metrics, and quick links to operational pages.
+- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, active charging energy/power/current/voltage when available, summary metrics, and quick links to operational pages.
 - View recent charging sessions.
 - View charger connection activity and recent logs.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.

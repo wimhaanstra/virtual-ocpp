@@ -484,6 +484,80 @@ nav button:hover {
   gap: 12px;
 }
 
+.current-state__header h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.current-state__header svg {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+}
+
+.charging-stats-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.charging-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.charging-session-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.charging-session-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.charging-session-card + .charging-session-card {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.charging-session-card__title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.charging-stats-grid div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.charging-stats-grid span,
+.charging-stats-grid strong {
+  display: block;
+  min-width: 0;
+}
+
+.charging-stats-grid span {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.charging-stats-grid strong {
+  font-size: 15px;
+  word-break: break-word;
+}
+
 .status-tile,
 .panel {
   border: 1px solid var(--line);
