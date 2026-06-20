@@ -82,6 +82,8 @@ Protected frontend pages use client-side routes so refresh and browser back/forw
 - `GET /api/chargers` lists recent charger connections. Requires admin session.
 - `GET /api/charger-connections` is an alias for charger connection history. Requires admin session.
 - `GET /api/sessions` lists recent charging sessions. Requires admin session.
+- `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` to the connected charger for an active session. Requires admin session.
+- `POST /api/sessions/:id/close` locally closes a lingering active session record without sending an OCPP command. Requires admin session.
 - `GET /api/logs` lists recent log/activity entries with safe context and without raw metadata. Requires admin session.
 - `ws://host:3000/ocpp/:chargerId` accepts OCPP 1.6j charger websocket connections. The dashboard shows the configured URL template from `OCPP_PUBLIC_URL`, or a local backend-port default when no override is set.
 
@@ -98,6 +100,10 @@ Implemented OCPP 1.6j calls:
 - `StopTransaction`
 - `StatusNotification`
 - `MeterValues`
+
+Server-initiated command:
+
+- `RemoteStopTransaction`
 
 Authorization uses the SQLite `tags` allowlist and `tag_charger_access`. Known enabled tags are still rejected until they have explicit enabled access for the charger that is authorizing. Unknown tags, disabled tags, or tags without charger access are rejected. Operators can manage global tags and grant/revoke selected-charger access from the protected admin UI.
 
@@ -177,6 +183,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Add per-proxy tag mappings so an upstream receives a different idTag than the charger sends locally.
 - Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, active charging energy/power/current/voltage when available, summary metrics, and quick links to operational pages.
 - View recent charging sessions.
+- Request a real OCPP remote stop for active sessions when the charger is connected.
 - Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
 - View charger connection activity and recent logs.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.
@@ -184,6 +191,8 @@ The current frontend includes global tag management, selected-charger tag access
 Tag access and proxy target changes affect OCPP behavior immediately because the server reads current SQLite state during authorization and proxied calls. Proxy target edits and deletes are rejected while that charger/target has an active mirrored transaction mapping, so in-flight upstream sessions are not silently orphaned.
 
 When a charger starts a new accepted transaction on a connector, Virtual OCPP automatically closes any older active local session on that same charger connector with reason `ReplacedByNewTransaction`. Other connectors on the same charger are left untouched.
+
+Remote stop requests send `RemoteStopTransaction` to the connected charger with the local transaction id. The local session remains active until the charger confirms the stop by sending `StopTransaction`; use the local close action only for stale records that the charger will no longer close itself.
 
 ## Planned V1 Features
 

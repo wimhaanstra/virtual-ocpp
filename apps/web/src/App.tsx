@@ -772,6 +772,31 @@ export default function App() {
     }
   }
 
+  async function remoteStopChargingSession(session: ChargingSession) {
+    setBusy(true);
+    setMessage(`Requesting remote stop for session ${session.transactionId}...`);
+    try {
+      const response = await fetch(`/api/sessions/${session.id}/remote-stop`, {
+        method: "POST",
+        credentials: "include"
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        const message = response.status === 409 ? "Charger is not connected or the session is no longer active." : "Could not request remote stop.";
+        setMessage(message);
+        return;
+      }
+
+      const result = (await response.json().catch(() => null)) as { status?: string } | null;
+      setMessage(result?.status === "Accepted" ? `Remote stop accepted for session ${session.transactionId}.` : `Remote stop returned ${result?.status ?? "Unknown"}.`);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadLogs(selectedChargerId)]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadLogs(chargerId = selectedChargerId) {
     const data = await fetchAdminJson<LogEntry[]>(withChargerContext("/api/logs", chargerId));
     if (data === null) return;
@@ -1628,16 +1653,28 @@ export default function App() {
                         <td>{session.stopReason || "-"}</td>
                         <td>
                           {session.active ? (
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button"
-                              onClick={() => void closeChargingSession(session)}
-                              disabled={busy}
-                              title="Close lingering session"
-                              aria-label={`Close lingering session ${session.transactionId}`}
-                            >
-                              <PowerOff aria-hidden="true" />
-                            </Button>
+                            <div className="action-row compact-action-row">
+                              <Button
+                                type="button"
+                                className="button-secondary icon-button"
+                                onClick={() => void remoteStopChargingSession(session)}
+                                disabled={busy}
+                                title="Remote stop transaction"
+                                aria-label={`Remote stop session ${session.transactionId}`}
+                              >
+                                <Power aria-hidden="true" />
+                              </Button>
+                              <Button
+                                type="button"
+                                className="button-secondary icon-button"
+                                onClick={() => void closeChargingSession(session)}
+                                disabled={busy}
+                                title="Close lingering session"
+                                aria-label={`Close lingering session ${session.transactionId}`}
+                              >
+                                <PowerOff aria-hidden="true" />
+                              </Button>
+                            </div>
                           ) : (
                             "-"
                           )}

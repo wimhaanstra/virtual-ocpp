@@ -1191,6 +1191,10 @@ describe("App", () => {
         );
       }
 
+      if (url === "/api/sessions/session-1/remote-stop" && method === "POST") {
+        return new Response(JSON.stringify({ ok: true, status: "Accepted" }), { status: 200 });
+      }
+
       if (url === "/api/chargers" && method === "GET") {
         return new Response(
           JSON.stringify([
@@ -1263,6 +1267,9 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Remote stop session 42" }));
+    await screen.findByText("Remote stop accepted for session 42.");
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/remote-stop" && init?.method === "POST")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Close lingering session 42" }));
     await screen.findByText("Closed session 42.");
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/close" && init?.method === "POST")).toBe(true);

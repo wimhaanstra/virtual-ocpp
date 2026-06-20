@@ -6,6 +6,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AppConfig } from '../config.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { Database } from '../db/client.js';
+import { ChargerCommandService } from './charger-command-service.js';
 import { OcppHandlers } from './handlers.js';
 import { ProxyAuthorizationService } from './proxy-service.js';
 import { OcppRepository } from './repository.js';
@@ -17,6 +18,7 @@ type RpcCall<TParams> = {
 type RpcClient = {
   identity: string;
   session?: { chargerId?: string };
+  call: (method: string, params: Record<string, unknown>, options?: { callTimeoutMs?: number }) => Promise<unknown>;
   handle: (method: string | ((call: { method: string; params: unknown }) => unknown), handler?: (call: RpcCall<never>) => unknown) => void;
   on: (event: 'close', handler: () => void) => void;
 };
@@ -26,7 +28,8 @@ export async function registerOcppServer(
   config: AppConfig,
   db: Database,
   communicationJournal?: CommunicationJournalService,
-  proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal)
+  proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal),
+  chargerCommands = new ChargerCommandService(communicationJournal)
 ) {
   const repository = new OcppRepository(db, communicationJournal);
   const handlers = new OcppHandlers(repository, proxyAuthorization);
@@ -56,6 +59,7 @@ export async function registerOcppServer(
   rpcServer.on('client', (client: RpcClient) => {
     const context = { chargerId: client.session?.chargerId ?? client.identity };
     const connectionId = repository.recordConnected(context.chargerId);
+    chargerCommands.register(context.chargerId, client);
 
     registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'BootNotification', (params: Parameters<typeof handlers.bootNotification>[1]) =>
       handlers.bootNotification(context, params)
@@ -112,6 +116,7 @@ export async function registerOcppServer(
     });
 
     client.on('close', () => {
+      chargerCommands.unregister(context.chargerId, client);
       repository.recordDisconnected(context.chargerId, connectionId);
     });
   });

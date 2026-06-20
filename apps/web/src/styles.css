@@ -809,6 +809,11 @@ td {
   gap: 8px;
 }
 
+.compact-action-row {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
 .communication-filters {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

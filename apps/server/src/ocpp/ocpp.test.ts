@@ -431,6 +431,59 @@ describe('OCPP 1.6 local primary', () => {
     expect(proxy.calls).toHaveLength(0);
   });
 
+  it('sends RemoteStopTransaction to the connected charger for an active session', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const remoteStopCalls: Array<Record<string, unknown>> = [];
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-REMOTE-STOP');
+    charger.handle('RemoteStopTransaction', async ({ params }) => {
+      remoteStopCalls.push(params ?? {});
+      return { status: 'Accepted' };
+    });
+    cleanup.push(async () => { await charger.close({}); });
+
+    server.db.insert(chargingSessions).values({
+      id: 'session-remote-stop',
+      chargerId: 'SMART-EVSE-REMOTE-STOP',
+      connectorId: 1,
+      transactionId: 9001,
+      idTag: 'TAG-1',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+
+    const cookie = await loginAdmin(server.app);
+    const response = await server.app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-remote-stop/remote-stop',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, status: 'Accepted' });
+    expect(remoteStopCalls).toEqual([{ transactionId: 9001 }]);
+    expect(server.db.select().from(chargingSessions).get()).toMatchObject({ status: 'active', stoppedAt: null });
+    expect(
+      server.db
+        .select()
+        .from(communicationJournal)
+        .all()
+        .some(
+          (row) =>
+            row.direction === 'outbound' &&
+            row.targetType === 'charger' &&
+            row.ocppMethod === 'RemoteStopTransaction' &&
+            row.transactionId === 9001
+        )
+    ).toBe(true);
+    expect(server.db.select().from(logs).all().some((row) => row.message === 'remote stop transaction requested')).toBe(true);
+  });
+
   it('reuses one persistent upstream proxy connection for repeated calls', async () => {
     const proxy = await startRecordingProxyServer();
     cleanup.push(proxy.close);

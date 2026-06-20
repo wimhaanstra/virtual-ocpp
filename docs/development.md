@@ -171,12 +171,13 @@ Retention is configured with `COMMUNICATION_LOG_RETENTION_HOURS`, defaulting to 
 The authenticated frontend exposes read-only operational views for sessions and activity:
 
 - `GET /api/sessions` returns recent charging sessions.
+- `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` for an active session through the connected charger websocket.
 - `POST /api/sessions/:id/close` marks an active session as locally closed with reason `OperatorClosed` and closes matching proxy-session mappings. It does not send a remote stop command to the charger.
 - `GET /api/charging-stats` returns active session meter summaries with normalized energy and power values.
 - `GET /api/chargers` and `GET /api/charger-connections` return recent charger connection records.
 - `GET /api/logs` returns recent logs with `hasMetadata` and a whitelisted context subset, but never raw metadata.
 
-The sessions page shows charger id, connector, transaction id, tag id, status, timestamps, meter readings, stop reason, and a close action for lingering active session records. The activity page shows charger connection history and recent log messages. For logs, only safe context fields such as `proxyTargetId`, `method`, and `status` are exposed. This slice uses manual refresh buttons; live updates are deferred.
+The sessions page shows charger id, connector, transaction id, tag id, status, timestamps, meter readings, stop reason, a remote stop action for active connected charger sessions, and a close action for lingering active session records. Remote stop is a charger command: it records the request/result in the communication journal and activity logs, but the local session remains active until the charger sends `StopTransaction`. The local close action is only for stale records. The activity page shows charger connection history and recent log messages. For logs, only safe context fields such as `proxyTargetId`, `method`, and `status` are exposed. This slice uses manual refresh buttons; live updates are deferred.
 
 Accepted `StartTransaction` calls automatically close older active local sessions for the same `chargerId` and `connectorId` with reason `ReplacedByNewTransaction`. This avoids stale sessions for single-connector chargers without incorrectly closing legitimate sessions on other connectors.
 

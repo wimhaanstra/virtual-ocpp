@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
 import { chargerConnections, chargingSessions, logs, proxySessionMappings } from './db/schema.js';
+import { ChargerCommandError, type ChargerCommandService } from './ocpp/charger-command-service.js';
 
 const RECENT_LIMIT = 50;
 const RECENT_LOG_LIMIT = 100;
@@ -13,7 +14,7 @@ const ChargerScopedQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
 });
 
-export function registerVisibilityRoutes(app: FastifyInstance, db: Database) {
+export function registerVisibilityRoutes(app: FastifyInstance, db: Database, chargerCommands?: ChargerCommandService) {
   const listConnections = async (request: FastifyRequest, reply: FastifyReply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -103,6 +104,57 @@ export function registerVisibilityRoutes(app: FastifyInstance, db: Database) {
     });
   });
 
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/remote-stop', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    if (session.status !== 'active') {
+      return reply.code(409).send({ error: 'session_not_active' });
+    }
+
+    if (!chargerCommands) {
+      return reply.code(503).send({ error: 'remote_commands_unavailable' });
+    }
+
+    try {
+      const result = await chargerCommands.remoteStopTransaction(session.chargerId, session.transactionId);
+      recordSessionLog(db, {
+        level: result.status === 'Accepted' ? 'info' : 'warn',
+        message: 'remote stop transaction requested',
+        chargerId: session.chargerId,
+        transactionId: session.transactionId,
+        metadata: {
+          connectorId: session.connectorId,
+          status: result.status
+        }
+      });
+      return {
+        ok: result.status === 'Accepted',
+        status: result.status
+      };
+    } catch (error) {
+      const statusCode = error instanceof ChargerCommandError && error.code === 'charger_not_connected' ? 409 : 502;
+      recordSessionLog(db, {
+        level: 'warn',
+        message: 'remote stop transaction failed',
+        chargerId: session.chargerId,
+        transactionId: session.transactionId,
+        metadata: {
+          connectorId: session.connectorId,
+          errorType: error instanceof Error ? error.name : 'unknown_error',
+          errorCode: error && typeof error === 'object' && 'code' in error ? (error as { code?: unknown }).code : undefined
+        }
+      });
+      return reply.code(statusCode).send({
+        error: error instanceof ChargerCommandError ? error.code : 'remote_stop_failed'
+      });
+    }
+  });
+
   app.get('/api/logs', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -118,6 +170,28 @@ export function registerVisibilityRoutes(app: FastifyInstance, db: Database) {
 
     return rows.map(toPublicLog);
   });
+}
+
+function recordSessionLog(
+  db: Database,
+  input: {
+    level: 'info' | 'warn';
+    message: string;
+    chargerId: string;
+    transactionId: number;
+    metadata: Record<string, unknown>;
+  }
+) {
+  db.insert(logs).values({
+    id: randomUUID(),
+    level: input.level,
+    category: 'session',
+    message: input.message,
+    chargerId: input.chargerId,
+    transactionId: input.transactionId,
+    metadata: JSON.stringify(input.metadata),
+    createdAt: new Date()
+  }).run();
 }
 
 function toPublicChargerConnection(connection: typeof chargerConnections.$inferSelect) {

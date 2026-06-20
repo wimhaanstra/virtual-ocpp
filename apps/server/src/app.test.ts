@@ -75,18 +75,19 @@ describe('app', () => {
     const app = await buildApp({ config, db: tempDb.db });
 
     const routes = [
-      '/api/chargers',
-      '/api/proxy-targets?chargerId=CHARGER-1',
-      '/api/tags',
-      '/api/charger-connections',
-      '/api/sessions',
-      '/api/charging-stats',
-      '/api/logs',
-      '/api/communication-journal'
-    ];
+      { method: 'GET', url: '/api/chargers' },
+      { method: 'GET', url: '/api/proxy-targets?chargerId=CHARGER-1' },
+      { method: 'GET', url: '/api/tags' },
+      { method: 'GET', url: '/api/charger-connections' },
+      { method: 'GET', url: '/api/sessions' },
+      { method: 'POST', url: '/api/sessions/session-1/remote-stop' },
+      { method: 'GET', url: '/api/charging-stats' },
+      { method: 'GET', url: '/api/logs' },
+      { method: 'GET', url: '/api/communication-journal' }
+    ] as const;
 
-    for (const url of routes) {
-      const response = await app.inject({ method: 'GET', url });
+    for (const { method, url } of routes) {
+      const response = await app.inject({ method, url });
       expect(response.statusCode).toBe(401);
       expect(response.json()).toEqual({ error: 'unauthorized' });
     }
@@ -791,6 +792,40 @@ describe('app', () => {
     });
     expect(tempDb.db.select().from(chargingSessions).get()?.status).toBe('stopped');
     expect(tempDb.db.select().from(proxySessionMappings).get()?.stoppedAt).toBeInstanceOf(Date);
+
+    await app.close();
+  });
+
+  it('rejects remote stop when the charger is not connected', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-disconnected',
+      chargerId: 'SMART-EVSE-DISCONNECTED',
+      connectorId: 1,
+      transactionId: 301,
+      idTag: 'TAG-1',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-disconnected/remote-stop',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'charger_not_connected' });
+    expect(tempDb.db.select().from(logs).all().some((row) => row.message === 'remote stop transaction failed')).toBe(true);
 
     await app.close();
   });
