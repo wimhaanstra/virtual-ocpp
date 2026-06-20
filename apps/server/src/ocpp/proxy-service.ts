@@ -35,10 +35,13 @@ type ReconnectBackoff = {
   failures: number;
   nextAttemptAt: number;
 };
+type ReconnectTimer = ReturnType<typeof setTimeout>;
 
 export class ProxyAuthorizationService {
   private readonly connections = new Map<string, UpstreamConnection>();
   private readonly reconnectBackoffs = new Map<string, ReconnectBackoff>();
+  private readonly reconnectTimers = new Map<string, ReconnectTimer>();
+  private closed = false;
 
   constructor(
     private readonly db: Database,
@@ -125,9 +128,24 @@ export class ProxyAuthorizationService {
   }
 
   async warmUpTarget(chargerId: string, proxyTargetId: string) {
+    if (this.closed) return;
+
     const target = this.getEnabledTarget(chargerId, proxyTargetId);
     if (!target || !this.hasActiveChargerConnection(chargerId)) return;
 
+    await this.warmUpEnabledTarget(chargerId, target);
+  }
+
+  async warmUpTargets(chargerId: string) {
+    if (this.closed) return;
+    if (!this.hasActiveChargerConnection(chargerId)) return;
+
+    for (const target of this.enabledTargets(chargerId)) {
+      await this.warmUpEnabledTarget(chargerId, target);
+    }
+  }
+
+  private async warmUpEnabledTarget(chargerId: string, target: ProxyTarget) {
     const charger = this.db.select().from(chargers).where(eq(chargers.id, chargerId)).limit(1).get();
     const boot = await this.callTarget(chargerId, target, 'BootNotification', {
       chargePointVendor: charger?.chargePointVendor ?? 'Virtual OCPP',
@@ -147,9 +165,11 @@ export class ProxyAuthorizationService {
   }
 
   async close() {
+    this.closed = true;
     const connections = [...this.connections.entries()];
     this.connections.clear();
     this.reconnectBackoffs.clear();
+    this.clearReconnectTimers();
 
     await Promise.allSettled(
       connections.map(async ([key, connection]) => {
@@ -453,7 +473,9 @@ export class ProxyAuthorizationService {
   private async connectClient(chargerId: string, target: ProxyTarget, connection: UpstreamConnection) {
     try {
       await connection.client?.connect();
-      this.reconnectBackoffs.delete(this.connectionKey(chargerId, target.id));
+      const key = this.connectionKey(chargerId, target.id);
+      this.reconnectBackoffs.delete(key);
+      this.clearReconnectTimer(key);
     } catch (error) {
       this.recordProxyLog({
         level: 'warn',
@@ -514,6 +536,7 @@ export class ProxyAuthorizationService {
           identity: target.stationId ?? chargerId
         }
       });
+      this.scheduleReconnect(chargerId, target.id);
     });
 
     return client;
@@ -522,7 +545,7 @@ export class ProxyAuthorizationService {
   private async evictConnection(chargerId: string, target: ProxyTarget, message: string) {
     const key = this.connectionKey(chargerId, target.id);
     const connection = this.connections.get(key);
-    this.scheduleReconnectBackoff(key);
+    this.scheduleReconnect(chargerId, target.id);
     if (!connection) return;
 
     await this.closeConnection(key, connection, chargerId, target.id, message);
@@ -542,6 +565,7 @@ export class ProxyAuthorizationService {
       if (!key.startsWith(`${chargerId}:`) || activeKeys.has(key)) continue;
       this.connections.delete(key);
       this.reconnectBackoffs.delete(key);
+      this.clearReconnectTimer(key);
       const { proxyTargetId } = parseConnectionKey(key);
       void this.closeConnection(key, connection, chargerId, proxyTargetId, 'proxy target connection closed because target is no longer enabled');
     }
@@ -552,9 +576,24 @@ export class ProxyAuthorizationService {
     const connection = this.connections.get(key);
     this.connections.delete(key);
     this.reconnectBackoffs.delete(key);
+    this.clearReconnectTimer(key);
     if (!connection) return;
 
     await this.closeConnection(key, connection, chargerId, proxyTargetId, message);
+  }
+
+  private scheduleReconnect(chargerId: string, proxyTargetId: string) {
+    if (this.closed) return;
+
+    const key = this.connectionKey(chargerId, proxyTargetId);
+    if (this.reconnectTimers.has(key)) return;
+
+    const delayMs = this.scheduleReconnectBackoff(key);
+    const timer = setTimeout(() => {
+      this.reconnectTimers.delete(key);
+      void this.retryWarmUp(chargerId, proxyTargetId);
+    }, delayMs + 10);
+    this.reconnectTimers.set(key, timer);
   }
 
   private scheduleReconnectBackoff(key: string) {
@@ -565,6 +604,34 @@ export class ProxyAuthorizationService {
       failures,
       nextAttemptAt: Date.now() + delayMs
     });
+    return delayMs;
+  }
+
+  private async retryWarmUp(chargerId: string, proxyTargetId: string) {
+    if (this.closed) return;
+
+    const target = this.getEnabledTarget(chargerId, proxyTargetId);
+    if (!target || !this.hasActiveChargerConnection(chargerId)) {
+      this.reconnectBackoffs.delete(this.connectionKey(chargerId, proxyTargetId));
+      return;
+    }
+
+    await this.warmUpEnabledTarget(chargerId, target);
+  }
+
+  private clearReconnectTimer(key: string) {
+    const timer = this.reconnectTimers.get(key);
+    if (!timer) return;
+
+    clearTimeout(timer);
+    this.reconnectTimers.delete(key);
+  }
+
+  private clearReconnectTimers() {
+    for (const timer of this.reconnectTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.reconnectTimers.clear();
   }
 
   private async closeConnection(

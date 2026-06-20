@@ -60,6 +60,7 @@ export async function registerOcppServer(
     const context = { chargerId: client.session?.chargerId ?? client.identity };
     const connectionId = repository.recordConnected(context.chargerId);
     chargerCommands.register(context.chargerId, client);
+    void proxyAuthorization.warmUpTargets(context.chargerId);
 
     registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'BootNotification', (params: Parameters<typeof handlers.bootNotification>[1]) =>
       handlers.bootNotification(context, params)

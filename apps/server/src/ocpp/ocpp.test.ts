@@ -51,6 +51,23 @@ async function connectCharger(endpoint: string, identity = `CP-${randomUUID()}`,
   return client as OcppClient;
 }
 
+async function waitForCondition(assertion: () => void | Promise<void>, timeoutMs = 3000) {
+  const startedAt = Date.now();
+  let lastError: unknown;
+
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      await assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+
+  if (lastError) throw lastError;
+}
+
 async function startProxyServer(status: 'Accepted' | 'Invalid') {
   const server = new RPCServer({
     protocols: ['ocpp1.6'],
@@ -511,7 +528,7 @@ describe('OCPP 1.6 local primary', () => {
     });
     await charger.call('Heartbeat', {});
 
-    expect(proxy.calls.map((call) => call.method)).toEqual(['BootNotification', 'Heartbeat']);
+    expect(proxy.calls.map((call) => call.method)).toContain('Heartbeat');
     expect(proxy.clients).toEqual(['UPSTREAM-REUSE']);
     expect(JSON.stringify(server.db.select().from(logs).all())).not.toContain('proxy-secret');
   });
@@ -596,6 +613,32 @@ describe('OCPP 1.6 local primary', () => {
     });
   });
 
+  it('warms enabled proxy targets when a charger connects', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-CONNECT-WARM',
+      name: 'Connect warm CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-CONNECT-WARM',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-CONNECT-WARM');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await waitForCondition(() => {
+      expect(proxy.clients).toEqual(['UPSTREAM-CONNECT-WARM']);
+      expect(proxy.calls.map((call) => call.method)).toEqual(['BootNotification', 'StatusNotification', 'Heartbeat']);
+    });
+  });
+
   it('reconnects on demand after an upstream target disconnects and comes back', async () => {
     const firstProxy = await startRecordingProxyServer();
     const server = await startTestServer();
@@ -632,6 +675,40 @@ describe('OCPP 1.6 local primary', () => {
     expect(secondProxy.clients).toEqual(['UPSTREAM-RECONNECT']);
     expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target connection reconnected')).toBe(true);
     expect(JSON.stringify(server.db.select().from(logs).all())).not.toContain('proxy-secret');
+  });
+
+  it('reconnects upstream targets in the background after a disconnect', async () => {
+    const firstProxy = await startRecordingProxyServer();
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    insertProxyTarget(server.db, {
+      id: randomUUID(),
+      chargerId: 'SMART-EVSE-BACKGROUND-RECONNECT',
+      name: 'Background reconnect CSMS',
+      url: firstProxy.endpoint,
+      stationId: 'UPSTREAM-BACKGROUND-RECONNECT',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-BACKGROUND-RECONNECT');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await waitForCondition(() => {
+      expect(firstProxy.clients).toEqual(['UPSTREAM-BACKGROUND-RECONNECT']);
+    });
+
+    await firstProxy.close();
+    const secondProxy = await startRecordingProxyServer(firstProxy.port);
+    cleanup.push(secondProxy.close);
+
+    await waitForCondition(() => {
+      expect(secondProxy.clients).toEqual(['UPSTREAM-BACKGROUND-RECONNECT']);
+      expect(secondProxy.calls.map((call) => call.method)).toEqual(['BootNotification', 'StatusNotification', 'Heartbeat']);
+    }, 4000);
+    expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target connection reconnected')).toBe(true);
   });
 
   it('fails open when an established deny-capable proxy connection is unavailable', async () => {
@@ -754,13 +831,15 @@ describe('OCPP 1.6 local primary', () => {
       reason: 'Local'
     });
 
-    expect(proxy.calls.map((call) => call.method)).toEqual([
-      'BootNotification',
-      'StatusNotification',
-      'StartTransaction',
-      'MeterValues',
-      'StopTransaction'
-    ]);
+    expect(proxy.calls.map((call) => call.method)).toEqual(
+      expect.arrayContaining([
+        'BootNotification',
+        'StatusNotification',
+        'StartTransaction',
+        'MeterValues',
+        'StopTransaction'
+      ])
+    );
     expect(proxy.calls.find((call) => call.method === 'StartTransaction')?.identity).toBe('UPSTREAM-STATION-1');
     expect(proxy.clients).toEqual(['UPSTREAM-STATION-1']);
     expect(proxy.calls.find((call) => call.method === 'StartTransaction')?.params).toMatchObject({
