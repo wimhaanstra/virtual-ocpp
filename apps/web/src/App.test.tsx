@@ -93,6 +93,8 @@ const emptyVisibilityResponses = (url: string, method: string) => {
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    window.localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
     window.history.replaceState({}, "", "/");
   });
 
@@ -291,6 +293,7 @@ describe("App", () => {
     expect(screen.getByText("wss://tap.example/ocpp/STATION-1")).toBeInTheDocument();
     expect(screen.getByText(/proxy target connection established at /)).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
   });
 
   it("keeps the current page in the URL and restores it on browser back", async () => {
@@ -368,6 +371,48 @@ describe("App", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/proxy-targets"));
     expect(window.location.search).toBe("?chargerId=SMART-EVSE-1");
     expect(screen.getByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
+  });
+
+  it("persists theme and sidebar shell preferences", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+
+      if (parsedUrl.pathname === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      const visibilityResponse = emptyVisibilityResponses(url, method);
+      if (visibilityResponse) return visibilityResponse;
+
+      if (parsedUrl.pathname === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (parsedUrl.pathname === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch to light mode" }));
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(window.localStorage.getItem("virtual-ocpp-theme")).toBe("light");
+
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Collapse sidebar" }));
+    expect(window.localStorage.getItem("virtual-ocpp-sidebar-collapsed")).toBe("true");
+    expect(sidebar.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+    expect(sidebar.getByRole("button", { name: "Dashboard" })).toHaveAttribute("title", "Dashboard");
   });
 
   it("shows communication journal rows after authentication", async () => {
@@ -1126,7 +1171,7 @@ describe("App", () => {
     });
   });
 
-  it("shows sessions and activity pages after authentication", async () => {
+  it("shows sessions and communication pages after authentication", async () => {
     let sessionClosed = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -1275,11 +1320,9 @@ describe("App", () => {
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/close" && init?.method === "POST")).toBe(true);
     expect(await screen.findByText("OperatorClosed")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Activity" }));
-    expect(screen.getByRole("heading", { name: "Activity" })).toBeInTheDocument();
-    expect(await screen.findByText("Connections")).toBeInTheDocument();
-    expect(screen.getByText("charging session started")).toBeInTheDocument();
-    expect(screen.getByText("proxyTargetId: proxy-1, method: StartTransaction, status: Accepted")).toBeInTheDocument();
+    fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
+    expect(screen.getByRole("heading", { name: "Communication" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
   });
 
   it("scopes charger-facing views to the selected charger context", async () => {
@@ -1493,10 +1536,6 @@ describe("App", () => {
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("SMART-EVSE-1")).toBeInTheDocument();
 
-    fireEvent.click(sidebar.getByRole("button", { name: "Activity" }));
-    expect(await screen.findByRole("heading", { name: "Activity" })).toBeInTheDocument();
-    expect(screen.getByText("charging session started")).toBeInTheDocument();
-
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
     expect(await screen.findByRole("heading", { name: "Communication" })).toBeInTheDocument();
     expect(screen.getByLabelText("Charger id")).toBeDisabled();
@@ -1633,7 +1672,7 @@ describe("App", () => {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
       }
 
-      if (url === "/api/charger-connections" && method === "GET" && expireSession) {
+      if (url.startsWith("/api/communication-journal") && method === "GET" && expireSession) {
         return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
       }
 
@@ -1673,7 +1712,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Activity" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
     expireSession = true;
     fireEvent.click(screen.getAllByRole("button", { name: "Refresh" })[0]);
 

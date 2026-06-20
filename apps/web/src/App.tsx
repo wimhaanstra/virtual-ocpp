@@ -3,12 +3,16 @@ import {
   ArrowRight,
   ChevronDown,
   Clock3,
-  Gauge,
   Eye,
   EyeOff,
+  Gauge,
   KeyRound,
+  LayoutDashboard,
   ListChecks,
   LogOut,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pencil,
   PlugZap,
   Plus,
@@ -16,8 +20,11 @@ import {
   PowerOff,
   RefreshCcw,
   SlidersHorizontal,
+  SunMoon,
+  Tags as TagsIcon,
   Trash2,
-  X
+  X,
+  type LucideIcon
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 
@@ -67,14 +74,6 @@ type ChargerRegistryRow = {
   disconnectedAt?: string | null;
   lastSeenAt?: string | null;
   updatedAt?: string | null;
-};
-
-type ChargerConnection = {
-  id: string;
-  chargerId: string;
-  connectedAt: string;
-  disconnectedAt: string | null;
-  active: boolean;
 };
 
 type ChargingSession = {
@@ -155,7 +154,8 @@ type DashboardConfig = {
   ocppBasicAuthUsername: string | null;
 };
 
-type ActiveView = "Home" | "Proxy targets" | "Tags" | "Sessions" | "Activity" | "Communication";
+type ActiveView = "Home" | "Proxy targets" | "Tags" | "Sessions" | "Communication";
+type ThemeMode = "dark" | "light";
 
 type CommunicationJournalFilters = {
   from: string;
@@ -233,14 +233,19 @@ const emptyProxyTargetForm = (): ProxyTargetFormState => ({
   tagMappingsDirty: false
 });
 
-const navItems: ActiveView[] = ["Home", "Proxy targets", "Tags", "Sessions", "Activity", "Communication"];
+const navItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Home", label: "Dashboard", icon: LayoutDashboard },
+  { view: "Communication", label: "Communication", icon: MessagesSquare },
+  { view: "Sessions", label: "Sessions", icon: ListChecks },
+  { view: "Proxy targets", label: "Proxy targets", icon: PlugZap },
+  { view: "Tags", label: "Tags", icon: TagsIcon }
+];
 
 const viewPaths: Record<ActiveView, string> = {
   Home: "/",
   "Proxy targets": "/proxy-targets",
   Tags: "/tags",
   Sessions: "/sessions",
-  Activity: "/activity",
   Communication: "/communication"
 };
 
@@ -271,6 +276,37 @@ function withChargerContext(url: string, chargerId: string) {
   const params = new URLSearchParams(query);
   params.set("chargerId", chargerId);
   return `${path}?${params.toString()}`;
+}
+
+function getStoredPreference(key: string) {
+  try {
+    return typeof window.localStorage?.getItem === "function" ? window.localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setStoredPreference(key: string, value: string) {
+  try {
+    if (typeof window.localStorage?.setItem === "function") {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {
+    // Preference persistence is best-effort; UI state still works without storage.
+  }
+}
+
+function getInitialTheme(): ThemeMode {
+  const storedTheme = getStoredPreference("virtual-ocpp-theme");
+  if (storedTheme === "light" || storedTheme === "dark") {
+    return storedTheme;
+  }
+
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function getInitialSidebarCollapsed() {
+  return getStoredPreference("virtual-ocpp-sidebar-collapsed") === "true";
 }
 
 function getChargerDisplayLabel(charger: ChargerRegistryRow) {
@@ -486,7 +522,6 @@ export default function App() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [proxyTargets, setProxyTargets] = useState<ProxyTarget[]>([]);
   const [chargers, setChargers] = useState<ChargerRegistryRow[]>([]);
-  const [chargerConnections, setChargerConnections] = useState<ChargerConnection[]>([]);
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
   const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -501,6 +536,8 @@ export default function App() {
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [proxyTargetModalOpen, setProxyTargetModalOpen] = useState(false);
   const [selectedChargerId, setSelectedChargerId] = useState(() => getSearchParam("chargerId"));
+  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getInitialSidebarCollapsed());
   const [message, setMessage] = useState("Sign in to manage proxy targets.");
   const [busy, setBusy] = useState(false);
 
@@ -563,6 +600,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    setStoredPreference("virtual-ocpp-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    setStoredPreference("virtual-ocpp-sidebar-collapsed", String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
     function handlePopState() {
       setActiveView(getViewFromPath());
       setSelectedChargerId(getSearchParam("chargerId"));
@@ -588,11 +635,6 @@ export default function App() {
   }, [authenticated, selectedChargerId]);
 
   useEffect(() => {
-    if (!authenticated || activeView !== "Activity") return;
-    void loadChargerConnections(selectedChargerId);
-  }, [authenticated, activeView, selectedChargerId]);
-
-  useEffect(() => {
     if (!authenticated || activeView !== "Home") return;
     void loadChargingStats(selectedChargerId);
   }, [authenticated, activeView, selectedChargerId]);
@@ -614,13 +656,16 @@ export default function App() {
     window.history.pushState({}, "", buildViewUrl(view, selectedChargerId));
   }
 
+  function toggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
+
   function resetAdminState() {
     setAuthenticated(false);
     setPassword("");
     setTags([]);
     setProxyTargets([]);
     setChargers([]);
-    setChargerConnections([]);
     setChargingSessions([]);
     setChargingStats([]);
     setChargingStatsStatus("idle");
@@ -709,16 +754,6 @@ export default function App() {
       return;
     }
     setChargers(data);
-  }
-
-  async function loadChargerConnections(chargerId = selectedChargerId) {
-    const data = await fetchAdminJson<ChargerConnection[]>(withChargerContext("/api/charger-connections", chargerId));
-    if (data === null) return;
-    if (data === undefined) {
-      setMessage("Could not load charger connections.");
-      return;
-    }
-    setChargerConnections(data);
   }
 
   async function loadChargingSessions(chargerId = selectedChargerId) {
@@ -1303,25 +1338,41 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${sidebarCollapsed ? "app-shell-collapsed" : ""}`}>
       <aside className="sidebar" aria-label="Main navigation">
         <div className="brand">
           <PlugZap aria-hidden="true" />
-          <span>Virtual OCPP</span>
+          <span className="sidebar-label">Virtual OCPP</span>
         </div>
         <nav>
-          {navItems.map((item) => (
-            <button
-              type="button"
-              className={item === activeView ? "active" : undefined}
-              aria-current={item === activeView ? "page" : undefined}
-              onClick={() => navigateToView(item)}
-              key={item}
-            >
-              {item}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                type="button"
+                className={item.view === activeView ? "active" : undefined}
+                aria-current={item.view === activeView ? "page" : undefined}
+                aria-label={sidebarCollapsed ? item.label : undefined}
+                title={sidebarCollapsed ? item.label : undefined}
+                onClick={() => navigateToView(item.view)}
+                key={item.view}
+              >
+                <Icon aria-hidden="true" />
+                <span className="sidebar-label">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
+        <button
+          type="button"
+          className="sidebar-collapse-button"
+          onClick={() => setSidebarCollapsed((current) => !current)}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+          <span className="sidebar-label">{sidebarCollapsed ? "Expand" : "Collapse"}</span>
+        </button>
       </aside>
 
       <section className="content">
@@ -1342,6 +1393,16 @@ export default function App() {
                 ))}
               </select>
             </label>
+            <Button
+              type="button"
+              className="button-secondary icon-button"
+              onClick={toggleTheme}
+              disabled={busy}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              <SunMoon aria-hidden="true" />
+            </Button>
             <Button type="button" className="button-secondary" onClick={() => void logout()} disabled={busy}>
               <LogOut aria-hidden="true" />
               <span className="button-label">Sign out</span>
@@ -1399,8 +1460,8 @@ export default function App() {
                     Sessions
                     <ArrowRight aria-hidden="true" />
                   </Button>
-                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Activity")}>
-                    Activity
+                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Communication")}>
+                    Communication
                     <ArrowRight aria-hidden="true" />
                   </Button>
                   <Button type="button" className="button-secondary" onClick={() => navigateToView("Tags")}>
@@ -1685,98 +1746,6 @@ export default function App() {
                 </table>
               </div>
             )}
-          </section>
-        ) : activeView === "Activity" ? (
-          <section className="dashboard-grid">
-            <section className="panel table-panel">
-              <div className="topbar-actions">
-                <div>
-                  <p className="eyebrow">Chargers</p>
-                  <h2>Connections</h2>
-                  <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-                </div>
-                <Button type="button" className="button-secondary" onClick={() => void loadChargerConnections(selectedChargerId)} disabled={busy}>
-                  <RefreshCcw aria-hidden="true" />
-                  <span className="button-label">Refresh</span>
-                </Button>
-              </div>
-              {chargerConnections.length === 0 ? (
-                <p>No charger connection rows available yet.</p>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Charger</th>
-                        <th>Status</th>
-                        <th>Connected</th>
-                        <th>Disconnected</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {chargerConnections.map((connection) => (
-                        <tr key={connection.id}>
-                          <td className="mono">{connection.chargerId}</td>
-                          <td>
-                            <span className={`pill ${connection.active ? "pill-good" : "pill-neutral"}`}>
-                              {connection.active ? "Connected" : "Disconnected"}
-                            </span>
-                          </td>
-                          <td>{formatDateTime(connection.connectedAt)}</td>
-                          <td>{formatDateTime(connection.disconnectedAt)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            <section className="panel table-panel">
-                <div className="topbar-actions">
-                  <div>
-                    <p className="eyebrow">Activity</p>
-                    <h2>Recent logs</h2>
-                    <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-                  </div>
-                  <Button type="button" className="button-secondary" onClick={() => void loadLogs(selectedChargerId)} disabled={busy}>
-                    <RefreshCcw aria-hidden="true" />
-                    <span className="button-label">Refresh</span>
-                  </Button>
-                </div>
-              {logs.length === 0 ? (
-                <p>No activity recorded yet.</p>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Level</th>
-                        <th>Category</th>
-                        <th>Message</th>
-                        <th>Context</th>
-                        <th>Charger</th>
-                        <th>Transaction</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((entry) => (
-                        <tr key={entry.id}>
-                          <td>{formatDateTime(entry.createdAt)}</td>
-                          <td>{entry.level}</td>
-                          <td>{entry.category}</td>
-                          <td>{entry.message}</td>
-                          <td>{formatLogContext(entry.context)}</td>
-                          <td className="mono">{entry.chargerId || "-"}</td>
-                          <td>{entry.transactionId ?? "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
           </section>
         ) : activeView === "Communication" ? (
           <section className="communication-layout">
@@ -2472,13 +2441,6 @@ export default function App() {
       </section>
     </main>
   );
-}
-
-function formatLogContext(context: Record<string, string> | null) {
-  if (!context) return "-";
-  return Object.entries(context)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join(", ");
 }
 
 function StatusTile({

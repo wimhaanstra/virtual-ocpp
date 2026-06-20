@@ -46,6 +46,7 @@ Relevant approved previews:
 - `docs/ui-examples/brand-directions.png`
 - `docs/ui-examples/amber-intensity.png`
 - `docs/ui-examples/layout-structure.png`
+- `docs/ui-examples/detail-tuning.png`
 
 ## Approved Visual Direction
 
@@ -56,8 +57,12 @@ Use restrained Charge Amber:
 - Light shell background: cool neutral gray, not beige.
 - Surfaces: flat neutral panels with small radii.
 - Borders: visible but quiet, used for structure instead of heavy shadows.
-- Radius: small, around `4px` for buttons, inputs, tables, and panels.
-- Spacing: tighter than the current UI, optimized for operations and table scanning.
+- Detail treatment: Dense Console.
+- Radius: `2px` for buttons, inputs, tables, and panels.
+- Table density: compact by default, with expanded details on demand.
+- Surface contrast: higher contrast, especially in dark mode.
+- Typography: quieter UI weights than the earlier heavy mockups while keeping table summaries legible.
+- Spacing: tight, optimized for communication traces and repeated operations.
 
 Use Charge Amber for:
 
@@ -223,6 +228,7 @@ Modal layout rules:
 - Avoid subtitles between every input.
 - Place cancel/save actions in a consistent footer.
 - Close icon is icon-only with accessible label.
+- Proxy tag mappings stay in the proxy target modal as a dedicated section, not a separate tab.
 
 ## Theme
 
