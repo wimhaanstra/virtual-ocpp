@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Virtual OCPP Detail Tuning</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #e7ebef;
+        color: #111827;
+        font-family:
+          "Avenir Next", Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont,
+          sans-serif;
+      }
+
+      .page {
+        display: grid;
+        gap: 26px;
+        padding: 28px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 30px;
+        line-height: 1.1;
+      }
+
+      .intro p,
+      .copy {
+        margin-top: 8px;
+        max-width: 980px;
+        color: #5b6573;
+      }
+
+      .variant {
+        display: grid;
+        gap: 12px;
+      }
+
+      .mock-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 420px;
+        gap: 18px;
+      }
+
+      .mock {
+        --primary: #ff9d00;
+        --bg: #f3f6f8;
+        --side: #ffffff;
+        --surface: #ffffff;
+        --surface-2: #edf2f6;
+        --text: #111827;
+        --muted: #607084;
+        --line: #cfd8e3;
+        --active-bg: color-mix(in srgb, var(--primary) 12%, transparent);
+        --good: #12805c;
+        --warn: #eab308;
+        --radius: 4px;
+        --row-py: 8px;
+        --weight-ui: 720;
+        --weight-strong: 800;
+        min-height: 500px;
+        overflow: hidden;
+        border: 1px solid rgba(17, 24, 39, 0.16);
+        border-radius: var(--radius);
+        background: var(--bg);
+        color: var(--text);
+        box-shadow: 0 20px 48px rgba(15, 23, 42, 0.16);
+      }
+
+      .mock.dark {
+        --bg: #0c1014;
+        --side: #111820;
+        --surface: #111820;
+        --surface-2: #17222c;
+        --text: #eef4f8;
+        --muted: #92a1b1;
+        --line: rgba(148, 163, 184, 0.2);
+        --active-bg: color-mix(in srgb, var(--primary) 18%, transparent);
+        --good: #45d391;
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.34);
+      }
+
+      .dense {
+        --radius: 2px;
+        --row-py: 6px;
+        --weight-ui: 680;
+        --weight-strong: 760;
+        --surface: #0f151c;
+        --surface-2: #151d26;
+        --line: rgba(160, 174, 192, 0.24);
+      }
+
+      .balanced {
+        --radius: 4px;
+        --row-py: 8px;
+        --weight-ui: 700;
+        --weight-strong: 780;
+      }
+
+      .calm {
+        --radius: 6px;
+        --row-py: 10px;
+        --weight-ui: 620;
+        --weight-strong: 720;
+        --line: #d8e0e8;
+        --surface-2: #f3f6f9;
+      }
+
+      .calm.dark {
+        --surface: #141b23;
+        --surface-2: #19232d;
+        --line: rgba(148, 163, 184, 0.15);
+      }
+
+      .shell {
+        display: grid;
+        grid-template-columns: 188px minmax(0, 1fr);
+        min-height: 500px;
+      }
+
+      .side {
+        border-right: 1px solid var(--line);
+        background: color-mix(in srgb, var(--side) 86%, var(--bg));
+        padding: 15px 14px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 2px;
+        margin-bottom: 22px;
+      }
+
+      .brand strong {
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      .brand span,
+      .meta {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: var(--weight-ui);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .nav {
+        display: grid;
+        gap: 2px;
+      }
+
+      .nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 34px;
+        border-left: 3px solid transparent;
+        color: var(--muted);
+        padding: 0 8px;
+        font-size: 12px;
+        font-weight: var(--weight-ui);
+      }
+
+      .nav-item.active {
+        border-color: var(--primary);
+        background: var(--active-bg);
+        color: var(--text);
+      }
+
+      .content {
+        display: grid;
+        min-width: 0;
+        align-content: start;
+        gap: 12px;
+        padding: 15px;
+      }
+
+      .topline {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .topline h3 {
+        font-size: 20px;
+        line-height: 1.1;
+      }
+
+      .toolbar,
+      .block {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-left: 4px solid var(--primary);
+        padding: 8px;
+      }
+
+      .chips,
+      .actions,
+      .tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .chip,
+      .tab,
+      .icon-button,
+      .status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface-2);
+        color: var(--text);
+        padding: 0 8px;
+        font-size: 11px;
+        font-weight: var(--weight-ui);
+      }
+
+      .tab.active,
+      .chip.primary {
+        border-color: var(--primary);
+        background: var(--active-bg);
+      }
+
+      .icon-button {
+        width: 30px;
+        padding: 0;
+      }
+
+      .block-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 40px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 10px;
+      }
+
+      .block-head h4 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: var(--weight-strong);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: var(--row-py) 10px;
+        text-align: left;
+        vertical-align: middle;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: var(--weight-ui);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .type {
+        display: inline-flex;
+        width: fit-content;
+        border-left: 3px solid var(--primary);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        background: var(--active-bg);
+        padding: 4px 7px;
+        font-size: 10px;
+        font-weight: var(--weight-strong);
+        text-transform: uppercase;
+      }
+
+      .summary {
+        font-weight: var(--weight-strong);
+      }
+
+      .status {
+        min-height: 22px;
+        padding: 0 7px;
+      }
+
+      .good {
+        border-color: color-mix(in srgb, var(--good) 48%, var(--line));
+        background: color-mix(in srgb, var(--good) 12%, transparent);
+        color: var(--good);
+      }
+
+      .warn {
+        border-color: color-mix(in srgb, var(--warn) 52%, var(--line));
+        background: color-mix(in srgb, var(--warn) 13%, transparent);
+        color: color-mix(in srgb, var(--warn) 70%, var(--text));
+      }
+
+      .form-preview {
+        display: grid;
+        align-content: start;
+        gap: 10px;
+        min-height: 500px;
+        padding: 14px;
+      }
+
+      .form-section {
+        display: grid;
+        gap: 8px;
+        border-top: 1px solid var(--line);
+        padding-top: 10px;
+      }
+
+      .form-section:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .form-section h5 {
+        margin: 0;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: var(--weight-ui);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+      }
+
+      .input {
+        min-height: 31px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface-2);
+        color: var(--muted);
+        padding: 7px 8px;
+        font-size: 12px;
+      }
+
+      .mapping-list {
+        display: grid;
+        gap: 6px;
+      }
+
+      .mapping-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr) 30px;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .mapping-tabs {
+        display: flex;
+        gap: 6px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 8px;
+      }
+
+      @media (max-width: 1200px) {
+        .mock-row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="intro">
+        <h1>Detail tuning options</h1>
+        <p>
+          Restrained Charge Amber, compact sidebar, and merged Communication are fixed. These compare
+          the remaining style knobs as cohesive choices: table density, radius, dark contrast,
+          typography weight, and proxy mapping placement.
+        </p>
+      </section>
+
+      <section class="variant">
+        <h2>Option A: Dense Console</h2>
+        <p class="copy">
+          2px radii, compact rows, stronger surface contrast, and quieter typography. Best for logs,
+          communication traces, and repeated admin work.
+        </p>
+        <div class="mock-row">
+          <article class="mock dark dense">
+            <div class="shell">
+              <aside class="side">
+                <div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div>
+                <nav class="nav">
+                  <div class="nav-item"><span>Dashboard</span><span>⌂</span></div>
+                  <div class="nav-item active"><span>Communication</span><span>⇄</span></div>
+                  <div class="nav-item"><span>Sessions</span><span>▣</span></div>
+                  <div class="nav-item"><span>Proxies</span><span>◎</span></div>
+                  <div class="nav-item"><span>Tags</span><span>⌁</span></div>
+                </nav>
+              </aside>
+              <section class="content">
+                <div class="topline"><div><h3>Communication</h3><p class="meta">Merged protocol and events</p></div><button class="icon-button">◐</button></div>
+                <div class="toolbar">
+                  <div class="tabs"><span class="tab active">All</span><span class="tab">Protocol</span><span class="tab">Events</span><span class="chip">Any source</span></div>
+                  <div class="actions"><button class="icon-button">⌕</button><button class="icon-button">↻</button></div>
+                </div>
+                <div class="block">
+                  <div class="block-head"><h4>Trace timeline</h4><span class="meta">24h retention</span></div>
+                  <table>
+                    <tr><th>Time</th><th>Type</th><th>Summary</th><th>Context</th><th></th></tr>
+                    <tr><td>10:22:29</td><td><span class="type">Protocol</span></td><td class="summary">RemoteStopTransaction</td><td>Server → Charger</td><td><button class="icon-button">▸</button></td></tr>
+                    <tr><td>10:22:14</td><td><span class="type">Protocol</span></td><td class="summary">MeterValues</td><td>Charger → Server</td><td><button class="icon-button">▸</button></td></tr>
+                    <tr><td>10:21:49</td><td><span class="type">Event</span></td><td class="summary">Proxy connected</td><td>TapElectric</td><td><button class="icon-button">▸</button></td></tr>
+                    <tr><td>10:21:08</td><td><span class="type">Protocol</span></td><td class="summary">Authorize</td><td>Server → Proxy</td><td><button class="icon-button">▸</button></td></tr>
+                    <tr><td>10:19:44</td><td><span class="type">Event</span></td><td class="summary">Authorization accepted</td><td>Tag 4227105</td><td><button class="icon-button">▸</button></td></tr>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </article>
+          <article class="mock dark dense form-preview">
+            <div class="block">
+              <div class="block-head"><h4>Proxy target</h4><button class="icon-button">×</button></div>
+              <div class="form-preview">
+                <div class="form-section"><h5>Identity</h5><div class="fields"><div class="input">Name</div><div class="input">Station ID</div></div></div>
+                <div class="form-section"><h5>Connection</h5><div class="fields"><div class="input">URL</div><div class="input">Enabled</div></div></div>
+                <div class="form-section"><h5>Credentials</h5><div class="fields"><div class="input">Username</div><div class="input">Password</div></div></div>
+                <div class="form-section">
+                  <h5>Tag mappings in same modal</h5>
+                  <div class="mapping-list">
+                    <div class="mapping-row"><div class="input">4227105</div><span>→</span><div class="input">tap-4227105</div><button class="icon-button">×</button></div>
+                    <div class="mapping-row"><div class="input">RFID-X</div><span>→</span><div class="input">contract-y</div><button class="icon-button">×</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="variant">
+        <h2>Option B: Balanced Operations</h2>
+        <p class="copy">
+          4px radii, compact-but-readable rows, moderate contrast, and medium UI weights. Best
+          default if the same layout must work for setup screens and trace-heavy screens.
+        </p>
+        <div class="mock-row">
+          <article class="mock dark balanced">
+            <div class="shell">
+              <aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div><nav class="nav"><div class="nav-item"><span>Dashboard</span><span>⌂</span></div><div class="nav-item active"><span>Communication</span><span>⇄</span></div><div class="nav-item"><span>Sessions</span><span>▣</span></div><div class="nav-item"><span>Proxies</span><span>◎</span></div><div class="nav-item"><span>Tags</span><span>⌁</span></div></nav></aside>
+              <section class="content">
+                <div class="topline"><div><h3>Communication</h3><p class="meta">Merged protocol and events</p></div><button class="icon-button">◐</button></div>
+                <div class="toolbar"><div class="tabs"><span class="tab active">All</span><span class="tab">Protocol</span><span class="tab">Events</span><span class="chip">Any source</span></div><div class="actions"><button class="icon-button">⌕</button><button class="icon-button">↻</button></div></div>
+                <div class="block"><div class="block-head"><h4>Trace timeline</h4><span class="meta">24h retention</span></div><table><tr><th>Time</th><th>Type</th><th>Summary</th><th>Context</th><th></th></tr><tr><td>10:22:29</td><td><span class="type">Protocol</span></td><td class="summary">RemoteStopTransaction</td><td>Server → Charger</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:22:14</td><td><span class="type">Protocol</span></td><td class="summary">MeterValues</td><td>Charger → Server</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21:49</td><td><span class="type">Event</span></td><td class="summary">Proxy connected</td><td>TapElectric</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21:08</td><td><span class="type">Protocol</span></td><td class="summary">Authorize</td><td>Server → Proxy</td><td><button class="icon-button">▸</button></td></tr></table></div>
+              </section>
+            </div>
+          </article>
+          <article class="mock dark balanced form-preview">
+            <div class="block">
+              <div class="block-head"><h4>Proxy target</h4><button class="icon-button">×</button></div>
+              <div class="form-preview">
+                <div class="form-section"><h5>Identity</h5><div class="fields"><div class="input">Name</div><div class="input">Station ID</div></div></div>
+                <div class="form-section"><h5>Connection</h5><div class="fields"><div class="input">URL</div><div class="input">Enabled</div></div></div>
+                <div class="form-section"><h5>Behavior</h5><div class="fields"><div class="input">Deny-capable</div><div class="input">Fail-open</div></div></div>
+                <div class="form-section">
+                  <h5>Mappings as a section</h5>
+                  <div class="mapping-list">
+                    <div class="mapping-row"><div class="input">4227105</div><span>→</span><div class="input">tap-4227105</div><button class="icon-button">×</button></div>
+                    <div class="mapping-row"><div class="input">RFID-X</div><span>→</span><div class="input">contract-y</div><button class="icon-button">×</button></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="variant">
+        <h2>Option C: Calm Admin</h2>
+        <p class="copy">
+          6px radii, roomier rows, lower contrast, and lighter typography. Polished for setup, but
+          less efficient for Communication and repeated operations.
+        </p>
+        <div class="mock-row">
+          <article class="mock dark calm">
+            <div class="shell">
+              <aside class="side"><div class="brand"><strong>Virtual OCPP</strong><span>Trace view</span></div><nav class="nav"><div class="nav-item"><span>Dashboard</span><span>⌂</span></div><div class="nav-item active"><span>Communication</span><span>⇄</span></div><div class="nav-item"><span>Sessions</span><span>▣</span></div><div class="nav-item"><span>Proxies</span><span>◎</span></div><div class="nav-item"><span>Tags</span><span>⌁</span></div></nav></aside>
+              <section class="content">
+                <div class="topline"><div><h3>Communication</h3><p class="meta">Merged protocol and events</p></div><button class="icon-button">◐</button></div>
+                <div class="toolbar"><div class="tabs"><span class="tab active">All</span><span class="tab">Protocol</span><span class="tab">Events</span><span class="chip">Any source</span></div><div class="actions"><button class="icon-button">⌕</button><button class="icon-button">↻</button></div></div>
+                <div class="block"><div class="block-head"><h4>Trace timeline</h4><span class="meta">24h retention</span></div><table><tr><th>Time</th><th>Type</th><th>Summary</th><th>Context</th><th></th></tr><tr><td>10:22:29</td><td><span class="type">Protocol</span></td><td class="summary">RemoteStopTransaction</td><td>Server → Charger</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:22:14</td><td><span class="type">Protocol</span></td><td class="summary">MeterValues</td><td>Charger → Server</td><td><button class="icon-button">▸</button></td></tr><tr><td>10:21:49</td><td><span class="type">Event</span></td><td class="summary">Proxy connected</td><td>TapElectric</td><td><button class="icon-button">▸</button></td></tr></table></div>
+              </section>
+            </div>
+          </article>
+          <article class="mock dark calm form-preview">
+            <div class="block">
+              <div class="block-head"><h4>Proxy target</h4><button class="icon-button">×</button></div>
+              <div class="form-preview">
+                <div class="mapping-tabs"><span class="tab active">Target</span><span class="tab">Mappings</span></div>
+                <div class="form-section"><h5>Identity</h5><div class="fields"><div class="input">Name</div><div class="input">Station ID</div></div></div>
+                <div class="form-section"><h5>Connection</h5><div class="fields"><div class="input">URL</div><div class="input">Enabled</div></div></div>
+                <div class="form-section"><h5>Behavior</h5><div class="fields"><div class="input">Deny-capable</div><div class="input">Fail-open</div></div></div>
+                <div class="form-section"><h5>Mappings tab preview</h5><div class="input">Mappings move behind a modal tab</div></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
