@@ -463,6 +463,8 @@ describe('OCPP 1.6 local primary', () => {
     const secondProxy = await startRecordingProxyServer(firstProxy.port);
     cleanup.push(secondProxy.close);
 
+    await charger.call('Heartbeat', {});
+    await new Promise((resolve) => setTimeout(resolve, 1100));
     const heartbeat = await charger.call('Heartbeat', {});
 
     expect(heartbeat).toHaveProperty('currentTime');

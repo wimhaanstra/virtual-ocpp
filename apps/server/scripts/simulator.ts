@@ -230,7 +230,7 @@ async function runSimulator(options: SimulatorOptions) {
   } finally {
     signalCleanup();
     if (state.transactionId !== null && !state.stopped) {
-      await stopActiveTransaction(client, options, state, 'PowerLoss');
+      await stopActiveTransaction(client, options, state, 'Local');
     }
     if (!options.keepOpen || state.stopRequested) {
       await client.close({});
@@ -445,7 +445,7 @@ function installSignalHandlers(client: OcppClient, options: SimulatorOptions, st
 
     requestStop(state);
     console.log(`Received ${signal}; stopping simulator session.`);
-    void stopActiveTransaction(client, options, state, 'PowerLoss')
+    void stopActiveTransaction(client, options, state, 'Local')
       .catch((error: unknown) => {
         console.error(error instanceof Error ? error.message : error);
       })
