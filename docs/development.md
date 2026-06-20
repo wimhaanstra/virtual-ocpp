@@ -108,8 +108,11 @@ Target fields:
 - `mode`: `monitor-only` or `deny-capable`.
 - `outagePolicy`: `fail-open` or `fail-closed`.
 - `basicAuthPassword`: optional outbound Basic Auth password, masked in API responses.
+- `tagMappings`: optional local-to-outbound idTag mappings for this proxy target.
 
 During `Authorize` and `StartTransaction`, Virtual OCPP first checks the global tag and charger-specific access. If the tag is locally rejected, proxy targets are not consulted. If the tag is locally accepted, enabled `deny-capable` targets for that charger are called in order. Any non-`Accepted` proxy response rejects the local operation.
+
+Per-proxy tag mappings are applied only to outbound `Authorize` and `StartTransaction` calls. Local allowlist checks, local session records, and charger responses keep the original charger-supplied idTag. The communication journal records the actual outbound proxy payload, so a mapped proxy call shows the outbound idTag.
 
 Unavailable deny-capable targets follow their configured outage policy. `fail-open` keeps the local allow decision; `fail-closed` rejects the operation until the target is reachable again. `monitor-only` targets receive mirrored calls but do not affect local charger decisions.
 

@@ -3,7 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { RPCClient } from 'ocpp-rpc';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { Database } from '../db/client.js';
-import { chargerConnections, chargers, logs, proxySessionMappings, proxyTargets } from '../db/schema.js';
+import { chargerConnections, chargers, logs, proxySessionMappings, proxyTagMappings, proxyTargets } from '../db/schema.js';
 import type {
   AuthorizeRequest,
   BootNotificationRequest,
@@ -193,7 +193,8 @@ export class ProxyAuthorizationService {
     const targets = this.enabledTargets(chargerId);
 
     for (const target of targets) {
-      const response = await this.callTarget(chargerId, target, method, params);
+      const outboundParams = this.applyTagMapping(target.id, method, params);
+      const response = await this.callTarget(chargerId, target, method, outboundParams);
       if (!response.ok) {
         if (options.canDeny && target.mode === 'deny-capable' && target.outagePolicy === 'fail-closed') {
           return {
@@ -221,6 +222,36 @@ export class ProxyAuthorizationService {
     }
 
     return { decision: { allowed: true }, responses };
+  }
+
+  private applyTagMapping(
+    proxyTargetId: string,
+    method: string,
+    params:
+      | AuthorizeRequest
+      | BootNotificationRequest
+      | HeartbeatRequest
+      | MeterValuesRequest
+      | StartTransactionRequest
+      | StatusNotificationRequest
+      | StopTransactionRequest
+  ) {
+    if (method !== 'Authorize' && method !== 'StartTransaction') return params;
+    const idTag = extractIdTag(params);
+    if (!idTag) return params;
+
+    const mapping = this.db
+      .select()
+      .from(proxyTagMappings)
+      .where(and(eq(proxyTagMappings.proxyTargetId, proxyTargetId), eq(proxyTagMappings.localIdTag, idTag)))
+      .limit(1)
+      .get();
+    if (!mapping) return params;
+
+    return {
+      ...params,
+      idTag: mapping.outboundIdTag
+    };
   }
 
   private async callTarget(

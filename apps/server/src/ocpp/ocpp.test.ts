@@ -7,9 +7,11 @@ import {
   chargerConnections,
   chargers,
   chargingSessions,
+  communicationJournal,
   logs,
   meterSamples,
   proxySessionMappings,
+  proxyTagMappings,
   proxyTargets,
   tagChargerAccess,
   tags
@@ -293,6 +295,112 @@ describe('OCPP 1.6 local primary', () => {
 
     expect(response).toEqual({ idTagInfo: { status: 'Invalid' } });
     expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target denied tag')).toBe(true);
+  });
+
+  it('maps local tags to proxy-specific outbound tags for authorization and starts', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'LOCAL-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-MAPPED' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-mapped',
+      chargerId: 'SMART-EVSE-MAPPED',
+      name: 'Mapped proxy',
+      url: proxy.endpoint,
+      mode: 'deny-capable'
+    });
+    server.db.insert(proxyTagMappings).values({
+      id: 'mapping-1',
+      proxyTargetId: 'proxy-mapped',
+      localIdTag: 'LOCAL-TAG',
+      outboundIdTag: 'REMOTE-TAG',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).run();
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-MAPPED');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const authorize = await charger.call('Authorize', { idTag: 'LOCAL-TAG' });
+    const start = await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'LOCAL-TAG',
+      meterStart: 100,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    });
+
+    expect(authorize).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(start).toMatchObject({ idTagInfo: { status: 'Accepted' } });
+    expect(proxy.calls.find((call) => call.method === 'Authorize')?.params).toMatchObject({ idTag: 'REMOTE-TAG' });
+    expect(proxy.calls.find((call) => call.method === 'StartTransaction')?.params).toMatchObject({ idTag: 'REMOTE-TAG' });
+    expect(server.db.select().from(chargingSessions).get()).toMatchObject({ idTag: 'LOCAL-TAG' });
+    expect(
+      server.db
+        .select()
+        .from(communicationJournal)
+        .all()
+        .some(
+          (row) =>
+            row.direction === 'outbound' &&
+            row.targetType === 'proxy' &&
+            row.ocppMethod === 'StartTransaction' &&
+            row.idTag === 'REMOTE-TAG' &&
+            JSON.parse(row.payloadJson).idTag === 'REMOTE-TAG'
+        )
+    ).toBe(true);
+  });
+
+  it('can map one local tag differently for separate proxy targets', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'LOCAL-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-MULTI-MAP' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-mapped-a',
+      chargerId: 'SMART-EVSE-MULTI-MAP',
+      name: 'Mapped proxy A',
+      url: proxy.endpoint,
+      mode: 'monitor-only'
+    });
+    insertProxyTarget(server.db, {
+      id: 'proxy-mapped-b',
+      chargerId: 'SMART-EVSE-MULTI-MAP',
+      name: 'Mapped proxy B',
+      url: proxy.endpoint,
+      mode: 'monitor-only'
+    });
+    server.db.insert(proxyTagMappings).values([
+      {
+        id: 'mapping-a',
+        proxyTargetId: 'proxy-mapped-a',
+        localIdTag: 'LOCAL-TAG',
+        outboundIdTag: 'REMOTE-A',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      },
+      {
+        id: 'mapping-b',
+        proxyTargetId: 'proxy-mapped-b',
+        localIdTag: 'LOCAL-TAG',
+        outboundIdTag: 'REMOTE-B',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]).run();
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-MULTI-MAP');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const authorize = await charger.call('Authorize', { idTag: 'LOCAL-TAG' });
+
+    expect(authorize).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(proxy.calls.filter((call) => call.method === 'Authorize').map((call) => call.params.idTag).sort()).toEqual(['REMOTE-A', 'REMOTE-B']);
   });
 
   it('does not forward charger traffic to proxy targets registered for another charger', async () => {

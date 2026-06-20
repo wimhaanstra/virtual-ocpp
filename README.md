@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. Per-proxy tag mapping and the production Docker image are planned but not implemented yet.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. The production Docker image is planned but not implemented yet.
 
 ## Stack
 
@@ -73,8 +73,8 @@ Protected frontend pages use client-side routes so refresh and browser back/forw
 - `PUT /api/tags/:id/chargers/:chargerId` grants or updates access for a tag on one registered charger. Requires admin session.
 - `DELETE /api/tags/:id/chargers/:chargerId` revokes access for a tag on one charger. Requires admin session.
 - `GET /api/proxy-targets?chargerId=...` lists configured external OCPP proxy targets for a charger. Requires admin session.
-- `POST /api/proxy-targets` creates a proxy target for `chargerId` with URL, optional username, optional password, optional station id, mode, and outage policy. Requires admin session.
-- `PATCH /api/proxy-targets/:id` updates target name, URL, username, station id, enabled state, mode, outage policy, or stored Basic Auth password. Requires admin session.
+- `POST /api/proxy-targets` creates a proxy target for `chargerId` with URL, optional username, optional password, optional station id, mode, outage policy, and optional `tagMappings`. Requires admin session.
+- `PATCH /api/proxy-targets/:id` updates target name, URL, username, station id, enabled state, mode, outage policy, stored Basic Auth password, or per-proxy tag mappings. Requires admin session.
 - `DELETE /api/proxy-targets/:id` deletes a proxy target. Requires admin session.
 - `GET /api/dashboard-config` returns secret-free charger connection config for the dashboard. Requires admin session.
 - `GET /api/communication-journal` lists redacted charger/server/proxy OCPP communication rows with source/target filters. Requires admin session.
@@ -111,6 +111,8 @@ Enabled deny-capable proxy targets are also checked during `Authorize` and `Star
 - `fail-closed`: reject locally accepted tags while the target is unavailable.
 
 Monitor-only targets receive mirrored calls but never affect the local charger decision.
+
+Proxy targets can define tag mappings for outbound `Authorize` and `StartTransaction` calls. Local authorization still uses the charger-supplied tag and local sessions keep that original tag, but the selected proxy receives the configured outbound tag. Different proxy targets can map the same local tag to different outbound tags.
 
 When an upstream target returns its own transaction id from `StartTransaction`, Virtual OCPP stores a per-target transaction mapping. Later `MeterValues` and `StopTransaction` calls are forwarded with that upstream transaction id while the charger continues using the local transaction id.
 
@@ -172,6 +174,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Enter the proxy target URL as the upstream base websocket URL. Virtual OCPP appends the configured station id, or the local charger id when station id is blank, as the OCPP websocket identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 - Edit, toggle, or delete proxy targets.
 - View whether a proxy target has stored credentials without exposing the username or password.
+- Add per-proxy tag mappings so an upstream receives a different idTag than the charger sends locally.
 - Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, active charging energy/power/current/voltage when available, summary metrics, and quick links to operational pages.
 - View recent charging sessions.
 - Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
@@ -184,7 +187,6 @@ When a charger starts a new accepted transaction on a connector, Virtual OCPP au
 
 ## Planned V1 Features
 
-- Exact per-proxy tag ID mappings for outbound `Authorize` and `StartTransaction`.
 - Single Docker image with persistent SQLite volume.
 
 ## Security Notes

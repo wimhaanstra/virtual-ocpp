@@ -17,20 +17,10 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Charger context and per-charger access: auto-register chargers, select charger context in the frontend, scope proxy targets to one charger, and require explicit per-charger tag access.
 - Persistent proxy connections: reuse one upstream OCPP websocket connection per charger/proxy target, evict failed connections, and apply in-memory reconnect backoff while preserving fail-open/fail-closed behavior.
 - OCPP charger simulator: repo-local CLI fake charger for demos and smoke tests, configurable charger/tag/meter values, optional tag seeding through the admin API, and full session flow.
+- Per-proxy tag mapping: proxy targets can rewrite local charger idTags for outbound `Authorize` and `StartTransaction` calls while preserving local authorization/session tags.
 
 ## Next Candidate Slices
 
-### Slice 5.4: Per-Proxy Tag Mapping
+### Slice 5.4: Production Docker Image
 
-Goal: support replacing local tag IDs with configured outbound tag IDs per proxy target.
-
-Scope:
-
-- Store per-proxy tag mappings.
-- Apply mappings to outbound `Authorize` and `StartTransaction`.
-- Keep local authorization based on local tags.
-
-Acceptance criteria:
-
-- A local tag can map to different outbound tag IDs for different proxy targets.
-- Missing mappings follow a documented fallback policy.
+Goal: package the backend and frontend for deployment with a persistent SQLite volume.

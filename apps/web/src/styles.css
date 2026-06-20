@@ -471,6 +471,38 @@ nav button:hover {
   word-break: break-word;
 }
 
+.tag-mapping-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tag-mapping-editor h3 {
+  margin: 2px 0 0;
+  font-size: 16px;
+}
+
+.tag-mapping-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tag-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(160px, 1fr) 36px;
+  gap: 8px;
+  align-items: end;
+}
+
+.tag-mapping-remove {
+  margin-bottom: 0;
+}
+
 .current-state {
   display: grid;
   gap: 8px;

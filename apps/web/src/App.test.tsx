@@ -33,6 +33,7 @@ type TestProxyTarget = {
   outagePolicy: "fail-open" | "fail-closed";
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
+  tagMappings?: Array<{ id?: string; localIdTag: string; outboundIdTag: string }>;
   createdAt: string;
   updatedAt: string;
 };
@@ -832,6 +833,7 @@ describe("App", () => {
         outagePolicy: "fail-closed" as const,
         hasUsername: true,
         hasBasicAuthPassword: true,
+        tagMappings: [{ id: "mapping-1", localIdTag: "LOCAL-TAG", outboundIdTag: "REMOTE-TAG" }],
         createdAt: "2026-06-19T08:00:00.000Z",
         updatedAt: "2026-06-19T08:00:00.000Z"
       }
@@ -896,6 +898,7 @@ describe("App", () => {
           mode?: "monitor-only" | "deny-capable";
           outagePolicy?: "fail-open" | "fail-closed";
           basicAuthPassword?: string | null;
+          tagMappings?: Array<{ localIdTag: string; outboundIdTag: string }>;
         };
         proxyTargets = proxyTargets.map((target) => ({
           ...target,
@@ -906,7 +909,8 @@ describe("App", () => {
           mode: body.mode ?? target.mode,
           outagePolicy: body.outagePolicy ?? target.outagePolicy,
           hasUsername: body.username === undefined ? target.hasUsername : Boolean(body.username),
-          hasBasicAuthPassword: body.basicAuthPassword === undefined ? target.hasBasicAuthPassword : Boolean(body.basicAuthPassword)
+          hasBasicAuthPassword: body.basicAuthPassword === undefined ? target.hasBasicAuthPassword : Boolean(body.basicAuthPassword),
+          tagMappings: body.tagMappings === undefined ? target.tagMappings : body.tagMappings
         }));
         return new Response(JSON.stringify(proxyTargets[0]), { status: 200 });
       }
@@ -923,6 +927,7 @@ describe("App", () => {
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
     expect(await screen.findByText("Tap Electric")).toBeInTheDocument();
+    expect(screen.getByText("1 mapping")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     const proxyTargetEditor = within(screen.getByRole("heading", { name: "Edit target" }).closest("section") as HTMLElement);
@@ -934,6 +939,8 @@ describe("App", () => {
     expect(proxyTargetEditor.getByLabelText("Password")).toHaveValue("");
     expect(proxyTargetEditor.getByLabelText("Clear stored username")).not.toBeChecked();
     expect(proxyTargetEditor.getByLabelText("Clear stored password")).not.toBeChecked();
+    expect(proxyTargetEditor.getByDisplayValue("LOCAL-TAG")).toBeInTheDocument();
+    expect(proxyTargetEditor.getByDisplayValue("REMOTE-TAG")).toBeInTheDocument();
 
     fireEvent.click(proxyTargetEditor.getByLabelText("Clear stored username"));
     fireEvent.click(proxyTargetEditor.getByLabelText("Clear stored password"));
@@ -952,6 +959,25 @@ describe("App", () => {
       outagePolicy: "fail-closed",
       username: null,
       basicAuthPassword: null
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const mappingEditor = within(screen.getByRole("heading", { name: "Edit target" }).closest("section") as HTMLElement);
+    fireEvent.change(mappingEditor.getByDisplayValue("REMOTE-TAG"), { target: { value: "REMOTE-TAG-2" } });
+    fireEvent.click(mappingEditor.getByRole("button", { name: "Save changes" }));
+    await screen.findByText("Proxy target updated.");
+
+    const mappingPatchCall = fetchMock.mock.calls
+      .filter(([input, init]) => String(input) === "/api/proxy-targets/proxy-1" && init?.method === "PATCH")
+      .at(-1);
+    expect(mappingPatchCall).toBeDefined();
+    expect(JSON.parse(String(mappingPatchCall?.[1]?.body))).toMatchObject({
+      tagMappings: [
+        {
+          localIdTag: "LOCAL-TAG",
+          outboundIdTag: "REMOTE-TAG-2"
+        }
+      ]
     });
   });
 
@@ -1027,6 +1053,7 @@ describe("App", () => {
           mode?: "monitor-only" | "deny-capable";
           outagePolicy?: "fail-open" | "fail-closed";
           stationId?: string | null;
+          tagMappings?: Array<{ localIdTag: string; outboundIdTag: string }>;
         };
         proxyTargets = [
           {
@@ -1039,6 +1066,7 @@ describe("App", () => {
             outagePolicy: body.outagePolicy ?? "fail-open",
             hasUsername: false,
             hasBasicAuthPassword: false,
+            tagMappings: body.tagMappings,
             createdAt: "2026-06-19T10:30:00.000Z",
             updatedAt: "2026-06-19T10:30:00.000Z"
           }
@@ -1071,6 +1099,9 @@ describe("App", () => {
     fireEvent.change(targetEditor.getByLabelText("Station ID"), { target: { value: "STATION-1" } });
     fireEvent.change(targetEditor.getByLabelText("Mode"), { target: { value: "deny-capable" } });
     fireEvent.change(targetEditor.getByLabelText("Outage policy"), { target: { value: "fail-closed" } });
+    fireEvent.click(targetEditor.getByRole("button", { name: "Add mapping" }));
+    fireEvent.change(targetEditor.getByPlaceholderText("SmartEVSE idTag"), { target: { value: "LOCAL-TAG" } });
+    fireEvent.change(targetEditor.getByPlaceholderText("Proxy idTag"), { target: { value: "REMOTE-TAG" } });
     fireEvent.click(targetEditor.getByRole("button", { name: "Add target" }));
 
     await screen.findByText("Proxy target saved.");
@@ -1085,7 +1116,13 @@ describe("App", () => {
       mode: "deny-capable",
       outagePolicy: "fail-closed",
       chargerId: selectedChargerId,
-      stationId: "STATION-1"
+      stationId: "STATION-1",
+      tagMappings: [
+        {
+          localIdTag: "LOCAL-TAG",
+          outboundIdTag: "REMOTE-TAG"
+        }
+      ]
     });
   });
 

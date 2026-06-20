@@ -134,6 +134,22 @@ export const proxySessionMappings = sqliteTable('proxy_session_mappings', {
   stoppedAt: integer('stopped_at', { mode: 'timestamp_ms' })
 });
 
+export const proxyTagMappings = sqliteTable(
+  'proxy_tag_mappings',
+  {
+    id: text('id').primaryKey(),
+    proxyTargetId: text('proxy_target_id').notNull(),
+    localIdTag: text('local_id_tag').notNull(),
+    outboundIdTag: text('outbound_id_tag').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull()
+  },
+  (table) => ({
+    proxyTargetIdx: index('proxy_tag_mappings_proxy_target_id_idx').on(table.proxyTargetId),
+    proxyLocalUnique: uniqueIndex('proxy_tag_mappings_proxy_target_id_local_id_tag_unique').on(table.proxyTargetId, table.localIdTag)
+  })
+);
+
 export const logs = sqliteTable('logs', {
   id: text('id').primaryKey(),
   level: text('level').notNull(),

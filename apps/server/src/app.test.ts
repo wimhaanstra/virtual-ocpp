@@ -10,6 +10,7 @@ import {
   logs,
   meterSamples,
   proxySessionMappings,
+  proxyTagMappings,
   proxyTargets,
   sessions,
   tagChargerAccess,
@@ -127,7 +128,13 @@ describe('app', () => {
         enabled: true,
         mode: 'deny-capable',
         outagePolicy: 'fail-closed',
-        basicAuthPassword: 'target-secret'
+        basicAuthPassword: 'target-secret',
+        tagMappings: [
+          {
+            localIdTag: 'LOCAL-TAG',
+            outboundIdTag: 'REMOTE-TAG'
+          }
+        ]
       }
     });
 
@@ -141,7 +148,13 @@ describe('app', () => {
       enabled: true,
       mode: 'deny-capable',
       outagePolicy: 'fail-closed',
-      hasBasicAuthPassword: true
+      hasBasicAuthPassword: true,
+      tagMappings: [
+        expect.objectContaining({
+          localIdTag: 'LOCAL-TAG',
+          outboundIdTag: 'REMOTE-TAG'
+        })
+      ]
     });
     expect(created.body).not.toContain('target-secret');
     expect(created.body).not.toContain('remote-user');
@@ -155,6 +168,12 @@ describe('app', () => {
     });
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toHaveLength(1);
+    expect(listed.json()[0].tagMappings).toEqual([
+      expect.objectContaining({
+        localIdTag: 'LOCAL-TAG',
+        outboundIdTag: 'REMOTE-TAG'
+      })
+    ]);
     expect(listed.body).not.toContain('target-secret');
     expect(listed.body).not.toContain('remote-user');
 
@@ -184,6 +203,28 @@ describe('app', () => {
     });
     expect(blockedUrlEdit.statusCode).toBe(409);
 
+    const remappedWhileActive = await app.inject({
+      method: 'PATCH',
+      url: `/api/proxy-targets/${targetId}`,
+      headers: { cookie },
+      payload: {
+        tagMappings: [
+          {
+            localIdTag: 'LOCAL-TAG',
+            outboundIdTag: 'REMOTE-TAG-ACTIVE'
+          }
+        ]
+      }
+    });
+    expect(remappedWhileActive.statusCode).toBe(200);
+    expect(
+      tempDb.db
+        .select()
+        .from(proxySessionMappings)
+        .where(eq(proxySessionMappings.id, 'active-mapping'))
+        .get()?.stoppedAt
+    ).toBeNull();
+
     const disabled = await app.inject({
       method: 'PATCH',
       url: `/api/proxy-targets/${targetId}`,
@@ -201,6 +242,29 @@ describe('app', () => {
         .where(eq(proxySessionMappings.id, 'active-mapping'))
         .get()?.stoppedAt
     ).toBeInstanceOf(Date);
+    expect(tempDb.db.select().from(proxyTagMappings).all()).toHaveLength(1);
+
+    const remapped = await app.inject({
+      method: 'PATCH',
+      url: `/api/proxy-targets/${targetId}`,
+      headers: { cookie },
+      payload: {
+        tagMappings: [
+          {
+            localIdTag: 'LOCAL-TAG',
+            outboundIdTag: 'REMOTE-TAG-2'
+          }
+        ]
+      }
+    });
+    expect(remapped.statusCode).toBe(200);
+    expect(remapped.json().tagMappings).toEqual([
+      expect.objectContaining({
+        localIdTag: 'LOCAL-TAG',
+        outboundIdTag: 'REMOTE-TAG-2'
+      })
+    ]);
+    expect(tempDb.db.select().from(proxyTagMappings).all()).toHaveLength(1);
 
     const deleted = await app.inject({
       method: 'DELETE',
@@ -209,6 +273,7 @@ describe('app', () => {
     });
     expect(deleted.statusCode).toBe(200);
     expect(tempDb.db.select().from(proxyTargets).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(proxyTagMappings).all()).toHaveLength(0);
 
     await app.close();
   });

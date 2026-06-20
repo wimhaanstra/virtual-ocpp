@@ -4,11 +4,31 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargers, logs, proxySessionMappings, proxyTargets } from './db/schema.js';
+import { chargers, logs, proxySessionMappings, proxyTagMappings, proxyTargets } from './db/schema.js';
 import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 
 const ModeSchema = z.enum(['monitor-only', 'deny-capable']);
 const OutagePolicySchema = z.enum(['fail-open', 'fail-closed']);
+const TagMappingsSchema = z
+  .array(
+    z.object({
+      localIdTag: z.string().trim().min(1).max(255),
+      outboundIdTag: z.string().trim().min(1).max(255)
+    })
+  )
+  .superRefine((mappings, context) => {
+    const seen = new Set<string>();
+    for (const [index, mapping] of mappings.entries()) {
+      if (seen.has(mapping.localIdTag)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Duplicate local tag mapping',
+          path: [index, 'localIdTag']
+        });
+      }
+      seen.add(mapping.localIdTag);
+    }
+  });
 
 const CreateProxyTargetSchema = z.object({
   chargerId: z.string().trim().min(1),
@@ -19,7 +39,8 @@ const CreateProxyTargetSchema = z.object({
   enabled: z.boolean().default(true),
   mode: ModeSchema.default('monitor-only'),
   outagePolicy: OutagePolicySchema.default('fail-open'),
-  basicAuthPassword: z.string().min(1).nullable().optional()
+  basicAuthPassword: z.string().min(1).nullable().optional(),
+  tagMappings: TagMappingsSchema.optional()
 });
 
 const UpdateProxyTargetSchema = z.object({
@@ -31,7 +52,8 @@ const UpdateProxyTargetSchema = z.object({
   enabled: z.boolean().optional(),
   mode: ModeSchema.optional(),
   outagePolicy: OutagePolicySchema.optional(),
-  basicAuthPassword: z.string().min(1).nullable().optional()
+  basicAuthPassword: z.string().min(1).nullable().optional(),
+  tagMappings: TagMappingsSchema.optional()
 });
 
 const ListProxyTargetsQuerySchema = z.object({
@@ -47,7 +69,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       return reply.code(400).send({ error: 'invalid_proxy_target_query', details: parsed.error.flatten() });
     }
 
-    return db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, parsed.data.chargerId)).all().map(toPublicProxyTarget);
+    return db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, parsed.data.chargerId)).all().map((target) => toPublicProxyTarget(db, target));
   });
 
   app.post('/api/proxy-targets', async (request, reply) => {
@@ -81,6 +103,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     };
 
     db.insert(proxyTargets).values(target).run();
+    replaceProxyTagMappings(db, id, body.data.tagMappings ?? []);
     recordProxyLog(db, 'proxy target created', {
       proxyTargetId: id,
       chargerId: target.chargerId,
@@ -89,7 +112,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     });
     await proxyAuthorization?.warmUpTarget(target.chargerId, target.id);
 
-    return reply.code(201).send(toPublicProxyTarget(target));
+    return reply.code(201).send(toPublicProxyTarget(db, target));
   });
 
   app.patch<{ Params: { id: string } }>('/api/proxy-targets/:id', async (request, reply) => {
@@ -119,15 +142,20 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     };
     const hasActiveMappings = hasActiveProxyMappings(db, existing.chargerId, existing.id);
     const disablingTarget = existing.enabled && !update.enabled;
-    if (hasActiveMappings && !disablingTarget && hasDisruptiveProxyTargetUpdate(existing, update)) {
+    const enablingTarget = !existing.enabled && update.enabled;
+    const hasDisruptiveUpdate = hasDisruptiveProxyTargetUpdate(existing, update);
+    if (hasActiveMappings && !disablingTarget && hasDisruptiveUpdate) {
       return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
     }
 
     db.update(proxyTargets).set(update).where(eq(proxyTargets.id, request.params.id)).run();
+    if (body.data.tagMappings !== undefined) {
+      replaceProxyTagMappings(db, existing.id, body.data.tagMappings);
+    }
     if (disablingTarget) {
       closeActiveProxyMappings(db, existing.chargerId, existing.id);
     }
-    if (existing.chargerId) {
+    if (existing.chargerId && (disablingTarget || hasDisruptiveUpdate)) {
       await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after update');
     }
     recordProxyLog(db, 'proxy target updated', {
@@ -136,11 +164,11 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       mode: update.mode,
       outagePolicy: update.outagePolicy
     });
-    if (existing.chargerId) {
+    if (existing.chargerId && (enablingTarget || (hasDisruptiveUpdate && update.enabled))) {
       await proxyAuthorization?.warmUpTarget(existing.chargerId, existing.id);
     }
 
-    return toPublicProxyTarget({ ...existing, ...update });
+    return toPublicProxyTarget(db, { ...existing, ...update });
   });
 
   app.delete<{ Params: { id: string } }>('/api/proxy-targets/:id', async (request, reply) => {
@@ -155,6 +183,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
     }
 
+    db.delete(proxyTagMappings).where(eq(proxyTagMappings.proxyTargetId, request.params.id)).run();
     db.delete(proxyTargets).where(eq(proxyTargets.id, request.params.id)).run();
     if (existing.chargerId) {
       await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after delete');
@@ -165,7 +194,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
   });
 }
 
-function toPublicProxyTarget(target: typeof proxyTargets.$inferSelect) {
+function toPublicProxyTarget(db: Database, target: typeof proxyTargets.$inferSelect) {
   return {
     id: target.id,
     chargerId: target.chargerId,
@@ -177,9 +206,41 @@ function toPublicProxyTarget(target: typeof proxyTargets.$inferSelect) {
     mode: target.mode,
     outagePolicy: target.outagePolicy,
     hasBasicAuthPassword: Boolean(target.basicAuthPassword),
+    tagMappings: db
+      .select()
+      .from(proxyTagMappings)
+      .where(eq(proxyTagMappings.proxyTargetId, target.id))
+      .all()
+      .map((mapping) => ({
+        id: mapping.id,
+        localIdTag: mapping.localIdTag,
+        outboundIdTag: mapping.outboundIdTag
+      })),
     createdAt: target.createdAt.toISOString(),
     updatedAt: target.updatedAt.toISOString()
   };
+}
+
+function replaceProxyTagMappings(
+  db: Database,
+  proxyTargetId: string,
+  mappings: Array<{
+    localIdTag: string;
+    outboundIdTag: string;
+  }>
+) {
+  const now = new Date();
+  db.delete(proxyTagMappings).where(eq(proxyTagMappings.proxyTargetId, proxyTargetId)).run();
+  for (const mapping of mappings) {
+    db.insert(proxyTagMappings).values({
+      id: randomUUID(),
+      proxyTargetId,
+      localIdTag: mapping.localIdTag.trim(),
+      outboundIdTag: mapping.outboundIdTag.trim(),
+      createdAt: now,
+      updatedAt: now
+    }).run();
+  }
 }
 
 function hasActiveProxyMappings(db: Database, chargerId: string | null, proxyTargetId: string) {

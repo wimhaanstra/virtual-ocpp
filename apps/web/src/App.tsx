@@ -47,8 +47,15 @@ type ProxyTarget = {
   outagePolicy: "fail-open" | "fail-closed";
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
+  tagMappings?: ProxyTagMapping[];
   createdAt: string;
   updatedAt: string;
+};
+
+type ProxyTagMapping = {
+  id?: string;
+  localIdTag: string;
+  outboundIdTag: string;
 };
 
 type ChargerRegistryRow = {
@@ -184,6 +191,8 @@ type ProxyTargetFormState = {
   clearBasicAuthPassword: boolean;
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
+  tagMappings: ProxyTagMapping[];
+  tagMappingsDirty: boolean;
 };
 
 const emptyCommunicationJournalFilters = (): CommunicationJournalFilters => ({
@@ -219,7 +228,9 @@ const emptyProxyTargetForm = (): ProxyTargetFormState => ({
   clearUsername: false,
   clearBasicAuthPassword: false,
   hasUsername: false,
-  hasBasicAuthPassword: false
+  hasBasicAuthPassword: false,
+  tagMappings: [],
+  tagMappingsDirty: false
 });
 
 const navItems: ActiveView[] = ["Home", "Proxy targets", "Tags", "Sessions", "Activity", "Communication"];
@@ -335,6 +346,11 @@ function formatDuration(seconds: number) {
   const minutes = Math.floor((safeSeconds % 3600) / 60);
   if (hours > 0) return `${hours}h ${minutes}m`;
   return `${minutes}m`;
+}
+
+function formatTagMappingCount(count: number) {
+  if (count === 0) return "None";
+  return `${count} mapping${count === 1 ? "" : "s"}`;
 }
 
 function stringifyPayload(payload: unknown) {
@@ -1045,9 +1061,35 @@ export default function App() {
       clearUsername: false,
       clearBasicAuthPassword: false,
       hasUsername: target.hasUsername,
-      hasBasicAuthPassword: target.hasBasicAuthPassword
+      hasBasicAuthPassword: target.hasBasicAuthPassword,
+      tagMappings: target.tagMappings?.map((mapping) => ({ ...mapping })) ?? [],
+      tagMappingsDirty: false
     });
     setMessage(`Editing proxy target ${target.name}.`);
+  }
+
+  function addProxyTagMapping() {
+    setProxyTargetForm((current) => ({
+      ...current,
+      tagMappings: [...current.tagMappings, { localIdTag: "", outboundIdTag: "" }],
+      tagMappingsDirty: true
+    }));
+  }
+
+  function updateProxyTagMapping(index: number, patch: Partial<ProxyTagMapping>) {
+    setProxyTargetForm((current) => ({
+      ...current,
+      tagMappings: current.tagMappings.map((mapping, mappingIndex) => (mappingIndex === index ? { ...mapping, ...patch } : mapping)),
+      tagMappingsDirty: true
+    }));
+  }
+
+  function removeProxyTagMapping(index: number) {
+    setProxyTargetForm((current) => ({
+      ...current,
+      tagMappings: current.tagMappings.filter((_, mappingIndex) => mappingIndex !== index),
+      tagMappingsDirty: true
+    }));
   }
 
   function cancelProxyTargetEdit() {
@@ -1076,6 +1118,16 @@ export default function App() {
 
       if (!isEditingProxyTarget && selectedChargerId) {
         body.chargerId = selectedChargerId;
+      }
+
+      const tagMappings = proxyTargetForm.tagMappings
+        .map((mapping) => ({
+          localIdTag: mapping.localIdTag.trim(),
+          outboundIdTag: mapping.outboundIdTag.trim()
+        }))
+        .filter((mapping) => mapping.localIdTag && mapping.outboundIdTag);
+      if (!isEditingProxyTarget || proxyTargetForm.tagMappingsDirty) {
+        body.tagMappings = tagMappings;
       }
 
       if (isEditingProxyTarget) {
@@ -2113,6 +2165,7 @@ export default function App() {
                           <th>Outage</th>
                           <th>Status</th>
                           <th>Credentials</th>
+                          <th>Tag mappings</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
@@ -2130,6 +2183,7 @@ export default function App() {
                               </span>
                             </td>
                             <td>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</td>
+                            <td>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</td>
                             <td>
                               <div className="action-row">
                                 <Button type="button" className="button-secondary" onClick={() => startProxyTargetEdit(target)} disabled={busy}>
@@ -2272,6 +2326,63 @@ export default function App() {
                         </label>
                       </>
                     ) : null}
+                    <section className="tag-mapping-editor">
+                      <div className="topbar-actions page-section-header">
+                        <div>
+                          <p className="eyebrow">Tag mapping</p>
+                          <h3>Proxy authentication</h3>
+                          <p className="status-copy">Replace local idTags only for this upstream proxy.</p>
+                        </div>
+                        <Button type="button" className="button-secondary" onClick={addProxyTagMapping} disabled={busy}>
+                          <Plus aria-hidden="true" />
+                          <span className="button-label">Add mapping</span>
+                        </Button>
+                      </div>
+                      {proxyTargetForm.tagMappings.length === 0 ? (
+                        <p className="status-copy">No tag mappings configured. The proxy receives the local charger tag unchanged.</p>
+                      ) : (
+                        <div className="tag-mapping-list">
+                          {proxyTargetForm.tagMappings.map((mapping, index) => (
+                            <div className="tag-mapping-row" key={mapping.id ?? index}>
+                              <label className="field">
+                                <span>Local tag</span>
+                                <input
+                                  list="known-tag-uuids"
+                                  value={mapping.localIdTag}
+                                  onChange={(event) => updateProxyTagMapping(index, { localIdTag: event.target.value })}
+                                  placeholder="SmartEVSE idTag"
+                                />
+                              </label>
+                              <label className="field">
+                                <span>Outbound tag</span>
+                                <input
+                                  value={mapping.outboundIdTag}
+                                  onChange={(event) => updateProxyTagMapping(index, { outboundIdTag: event.target.value })}
+                                  placeholder="Proxy idTag"
+                                />
+                              </label>
+                              <Button
+                                type="button"
+                                className="button-ghost icon-button tag-mapping-remove"
+                                onClick={() => removeProxyTagMapping(index)}
+                                disabled={busy}
+                                title="Remove tag mapping"
+                                aria-label={`Remove tag mapping ${index + 1}`}
+                              >
+                                <Trash2 aria-hidden="true" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <datalist id="known-tag-uuids">
+                        {tags.map((tag) => (
+                          <option key={tag.id} value={tag.uuid}>
+                            {tag.label ?? tag.uuid}
+                          </option>
+                        ))}
+                      </datalist>
+                    </section>
                     <label className="field">
                       <span>Mode</span>
                       <select
