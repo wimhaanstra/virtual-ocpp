@@ -140,6 +140,8 @@ Useful options:
 - `--basic-auth-password ...`: charger Basic Auth password when `OCPP_BASIC_AUTH_PASSWORD` is configured.
 - `--keep-open`: keep the websocket connected and continue heartbeats after the demo session.
 
+Pressing `Ctrl+C` during an accepted simulator session sends `StopTransaction` with the latest simulated meter value before disconnecting, so the session should not remain active.
+
 Example timed session:
 
 ```sh

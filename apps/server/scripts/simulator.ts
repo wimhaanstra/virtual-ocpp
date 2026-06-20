@@ -36,6 +36,15 @@ type TagResponse = {
 };
 
 type OcppClient = InstanceType<typeof RPCClient>;
+type SimulatorRuntimeState = {
+  stopping: boolean;
+  stopRequested: boolean;
+  stopWaiters: Set<() => void>;
+  transactionId: number | null;
+  meterWh: number;
+  stopped: boolean;
+  connected: boolean;
+};
 
 const DEFAULT_CHARGER_ID = 'SIM-001';
 const DEFAULT_TAG_ID = 'SIM-TAG-001';
@@ -150,6 +159,16 @@ async function runSimulator(options: SimulatorOptions) {
 
   console.log(`Connecting ${options.chargerId} to ${options.url}`);
   await client.connect();
+  const state: SimulatorRuntimeState = {
+    stopping: false,
+    stopRequested: false,
+    stopWaiters: new Set(),
+    transactionId: null,
+    meterWh: options.meterStartWh,
+    stopped: false,
+    connected: true
+  };
+  const signalCleanup = installSignalHandlers(client, options, state);
 
   try {
     const boot = await call(client, 'BootNotification', {
@@ -192,6 +211,7 @@ async function runSimulator(options: SimulatorOptions) {
       console.log('Transaction was not accepted. MeterValues and StopTransaction were skipped.');
       return;
     }
+    state.transactionId = start.transactionId;
 
     await call(client, 'StatusNotification', {
       connectorId: options.connectorId,
@@ -200,30 +220,21 @@ async function runSimulator(options: SimulatorOptions) {
       timestamp: new Date().toISOString()
     });
 
-    const meterWh = await emitMeterValues(client, options, start.transactionId);
-
-    const stop = await call(client, 'StopTransaction', {
-      transactionId: start.transactionId,
-      meterStop: meterWh,
-      timestamp: new Date().toISOString(),
-      reason: 'Local'
-    });
-    console.log(`StopTransaction: ${JSON.stringify(stop)}`);
-
-    await call(client, 'StatusNotification', {
-      connectorId: options.connectorId,
-      errorCode: 'NoError',
-      status: 'Available',
-      timestamp: new Date().toISOString()
-    });
+    state.meterWh = await emitMeterValues(client, options, state);
+    await stopActiveTransaction(client, options, state, 'Local');
 
     if (options.keepOpen) {
       console.log(`Keeping ${options.chargerId} online. Press Ctrl+C to stop.`);
-      await keepHeartbeatLoop(client, options.heartbeatIntervalMs);
+      await keepHeartbeatLoop(client, options.heartbeatIntervalMs, state);
     }
   } finally {
-    if (!options.keepOpen) {
+    signalCleanup();
+    if (state.transactionId !== null && !state.stopped) {
+      await stopActiveTransaction(client, options, state, 'PowerLoss');
+    }
+    if (!options.keepOpen || state.stopRequested) {
       await client.close({});
+      state.connected = false;
       console.log('Simulator disconnected.');
     }
   }
@@ -234,39 +245,41 @@ async function call(client: OcppClient, method: string, params: Record<string, u
   return client.call(method, params);
 }
 
-async function emitMeterValues(client: OcppClient, options: SimulatorOptions, transactionId: number) {
+async function emitMeterValues(client: OcppClient, options: SimulatorOptions, state: SimulatorRuntimeState) {
   if (options.runTimeMs !== null) {
-    return emitTimedMeterValues(client, options, transactionId);
+    return emitTimedMeterValues(client, options, state);
   }
 
-  let meterWh = options.meterStartWh;
   for (let index = 0; index < options.meterSamples; index += 1) {
-    meterWh += options.meterStepWh;
-    if (index > 0) await sleep(options.sampleIntervalMs);
-    await emitMeterValue(client, options, transactionId, meterWh);
-    console.log(`MeterValues ${index + 1}/${options.meterSamples}: ${meterWh} Wh`);
+    if (state.stopRequested) break;
+    state.meterWh += options.meterStepWh;
+    if (index > 0) await sleep(options.sampleIntervalMs, state);
+    if (state.stopRequested) break;
+    await emitMeterValue(client, options, state.transactionId as number, state.meterWh);
+    console.log(`MeterValues ${index + 1}/${options.meterSamples}: ${state.meterWh} Wh`);
   }
-  return meterWh;
+  return state.meterWh;
 }
 
-async function emitTimedMeterValues(client: OcppClient, options: SimulatorOptions, transactionId: number) {
+async function emitTimedMeterValues(client: OcppClient, options: SimulatorOptions, state: SimulatorRuntimeState) {
   const powerKw = options.powerKw ?? 11;
   const sampleCount = Math.max(1, Math.ceil((options.runTimeMs ?? 0) / options.sampleIntervalMs));
   let elapsedMs = 0;
-  let meterWh = options.meterStartWh;
 
   console.log(`Running timed charge for ${formatDuration(options.runTimeMs ?? 0)} at ${powerKw} kW.`);
   for (let index = 0; index < sampleCount; index += 1) {
+    if (state.stopRequested) break;
     const nextElapsedMs = Math.min(options.runTimeMs ?? 0, elapsedMs + options.sampleIntervalMs);
     const intervalMs = nextElapsedMs - elapsedMs;
-    await sleep(intervalMs);
-    meterWh += Math.round(powerKw * 1000 * (intervalMs / 3_600_000));
+    await sleep(intervalMs, state);
+    if (state.stopRequested) break;
+    state.meterWh += Math.round(powerKw * 1000 * (intervalMs / 3_600_000));
     elapsedMs = nextElapsedMs;
-    await emitMeterValue(client, options, transactionId, meterWh);
-    console.log(`MeterValues ${index + 1}/${sampleCount}: ${meterWh} Wh after ${formatDuration(elapsedMs)}`);
+    await emitMeterValue(client, options, state.transactionId as number, state.meterWh);
+    console.log(`MeterValues ${index + 1}/${sampleCount}: ${state.meterWh} Wh after ${formatDuration(elapsedMs)}`);
   }
 
-  return meterWh;
+  return state.meterWh;
 }
 
 async function emitMeterValue(client: OcppClient, options: SimulatorOptions, transactionId: number, meterWh: number) {
@@ -287,6 +300,31 @@ async function emitMeterValue(client: OcppClient, options: SimulatorOptions, tra
       }
     ]
   });
+}
+
+async function stopActiveTransaction(client: OcppClient, options: SimulatorOptions, state: SimulatorRuntimeState, reason: string) {
+  if (state.transactionId === null || state.stopped || state.stopping) return;
+
+  state.stopping = true;
+  try {
+    const stop = await call(client, 'StopTransaction', {
+      transactionId: state.transactionId,
+      meterStop: state.meterWh,
+      timestamp: new Date().toISOString(),
+      reason
+    });
+    state.stopped = true;
+    console.log(`StopTransaction: ${JSON.stringify(stop)}`);
+
+    await call(client, 'StatusNotification', {
+      connectorId: options.connectorId,
+      errorCode: 'NoError',
+      status: 'Available',
+      timestamp: new Date().toISOString()
+    });
+  } finally {
+    state.stopping = false;
+  }
 }
 
 async function ensureTagAccess(options: SimulatorOptions) {
@@ -387,14 +425,46 @@ async function adminRequest<T = unknown>(
   return response.json() as Promise<T>;
 }
 
-async function keepHeartbeatLoop(client: OcppClient, intervalMs: number) {
+async function keepHeartbeatLoop(client: OcppClient, intervalMs: number, state: SimulatorRuntimeState) {
   let count = 0;
-  while (true) {
-    if (intervalMs > 0) await sleep(intervalMs);
+  while (!state.stopRequested) {
+    if (intervalMs > 0) await sleep(intervalMs, state);
+    if (state.stopRequested) break;
     count += 1;
     const heartbeat = await call(client, 'Heartbeat', {});
     console.log(`Heartbeat keep-open ${count}: ${JSON.stringify(heartbeat)}`);
   }
+}
+
+function installSignalHandlers(client: OcppClient, options: SimulatorOptions, state: SimulatorRuntimeState) {
+  const handleSignal = (signal: NodeJS.Signals) => {
+    if (state.stopRequested) {
+      console.error(`Received ${signal} again; exiting immediately.`);
+      process.exit(130);
+    }
+
+    requestStop(state);
+    console.log(`Received ${signal}; stopping simulator session.`);
+    void stopActiveTransaction(client, options, state, 'PowerLoss')
+      .catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : error);
+      })
+      .finally(() => {
+        if (state.connected) {
+          void client.close({}).finally(() => {
+            state.connected = false;
+          });
+        }
+      });
+  };
+
+  process.on('SIGINT', handleSignal);
+  process.on('SIGTERM', handleSignal);
+
+  return () => {
+    process.off('SIGINT', handleSignal);
+    process.off('SIGTERM', handleSignal);
+  };
 }
 
 function parsePositiveInteger(value: string, name: string) {
@@ -458,8 +528,27 @@ function isBooleanFlag(key: string) {
   return ['ensure-tag', 'keep-open', 'help'].includes(key);
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function requestStop(state: SimulatorRuntimeState) {
+  state.stopRequested = true;
+  for (const resolve of state.stopWaiters) {
+    resolve();
+  }
+  state.stopWaiters.clear();
+}
+
+function sleep(ms: number, state?: SimulatorRuntimeState) {
+  if (!state) return new Promise((resolve) => setTimeout(resolve, ms));
+  if (state.stopRequested) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timeout);
+      state.stopWaiters.delete(done);
+      resolve();
+    };
+    const timeout = setTimeout(done, ms);
+    state.stopWaiters.add(done);
+  });
 }
 
 function loadEnvFileFromKnownLocations() {

@@ -76,6 +76,8 @@ The simulator uses `ocpp-rpc` as a charger client and sends a full session flow 
 
 Use `--run-time=15m --power-kw=11` to simulate a timed charging session at 11 kW. `--run-time` accepts `ms`, `s`, `m`, and `h` units, including combined values such as `1h30m`. In timed mode the simulator calculates energy from elapsed time and power, then emits periodic meter values.
 
+Pressing `Ctrl+C` during an accepted simulator transaction sends a final `StopTransaction` with the latest simulated meter value, then disconnects the charger websocket.
+
 Use `--keep-open` when you want the dashboard to continue showing the simulator as connected after the demo session. Use `npm run simulator -- --help` to see all CLI options.
 
 ## Tag Workflow
