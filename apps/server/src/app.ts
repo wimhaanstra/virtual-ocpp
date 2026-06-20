@@ -50,7 +50,7 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<Fastify
   registerTagRoutes(app, db);
   registerProxyTargetRoutes(app, db, proxyAuthorization);
   registerCommunicationJournalRoutes(app, db, communicationJournal);
-  registerVisibilityRoutes(app, db, chargerCommands);
+  registerVisibilityRoutes(app, db, chargerCommands, proxyAuthorization);
   await registerOcppServer(app, config, db, communicationJournal, proxyAuthorization, chargerCommands);
 
   return app;

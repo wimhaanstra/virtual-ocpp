@@ -109,6 +109,41 @@ type ChargingStats = {
   latestPowerContext: string | null;
 };
 
+type ForceClosePreview = {
+  session: ChargingSession;
+  localStopTransaction: {
+    transactionId: number;
+    idTag?: string;
+    meterStop?: number;
+    timestamp?: string;
+    reason?: string;
+  };
+  meterSource: "latest-meter-sample" | "start-meter" | "unknown";
+  latestMeterSample: {
+    sampledAt: string;
+    value: string;
+    meterWh: number;
+    measurand: string | null;
+    unit: string | null;
+    transactionId: number | null;
+  } | null;
+  proxyPayloads: Array<{
+    proxyTargetId: string;
+    proxyTargetName: string;
+    proxyTargetEnabled: boolean;
+    externalTransactionId: number;
+    payload: Record<string, unknown>;
+  }>;
+  warnings: string[];
+  proxyResults?: Array<{
+    proxyTargetId: string;
+    proxyTargetName: string;
+    externalTransactionId: number;
+    attempted: boolean;
+    ok: boolean;
+  }>;
+};
+
 type LogEntry = {
   id: string;
   level: string;
@@ -518,6 +553,8 @@ export default function App() {
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
   const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [forceClosePreview, setForceClosePreview] = useState<ForceClosePreview | null>(null);
+  const [forceCloseLoading, setForceCloseLoading] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [communicationJournal, setCommunicationJournal] = useState<CommunicationJournalItem[]>([]);
   const [communicationRetentionHours, setCommunicationRetentionHours] = useState<number | null>(null);
@@ -773,11 +810,39 @@ export default function App() {
     setChargingStatsStatus("ready");
   }
 
-  async function closeChargingSession(session: ChargingSession) {
+  async function previewForceCloseChargingSession(session: ChargingSession) {
     setBusy(true);
-    setMessage(`Closing session ${session.transactionId}...`);
+    setForceCloseLoading(true);
+    setMessage(`Preparing force close preview for session ${session.transactionId}...`);
     try {
-      const response = await fetch(`/api/sessions/${session.id}/close`, {
+      const response = await fetch(`/api/sessions/${session.id}/force-close-preview`, {
+        credentials: "include"
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        setMessage("Could not prepare force close preview.");
+        return;
+      }
+
+      const preview = (await response.json()) as ForceClosePreview;
+      setForceClosePreview(preview);
+      setMessage(`Review force close payload for session ${session.transactionId}.`);
+    } finally {
+      setForceCloseLoading(false);
+      setBusy(false);
+    }
+  }
+
+  async function executeForceCloseChargingSession() {
+    if (!forceClosePreview) return;
+
+    setBusy(true);
+    setForceCloseLoading(true);
+    setMessage(`Force closing session ${forceClosePreview.session.transactionId}...`);
+    try {
+      const response = await fetch(`/api/sessions/${forceClosePreview.session.id}/force-close`, {
         method: "POST",
         credentials: "include"
       });
@@ -785,15 +850,24 @@ export default function App() {
       if (handleUnauthorized(response)) return;
 
       if (!response.ok) {
-        setMessage("Could not close charging session.");
+        setMessage(response.status === 409 ? "Session is no longer active." : "Could not force close charging session.");
         return;
       }
 
-      setMessage(`Closed session ${session.transactionId}.`);
-      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadLogs(selectedChargerId)]);
+      const result = (await response.json()) as ForceClosePreview;
+      const failed = result.proxyResults?.filter((entry) => entry.attempted && !entry.ok).length ?? 0;
+      setForceClosePreview(null);
+      setMessage(failed > 0 ? `Force closed session ${result.session.transactionId}; ${failed} proxy stop attempt failed.` : `Force closed session ${result.session.transactionId}.`);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadLogs(selectedChargerId), loadCommunicationJournal(selectedChargerId)]);
     } finally {
+      setForceCloseLoading(false);
       setBusy(false);
     }
+  }
+
+  function cancelForceClosePreview() {
+    setForceClosePreview(null);
+    setForceCloseLoading(false);
   }
 
   async function remoteStopChargingSession(session: ChargingSession) {
@@ -1630,10 +1704,10 @@ export default function App() {
                               <Button
                                 type="button"
                                 className="button-secondary icon-button"
-                                onClick={() => void closeChargingSession(session)}
+                                onClick={() => void previewForceCloseChargingSession(session)}
                                 disabled={busy}
-                                title="Close lingering session"
-                                aria-label={`Close lingering session ${session.transactionId}`}
+                                title="Force close with preview"
+                                aria-label={`Force close session ${session.transactionId}`}
                               >
                                 <PowerOff aria-hidden="true" />
                               </Button>
@@ -2341,6 +2415,85 @@ export default function App() {
           </section>
         )}
       </section>
+
+      {forceClosePreview ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="force-close-modal-title">
+            <div className="topbar-actions page-section-header">
+              <div>
+                <p className="eyebrow">Force close</p>
+                <h2 id="force-close-modal-title">Review StopTransaction</h2>
+                <p className="status-copy">
+                  Session {forceClosePreview.session.transactionId} on charger {forceClosePreview.session.chargerId}.
+                </p>
+              </div>
+              <Button type="button" className="button-ghost" onClick={cancelForceClosePreview} disabled={busy} aria-label="Close force close preview">
+                <X aria-hidden="true" />
+              </Button>
+            </div>
+
+            <div className="force-close-summary">
+              <div>
+                <span>Meter source</span>
+                <strong>{forceClosePreview.meterSource}</strong>
+              </div>
+              <div>
+                <span>Stop meter</span>
+                <strong>{forceClosePreview.localStopTransaction.meterStop ?? "None"}</strong>
+              </div>
+              <div>
+                <span>Timestamp</span>
+                <strong>{forceClosePreview.localStopTransaction.timestamp ? formatDateTime(forceClosePreview.localStopTransaction.timestamp) : "None"}</strong>
+              </div>
+            </div>
+
+            {forceClosePreview.latestMeterSample ? (
+              <p className="status-copy">
+                Latest meter sample: {forceClosePreview.latestMeterSample.meterWh} Wh at {formatDateTime(forceClosePreview.latestMeterSample.sampledAt)}.
+              </p>
+            ) : null}
+
+            {forceClosePreview.warnings.length > 0 ? (
+              <div className="force-close-warning">
+                {forceClosePreview.warnings.map((warning) => (
+                  <p key={warning}>{warning}</p>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="force-close-payloads">
+              <div>
+                <p className="eyebrow">Local record</p>
+                <pre className="communication-payload">{stringifyPayload(forceClosePreview.localStopTransaction)}</pre>
+              </div>
+              {forceClosePreview.proxyPayloads.map((entry) => (
+                <div key={`${entry.proxyTargetId}-${entry.externalTransactionId}`}>
+                  <div className="force-close-payload-header">
+                    <div>
+                      <p className="eyebrow">Proxy target</p>
+                      <h3 title={entry.proxyTargetId}>{entry.proxyTargetName}</h3>
+                    </div>
+                    <span className={`pill ${entry.proxyTargetEnabled ? "pill-good" : "pill-warning"}`}>
+                      {entry.proxyTargetEnabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </div>
+                  <pre className="communication-payload">{stringifyPayload(entry.payload)}</pre>
+                </div>
+              ))}
+            </div>
+
+            <div className="action-row modal-actions">
+              <Button type="button" className="button-secondary" onClick={cancelForceClosePreview} disabled={busy}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={() => void executeForceCloseChargingSession()} disabled={busy || forceCloseLoading}>
+                <PowerOff aria-hidden="true" />
+                Force close
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }

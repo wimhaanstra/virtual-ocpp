@@ -21,6 +21,7 @@ export type StartTransactionRequest = {
 
 export type StopTransactionRequest = {
   transactionId?: number;
+  idTag?: string;
   meterStop?: number;
   timestamp?: string;
   reason?: string;

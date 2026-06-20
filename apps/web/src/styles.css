@@ -792,6 +792,67 @@ nav button:hover {
   justify-content: flex-end;
 }
 
+.force-close-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.force-close-summary div,
+.force-close-payloads > div,
+.force-close-warning {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+}
+
+.force-close-summary span,
+.force-close-summary strong {
+  display: block;
+}
+
+.force-close-summary span {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.force-close-summary strong {
+  word-break: break-word;
+}
+
+.force-close-warning {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--line));
+}
+
+.force-close-warning p {
+  margin: 0;
+}
+
+.force-close-warning p + p {
+  margin-top: 6px;
+}
+
+.force-close-payloads {
+  display: grid;
+  gap: 10px;
+}
+
+.force-close-payload-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.force-close-payload-header h3 {
+  margin: 2px 0 0;
+  font-size: 15px;
+}
+
 .check-row {
   display: flex;
   align-items: center;

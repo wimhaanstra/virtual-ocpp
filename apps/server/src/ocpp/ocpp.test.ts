@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { RPCClient, RPCServer } from 'ocpp-rpc';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -870,5 +871,80 @@ describe('OCPP 1.6 local primary', () => {
       unit: 'kWh'
     });
     expect(server.db.select().from(chargingSessions).all()).toHaveLength(1);
+  });
+
+  it('force closes lingering sessions by sending StopTransaction to proxy targets first', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    insertProxyTarget(server.db, {
+      id: 'proxy-force-close',
+      chargerId: 'SMART-EVSE-FORCE-CLOSE',
+      name: 'Force close CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-FORCE-CLOSE',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+    server.db.insert(chargingSessions).values({
+      id: 'session-force-close',
+      chargerId: 'SMART-EVSE-FORCE-CLOSE',
+      connectorId: 1,
+      transactionId: 700,
+      idTag: 'FORCE-TAG',
+      startedAt: new Date('2026-06-19T10:00:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+    server.db.insert(proxySessionMappings).values({
+      id: 'mapping-force-close',
+      chargerId: 'SMART-EVSE-FORCE-CLOSE',
+      proxyTargetId: 'proxy-force-close',
+      localTransactionId: 700,
+      externalTransactionId: 1700,
+      createdAt: new Date('2026-06-19T10:00:00.000Z'),
+      stoppedAt: null
+    }).run();
+    server.db.insert(meterSamples).values({
+      id: 'meter-force-close',
+      chargerId: 'SMART-EVSE-FORCE-CLOSE',
+      connectorId: 1,
+      transactionId: null,
+      sampledAt: new Date('2026-06-19T10:05:00.000Z'),
+      value: '2.75',
+      numericValue: 2.75,
+      normalizedValue: 2750,
+      normalizedUnit: 'Wh',
+      measurand: 'Energy.Active.Import.Register',
+      unit: 'kWh'
+    }).run();
+
+    const cookie = await loginAdmin(server.app);
+    const response = await server.app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-force-close/force-close',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(proxy.calls.find((call) => call.method === 'StopTransaction')?.params).toMatchObject({
+      transactionId: 1700,
+      idTag: 'FORCE-TAG',
+      meterStop: 2750,
+      timestamp: '2026-06-19T10:05:00.000Z',
+      reason: 'Local'
+    });
+    expect(server.db.select().from(chargingSessions).where(eq(chargingSessions.id, 'session-force-close')).get()).toMatchObject({
+      status: 'stopped',
+      stopMeterWh: 2750,
+      stopReason: 'OperatorForceClosed'
+    });
+    expect(server.db.select().from(proxySessionMappings).where(eq(proxySessionMappings.id, 'mapping-force-close')).get()?.stoppedAt).toBeInstanceOf(Date);
   });
 });

@@ -23,6 +23,13 @@ type ProxyResponse = {
   idTagInfo?: { status?: string };
   transactionId?: number;
 };
+type ProxyStopResult = {
+  proxyTargetId: string;
+  proxyTargetName: string;
+  externalTransactionId: number;
+  attempted: boolean;
+  ok: boolean;
+};
 type UpstreamConnection = {
   client: InstanceType<typeof RPCClient> | null;
   signature: string;
@@ -87,22 +94,59 @@ export class ProxyAuthorizationService {
   async stopTransaction(chargerId: string, params: StopTransactionRequest) {
     if (typeof params.transactionId !== 'number') return;
 
+    await this.stopTransactionForMappings(chargerId, params);
+  }
+
+  async forceStopTransaction(chargerId: string, params: StopTransactionRequest): Promise<ProxyStopResult[]> {
+    if (typeof params.transactionId !== 'number') return [];
+
+    return this.stopTransactionForMappings(chargerId, params);
+  }
+
+  private async stopTransactionForMappings(chargerId: string, params: StopTransactionRequest): Promise<ProxyStopResult[]> {
+    if (typeof params.transactionId !== 'number') return [];
+
+    const stoppedAt = new Date();
+    const results: ProxyStopResult[] = [];
     const mappings = this.getActiveMappings(chargerId, params.transactionId);
     for (const mapping of mappings) {
       const target = this.getEnabledTarget(chargerId, mapping.proxyTargetId);
-      if (!target) continue;
+      if (!target) {
+        results.push({
+          proxyTargetId: mapping.proxyTargetId,
+          proxyTargetName: mapping.proxyTargetId,
+          externalTransactionId: mapping.externalTransactionId,
+          attempted: false,
+          ok: false
+        });
+        this.db
+          .update(proxySessionMappings)
+          .set({ stoppedAt })
+          .where(eq(proxySessionMappings.id, mapping.id))
+          .run();
+        continue;
+      }
 
-      await this.callTarget(chargerId, target, 'StopTransaction', {
+      const response = await this.callTarget(chargerId, target, 'StopTransaction', {
         ...params,
         transactionId: mapping.externalTransactionId
+      });
+      results.push({
+        proxyTargetId: target.id,
+        proxyTargetName: target.name,
+        externalTransactionId: mapping.externalTransactionId,
+        attempted: true,
+        ok: response.ok
       });
 
       this.db
         .update(proxySessionMappings)
-        .set({ stoppedAt: new Date() })
+        .set({ stoppedAt })
         .where(eq(proxySessionMappings.id, mapping.id))
         .run();
     }
+
+    return results;
   }
 
   async statusNotification(chargerId: string, params: StatusNotificationRequest) {

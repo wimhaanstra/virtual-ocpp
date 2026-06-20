@@ -823,6 +823,96 @@ describe('app', () => {
     await app.close();
   });
 
+  it('previews force close StopTransaction payloads with the latest meter sample', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-force-preview',
+      chargerId: 'SMART-EVSE-FORCE-PREVIEW',
+      connectorId: 1,
+      transactionId: 301,
+      idTag: 'TAG-FORCE',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+
+    tempDb.db.insert(proxyTargets).values({
+      id: 'proxy-force-preview',
+      chargerId: 'SMART-EVSE-FORCE-PREVIEW',
+      name: 'Preview CSMS',
+      url: 'ws://127.0.0.1:65535',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      createdAt: new Date('2026-06-19T09:00:00.000Z'),
+      updatedAt: new Date('2026-06-19T09:00:00.000Z')
+    }).run();
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'mapping-force-preview',
+      chargerId: 'SMART-EVSE-FORCE-PREVIEW',
+      proxyTargetId: 'proxy-force-preview',
+      localTransactionId: 301,
+      externalTransactionId: 401,
+      createdAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null
+    }).run();
+    tempDb.db.insert(meterSamples).values({
+      id: 'meter-force-preview',
+      chargerId: 'SMART-EVSE-FORCE-PREVIEW',
+      connectorId: 1,
+      transactionId: null,
+      sampledAt: new Date('2026-06-19T09:15:00.000Z'),
+      value: '1.55',
+      numericValue: 1.55,
+      normalizedValue: 1550,
+      normalizedUnit: 'Wh',
+      measurand: 'Energy.Active.Import.Register',
+      unit: 'kWh'
+    }).run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/session-force-preview/force-close-preview',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      meterSource: 'latest-meter-sample',
+      localStopTransaction: {
+        transactionId: 301,
+        idTag: 'TAG-FORCE',
+        meterStop: 1550,
+        timestamp: '2026-06-19T09:15:00.000Z',
+        reason: 'Local'
+      },
+      proxyPayloads: [
+        {
+          proxyTargetId: 'proxy-force-preview',
+          proxyTargetName: 'Preview CSMS',
+          externalTransactionId: 401,
+          payload: {
+            transactionId: 401,
+            idTag: 'TAG-FORCE',
+            meterStop: 1550,
+            timestamp: '2026-06-19T09:15:00.000Z',
+            reason: 'Local'
+          }
+        }
+      ]
+    });
+
+    await app.close();
+  });
+
   it('rejects remote stop when the charger is not connected', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();

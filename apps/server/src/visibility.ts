@@ -4,8 +4,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargerConnections, chargingSessions, logs, proxySessionMappings } from './db/schema.js';
+import { chargerConnections, chargingSessions, logs, meterSamples, proxySessionMappings, proxyTargets } from './db/schema.js';
 import { ChargerCommandError, type ChargerCommandService } from './ocpp/charger-command-service.js';
+import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
+import type { StopTransactionRequest } from './ocpp/types.js';
 
 const RECENT_LIMIT = 50;
 const RECENT_LOG_LIMIT = 100;
@@ -14,7 +16,12 @@ const ChargerScopedQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
 });
 
-export function registerVisibilityRoutes(app: FastifyInstance, db: Database, chargerCommands?: ChargerCommandService) {
+export function registerVisibilityRoutes(
+  app: FastifyInstance,
+  db: Database,
+  chargerCommands?: ChargerCommandService,
+  proxyAuthorization?: ProxyAuthorizationService
+) {
   const listConnections = async (request: FastifyRequest, reply: FastifyReply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -47,6 +54,75 @@ export function registerVisibilityRoutes(app: FastifyInstance, db: Database, cha
       : query.orderBy(desc(chargingSessions.startedAt)).limit(RECENT_LIMIT).all();
 
     return rows.map(toPublicChargingSession);
+  });
+
+  app.get<{ Params: { id: string } }>('/api/sessions/:id/force-close-preview', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    return buildForceClosePreview(db, session, new Date());
+  });
+
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/force-close', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    if (session.status !== 'active') {
+      return reply.code(409).send({ error: 'session_not_active' });
+    }
+
+    const stoppedAt = new Date();
+    const preview = buildForceClosePreview(db, session, stoppedAt);
+    const proxyResults = proxyAuthorization
+      ? await proxyAuthorization.forceStopTransaction(session.chargerId, preview.localStopTransaction)
+      : [];
+
+    db.update(chargingSessions)
+      .set({
+        stoppedAt,
+        stopMeterWh: preview.localStopTransaction.meterStop ?? null,
+        stopReason: 'OperatorForceClosed',
+        status: 'stopped'
+      })
+      .where(eq(chargingSessions.id, session.id))
+      .run();
+
+    db.insert(logs).values({
+      id: randomUUID(),
+      level: proxyResults.some((result) => result.attempted && !result.ok) ? 'warn' : 'info',
+      category: 'session',
+      message: 'charging session force closed',
+      chargerId: session.chargerId,
+      transactionId: session.transactionId,
+      metadata: JSON.stringify({
+        connectorId: session.connectorId,
+        reason: 'OperatorForceClosed',
+        meterStop: preview.localStopTransaction.meterStop ?? null,
+        meterSource: preview.meterSource,
+        proxyResults
+      }),
+      createdAt: stoppedAt
+    }).run();
+
+    return {
+      ...preview,
+      session: toPublicChargingSession({
+        ...session,
+        stoppedAt,
+        stopMeterWh: preview.localStopTransaction.meterStop ?? null,
+        stopReason: 'OperatorForceClosed',
+        status: 'stopped'
+      }),
+      proxyResults
+    };
   });
 
   app.post<{ Params: { id: string } }>('/api/sessions/:id/close', async (request, reply) => {
@@ -192,6 +268,124 @@ function recordSessionLog(
     metadata: JSON.stringify(input.metadata),
     createdAt: new Date()
   }).run();
+}
+
+function buildForceClosePreview(db: Database, session: typeof chargingSessions.$inferSelect, stoppedAt: Date) {
+  const latestEnergy = findLatestEnergySampleForSession(db, session);
+  const meterStop = latestEnergy?.meterWh ?? session.startMeterWh ?? undefined;
+  const timestamp = (latestEnergy?.sampledAt ?? stoppedAt).toISOString();
+  const reason = 'Local';
+  const localStopTransaction: StopTransactionRequest = {
+    transactionId: session.transactionId,
+    timestamp,
+    reason
+  };
+
+  if (typeof session.idTag === 'string' && session.idTag.trim()) {
+    localStopTransaction.idTag = session.idTag;
+  }
+  if (typeof meterStop === 'number') {
+    localStopTransaction.meterStop = Math.round(meterStop);
+  }
+
+  const proxyPayloads = getActiveProxyMappings(db, session).map(({ mapping, target }) => ({
+    proxyTargetId: mapping.proxyTargetId,
+    proxyTargetName: target?.name ?? mapping.proxyTargetId,
+    proxyTargetEnabled: target?.enabled === true,
+    externalTransactionId: mapping.externalTransactionId,
+    payload: {
+      ...localStopTransaction,
+      transactionId: mapping.externalTransactionId
+    }
+  }));
+
+  const warnings: string[] = [];
+  if (!latestEnergy) {
+    warnings.push(
+      typeof session.startMeterWh === 'number'
+        ? 'No stored energy meter sample was found for this session; preview falls back to the start meter.'
+        : 'No stored energy meter sample or start meter was found; StopTransaction will omit meterStop.'
+    );
+  }
+  if (proxyPayloads.some((entry) => !entry.proxyTargetEnabled)) {
+    warnings.push('One or more proxy mappings point to a disabled or missing proxy target and may not be sent.');
+  }
+
+  return {
+    session: toPublicChargingSession(session),
+    localStopTransaction,
+    meterSource: latestEnergy ? 'latest-meter-sample' : typeof session.startMeterWh === 'number' ? 'start-meter' : 'unknown',
+    latestMeterSample: latestEnergy
+      ? {
+          sampledAt: latestEnergy.sampledAt.toISOString(),
+          value: latestEnergy.value,
+          meterWh: Math.round(latestEnergy.meterWh),
+          measurand: latestEnergy.measurand,
+          unit: latestEnergy.unit,
+          transactionId: latestEnergy.transactionId
+        }
+      : null,
+    proxyPayloads,
+    warnings
+  };
+}
+
+function getActiveProxyMappings(db: Database, session: typeof chargingSessions.$inferSelect) {
+  return db
+    .select()
+    .from(proxySessionMappings)
+    .where(
+      and(
+        eq(proxySessionMappings.chargerId, session.chargerId),
+        eq(proxySessionMappings.localTransactionId, session.transactionId),
+        isNull(proxySessionMappings.stoppedAt)
+      )
+    )
+    .all()
+    .map((mapping) => ({
+      mapping,
+      target: db.select().from(proxyTargets).where(eq(proxyTargets.id, mapping.proxyTargetId)).limit(1).get() ?? null
+    }));
+}
+
+function findLatestEnergySampleForSession(db: Database, session: typeof chargingSessions.$inferSelect) {
+  const rows = db
+    .select()
+    .from(meterSamples)
+    .where(and(eq(meterSamples.chargerId, session.chargerId), eq(meterSamples.connectorId, session.connectorId)))
+    .orderBy(desc(meterSamples.sampledAt))
+    .all();
+
+  for (const sample of rows) {
+    if (sample.sampledAt < session.startedAt) continue;
+    if (typeof sample.transactionId === 'number' && sample.transactionId !== session.transactionId) continue;
+    if (!isEnergySample(sample)) continue;
+
+    const meterWh = normalizeEnergyWh(sample);
+    if (meterWh === null) continue;
+
+    return {
+      sampledAt: sample.sampledAt,
+      value: sample.value,
+      meterWh,
+      measurand: sample.measurand ?? null,
+      unit: sample.unit ?? null,
+      transactionId: sample.transactionId ?? null
+    };
+  }
+
+  return null;
+}
+
+function isEnergySample(sample: typeof meterSamples.$inferSelect) {
+  return sample.measurand === 'Energy.Active.Import.Register' || sample.measurand === null || sample.measurand === '';
+}
+
+function normalizeEnergyWh(sample: typeof meterSamples.$inferSelect) {
+  if (sample.normalizedUnit === 'Wh' && typeof sample.normalizedValue === 'number') return sample.normalizedValue;
+  const value = typeof sample.normalizedValue === 'number' ? sample.normalizedValue : typeof sample.numericValue === 'number' ? sample.numericValue : Number.parseFloat(sample.value);
+  if (!Number.isFinite(value)) return null;
+  return sample.unit?.trim().toLowerCase() === 'kwh' ? value * 1000 : value;
 }
 
 function toPublicChargerConnection(connection: typeof chargerConnections.$inferSelect) {

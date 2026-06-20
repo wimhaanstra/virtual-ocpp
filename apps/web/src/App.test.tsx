@@ -1209,8 +1209,8 @@ describe("App", () => {
               startedAt: "2026-06-19T09:05:00.000Z",
               stoppedAt: sessionClosed ? "2026-06-19T09:30:00.000Z" : null,
               startMeterWh: 1000,
-              stopMeterWh: null,
-              stopReason: sessionClosed ? "OperatorClosed" : null,
+              stopMeterWh: sessionClosed ? 1550 : null,
+              stopReason: sessionClosed ? "OperatorForceClosed" : null,
               status: sessionClosed ? "stopped" : "active",
               active: !sessionClosed
             }
@@ -1219,22 +1219,98 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/sessions/session-1/close" && method === "POST") {
+      if (url === "/api/sessions/session-1/force-close-preview" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            session: {
+              id: "session-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              stoppedAt: null,
+              startMeterWh: 1000,
+              stopMeterWh: null,
+              stopReason: null,
+              status: "active",
+              active: true
+            },
+            localStopTransaction: {
+              transactionId: 42,
+              idTag: "TAG-1",
+              meterStop: 1550,
+              timestamp: "2026-06-19T09:25:00.000Z",
+              reason: "Local"
+            },
+            meterSource: "latest-meter-sample",
+            latestMeterSample: {
+              sampledAt: "2026-06-19T09:25:00.000Z",
+              value: "1550",
+              meterWh: 1550,
+              measurand: "Energy.Active.Import.Register",
+              unit: "Wh",
+              transactionId: null
+            },
+            proxyPayloads: [
+              {
+                proxyTargetId: "proxy-1",
+                proxyTargetName: "TapElectric",
+                proxyTargetEnabled: true,
+                externalTransactionId: 4242,
+                payload: {
+                  transactionId: 4242,
+                  idTag: "TAG-1",
+                  meterStop: 1550,
+                  timestamp: "2026-06-19T09:25:00.000Z",
+                  reason: "Local"
+                }
+              }
+            ],
+            warnings: []
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url === "/api/sessions/session-1/force-close" && method === "POST") {
         sessionClosed = true;
         return new Response(
           JSON.stringify({
-            id: "session-1",
-            chargerId: "SMART-EVSE-1",
-            connectorId: 1,
-            transactionId: 42,
-            idTag: "TAG-1",
-            startedAt: "2026-06-19T09:05:00.000Z",
-            stoppedAt: "2026-06-19T09:30:00.000Z",
-            startMeterWh: 1000,
-            stopMeterWh: null,
-            stopReason: "OperatorClosed",
-            status: "stopped",
-            active: false
+            session: {
+              id: "session-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              stoppedAt: "2026-06-19T09:30:00.000Z",
+              startMeterWh: 1000,
+              stopMeterWh: 1550,
+              stopReason: "OperatorForceClosed",
+              status: "stopped",
+              active: false
+            },
+            localStopTransaction: {
+              transactionId: 42,
+              idTag: "TAG-1",
+              meterStop: 1550,
+              timestamp: "2026-06-19T09:25:00.000Z",
+              reason: "Local"
+            },
+            meterSource: "latest-meter-sample",
+            latestMeterSample: null,
+            proxyPayloads: [],
+            warnings: [],
+            proxyResults: [
+              {
+                proxyTargetId: "proxy-1",
+                proxyTargetName: "TapElectric",
+                externalTransactionId: 4242,
+                attempted: true,
+                ok: true
+              }
+            ]
           }),
           { status: 200 }
         );
@@ -1319,10 +1395,15 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remote stop session 42" }));
     await screen.findByText("Remote stop accepted for session 42.");
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/remote-stop" && init?.method === "POST")).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Close lingering session 42" }));
-    await screen.findByText("Closed session 42.");
-    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/close" && init?.method === "POST")).toBe(true);
-    expect(await screen.findByText("OperatorClosed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Force close session 42" }));
+    expect(await screen.findByRole("heading", { name: "Review StopTransaction" })).toBeInTheDocument();
+    expect(screen.getByText("TapElectric")).toBeInTheDocument();
+    expect(screen.getAllByText(/1550/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Force close" }));
+    await screen.findByText("Force closed session 42.");
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/force-close-preview" && (init?.method ?? "GET") === "GET")).toBe(true);
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/force-close" && init?.method === "POST")).toBe(true);
+    expect(await screen.findByText("OperatorForceClosed")).toBeInTheDocument();
 
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
     expect(screen.getByRole("heading", { name: "Communication" })).toBeInTheDocument();
