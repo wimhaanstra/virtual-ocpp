@@ -1,8 +1,7 @@
-import { Fragment, type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { Fragment, type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   ChevronDown,
-  Clock3,
   Eye,
   EyeOff,
   Gauge,
@@ -317,12 +316,6 @@ function getChargerContextId(charger: ChargerRegistryRow) {
   return charger.chargerId?.trim() || charger.id;
 }
 
-function getChargerStatusLabel(charger: ChargerRegistryRow) {
-  if (charger.active) return "Connected";
-  if (charger.active === false) return "Disconnected";
-  return "Registered";
-}
-
 function getChargerSortTime(charger: ChargerRegistryRow) {
   const candidates = [charger.lastSeenAt, charger.updatedAt, charger.connectedAt, charger.disconnectedAt].filter(Boolean);
   const value = candidates[0];
@@ -541,13 +534,7 @@ export default function App() {
   const [message, setMessage] = useState("Sign in to manage proxy targets.");
   const [busy, setBusy] = useState(false);
 
-  const enabledTagCount = useMemo(() => tags.filter((tag) => tag.enabled).length, [tags]);
-  const enabledProxyCount = useMemo(() => proxyTargets.filter((target) => target.enabled).length, [proxyTargets]);
-  const activeSessionCount = useMemo(() => chargingSessions.filter((session) => session.active).length, [chargingSessions]);
   const connectedChargerCount = useMemo(() => chargers.filter((charger) => charger.active).length, [chargers]);
-  const sortedChargers = useMemo(() => sortChargers(chargers), [chargers]);
-  const recentChargers = useMemo(() => sortedChargers.slice(0, 5), [sortedChargers]);
-  const latestCharger = recentChargers[0] ?? null;
   const selectedCharger = useMemo(
     () => chargers.find((charger) => charger.id === selectedChargerId || charger.chargerId === selectedChargerId) ?? null,
     [chargers, selectedChargerId]
@@ -576,6 +563,8 @@ export default function App() {
 
   const isEditingTag = tagForm.id !== null;
   const isEditingProxyTarget = proxyTargetForm.id !== null;
+  const selectedConnectionStatus = selectedCharger?.active ? "Connected" : selectedCharger ? "Registered" : connectedChargerCount > 0 ? "Connected" : "Idle";
+  const selectedConnectionTone = selectedCharger?.active || (!selectedCharger && connectedChargerCount > 0) ? "pill-good" : "pill-neutral";
 
   function formatProxyTargetLabel(proxyTargetId: string | null) {
     if (!proxyTargetId) return "-";
@@ -1423,8 +1412,9 @@ export default function App() {
                 <div className="topbar-actions">
                   <div>
                     <p className="eyebrow">Charging ingress</p>
-                    <h2>Connect a charger</h2>
+                    <h2>Charger connection</h2>
                   </div>
+                  <span className={`pill ${selectedConnectionTone}`}>{selectedConnectionStatus}</span>
                   <Button type="button" className="button-secondary" onClick={() => void loadAdminData()} disabled={busy}>
                     <RefreshCcw aria-hidden="true" />
                     <span className="button-label">Refresh</span>
@@ -1456,16 +1446,12 @@ export default function App() {
                 </div>
 
                 <div className="home-link-row" aria-label="Dashboard quick links">
-                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Sessions")}>
-                    Sessions
-                    <ArrowRight aria-hidden="true" />
-                  </Button>
                   <Button type="button" className="button-secondary" onClick={() => navigateToView("Communication")}>
                     Communication
                     <ArrowRight aria-hidden="true" />
                   </Button>
-                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Tags")}>
-                    Tags
+                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Sessions")}>
+                    Sessions
                     <ArrowRight aria-hidden="true" />
                   </Button>
                   <Button type="button" className="button-secondary" onClick={() => navigateToView("Proxy targets")}>
@@ -1476,44 +1462,7 @@ export default function App() {
               </section>
 
               <section className="panel home-panel">
-                <div>
-                  <p className="eyebrow">Dashboard summary</p>
-                  <h2>Operational snapshot</h2>
-                </div>
-
-                <section className="status-grid home-status-grid" aria-label="System status">
-                  <StatusTile icon={<PlugZap />} label="Chargers connected now" value={String(connectedChargerCount)} tone={connectedChargerCount > 0 ? "good" : "neutral"} />
-                  <StatusTile icon={<Clock3 />} label="Recent registry rows" value={String(chargers.length)} tone="neutral" />
-                  <StatusTile icon={<KeyRound />} label="Enabled tags" value={String(enabledTagCount)} tone={enabledTagCount > 0 ? "good" : "neutral"} />
-                  <StatusTile icon={<ListChecks />} label="Active sessions" value={String(activeSessionCount)} tone={activeSessionCount > 0 ? "good" : "neutral"} />
-                  <StatusTile icon={<ListChecks />} label="Enabled proxy targets" value={String(enabledProxyCount)} tone={enabledProxyCount > 0 ? "good" : "neutral"} />
-                  <StatusTile icon={<PlugZap />} label="Proxy targets connected" value={`${proxyHealthCounts.connected}/${proxyHealthCounts.enabled}`} tone={proxyHealthCounts.failing > 0 ? "warning" : proxyHealthCounts.connected > 0 ? "good" : "neutral"} />
-                </section>
-
-                <div className="current-state">
-                  <div className="current-state__header">
-                    <p className="eyebrow">Current state</p>
-                    <span className={`pill ${connectedChargerCount > 0 ? "pill-good" : "pill-neutral"}`}>
-                      {connectedChargerCount > 0 ? "Connected" : "Idle"}
-                    </span>
-                  </div>
-                  <p>
-                    {connectedChargerCount > 0
-                      ? `${connectedChargerCount} charger${connectedChargerCount === 1 ? " is" : "s are"} connected right now.`
-                      : "No chargers are connected right now."}
-                  </p>
-                  {latestCharger ? (
-                    <p className="status-copy">
-                      Latest event: <span className="mono">{latestCharger.id}</span>{" "}
-                      {latestCharger.active ? "connected" : "registered"} at{" "}
-                      {formatDateTime(latestCharger.disconnectedAt ?? latestCharger.connectedAt ?? latestCharger.updatedAt ?? latestCharger.lastSeenAt ?? null)}.
-                    </p>
-                  ) : (
-                    <p className="status-copy">No charger registry rows have been loaded yet.</p>
-                  )}
-                </div>
-
-                <section className="charging-stats-panel" aria-label="Live charging stats">
+                <section className="charging-stats-panel charging-stats-panel-standalone" aria-label="Live charging stats">
                   <div className="current-state__header">
                     <div>
                       <p className="eyebrow">Live charging</p>
@@ -1609,53 +1558,6 @@ export default function App() {
                       </p>
                     </article>
                   ))}
-                </div>
-              )}
-            </section>
-
-            <section className="panel table-panel">
-              <div className="topbar-actions">
-                <div>
-                  <p className="eyebrow">Chargers</p>
-                  <h2>Current and recent connection state</h2>
-                </div>
-                <Button type="button" className="button-secondary" onClick={() => void loadChargers()} disabled={busy}>
-                  <RefreshCcw aria-hidden="true" />
-                  <span className="button-label">Refresh</span>
-                </Button>
-              </div>
-              {recentChargers.length === 0 ? (
-                <p>No charger registry rows available yet.</p>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Charger</th>
-                        <th>Label</th>
-                        <th>Status</th>
-                        <th>Connected</th>
-                        <th>Disconnected</th>
-                        <th>Last seen</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentChargers.map((charger) => (
-                        <tr key={charger.id}>
-                          <td className="mono">{getChargerContextId(charger)}</td>
-                          <td>{getChargerDisplayLabel(charger)}</td>
-                          <td>
-                            <span className={`pill ${charger.active ? "pill-good" : "pill-neutral"}`}>
-                              {getChargerStatusLabel(charger)}
-                            </span>
-                          </td>
-                          <td>{formatDateTime(charger.connectedAt ?? null)}</td>
-                          <td>{formatDateTime(charger.disconnectedAt ?? null)}</td>
-                          <td>{formatDateTime(charger.lastSeenAt ?? charger.updatedAt ?? null)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               )}
             </section>
@@ -2440,29 +2342,5 @@ export default function App() {
         )}
       </section>
     </main>
-  );
-}
-
-function StatusTile({
-  icon,
-  label,
-  value,
-  tone
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  tone: "good" | "neutral" | "warning";
-}) {
-  return (
-    <article className={`status-tile ${tone}`}>
-      <div className="tile-icon" aria-hidden="true">
-        {icon}
-      </div>
-      <div>
-        <p>{label}</p>
-        <strong>{value}</strong>
-      </div>
-    </article>
   );
 }
