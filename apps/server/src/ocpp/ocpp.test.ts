@@ -1039,6 +1039,27 @@ describe('OCPP 1.6 local primary', () => {
     );
   });
 
+  it('does not detect a meter gap before the first known session', async () => {
+    const server = await startTestServer({ meterGapThresholdWh: 500 });
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'FIRST-SESSION-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-FIRST-SESSION' });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-FIRST-SESSION');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const start = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'FIRST-SESSION-TAG',
+      meterStart: 2500,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { idTagInfo: { status: string } };
+
+    expect(start.idTagInfo.status).toBe('Accepted');
+    expect(server.db.select().from(meterGapEvents).all()).toHaveLength(0);
+  });
+
   it('does not close or forward an offline replay StopTransaction when more than one active session matches the recovery rules', async () => {
     const proxy = await startRecordingProxyServer();
     cleanup.push(proxy.close);

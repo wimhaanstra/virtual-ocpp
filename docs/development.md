@@ -180,6 +180,8 @@ Accepted `StartTransaction` calls are also checked for meter gaps. When the star
 
 Operators can also run the same detection manually from the charger dashboard meter-gap panel. The UI calls `POST /api/chargers/:id/meter-gaps/scan`, which walks stored sessions per connector, creates missing pending gap events, and returns `created`, `existing`, and `ignored` counts. Re-running a scan is duplicate-safe for the same previous/new session pair.
 
+The first known session for a charger/connector is treated as the meter baseline. Virtual OCPP does not create a meter-gap event before that first session because there is no previous stopped meter value that can be submitted or reconciled.
+
 Proxy target forms treat `url` as the upstream base websocket URL and append `stationId`, or the local charger id when `stationId` is blank, as the upstream OCPP identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 
 ## Communication Journal Workflow

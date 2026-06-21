@@ -1423,6 +1423,50 @@ describe('app', () => {
     await app.close();
   });
 
+  it('does not create a manual meter gap before the first known charging session', async () => {
+    const config = testConfig({ meterGapThresholdWh: 500 });
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    const now = new Date('2026-06-19T09:00:00.000Z');
+    tempDb.db.insert(chargers).values({
+      id: 'CHARGER-FIRST-GAP-SCAN',
+      label: 'First gap scan',
+      enabled: true,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(chargingSessions).values({
+      id: 'first-gap-scan-session',
+      chargerId: 'CHARGER-FIRST-GAP-SCAN',
+      connectorId: 1,
+      transactionId: 1,
+      idTag: 'TAG',
+      startedAt: new Date('2026-06-19T10:00:00.000Z'),
+      stoppedAt: new Date('2026-06-19T10:30:00.000Z'),
+      startMeterWh: 2500,
+      stopMeterWh: 2800,
+      stopReason: 'Local',
+      status: 'stopped'
+    }).run();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/chargers/CHARGER-FIRST-GAP-SCAN/meter-gaps/scan',
+      headers: { cookie },
+      payload: {}
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ created: 0, existing: 0 });
+    expect(tempDb.db.select().from(meterGapEvents).all()).toHaveLength(0);
+
+    await app.close();
+  });
+
   it('upgrades existing meter sample tables with normalized columns and indexes', () => {
     const sqlite = new Database(':memory:');
     try {
