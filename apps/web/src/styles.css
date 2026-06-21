@@ -680,6 +680,42 @@ nav button:hover {
   word-break: break-word;
 }
 
+.session-audit-list {
+  display: grid;
+  gap: 8px;
+}
+
+.session-audit-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+}
+
+.session-audit-item h3 {
+  margin: 0 0 3px;
+  font-size: 15px;
+}
+
+.status-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.session-audit-row {
+  background: var(--panel-subtle);
+}
+
+.session-audit-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .panel {
   border: 1px solid var(--line);
   border-radius: var(--radius);

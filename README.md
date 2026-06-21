@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages, and a redacted communication journal for protocol troubleshooting. The production Docker image is planned but not implemented yet.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages with stale-session audit checks, runtime proxy health, and a redacted communication journal for protocol troubleshooting. The production Docker image is planned but not implemented yet.
 
 ## Stack
 
@@ -57,7 +57,7 @@ npm run db:migrate   # apply Drizzle migrations
 
 The frontend dev server runs at `http://localhost:5173`. It proxies `/api` and `/health` to the backend at `http://localhost:3000`.
 
-Protected frontend pages use client-side routes so refresh and browser back/forward keep the current page: `/`, `/proxy-targets`, `/tags`, `/sessions`, `/activity`, and `/communication`. The selected charger context is preserved in `?chargerId=...`.
+Protected frontend pages use client-side routes so refresh and browser back/forward keep the current page: `/`, `/proxy-targets`, `/tags`, `/sessions`, and `/communication`. The selected charger context is preserved in `?chargerId=...`.
 
 ## Current Endpoints
 
@@ -76,12 +76,14 @@ Protected frontend pages use client-side routes so refresh and browser back/forw
 - `POST /api/proxy-targets` creates a proxy target for `chargerId` with URL, optional username, optional password, optional station id, mode, outage policy, and optional `tagMappings`. Requires admin session.
 - `PATCH /api/proxy-targets/:id` updates target name, URL, username, station id, enabled state, mode, outage policy, stored Basic Auth password, or per-proxy tag mappings. Requires admin session.
 - `DELETE /api/proxy-targets/:id` deletes a proxy target. Requires admin session.
+- `GET /api/proxy-health?chargerId=...` returns runtime upstream proxy socket health for a charger. Requires admin session.
 - `GET /api/dashboard-config` returns secret-free charger connection config for the dashboard. Requires admin session.
 - `GET /api/communication-journal` lists redacted charger/server/proxy OCPP communication rows with source/target filters. Requires admin session.
 - `POST /api/communication-journal/purge` deletes communication journal rows older than `COMMUNICATION_LOG_RETENTION_HOURS`. Requires admin session.
 - `GET /api/chargers` lists recent charger connections. Requires admin session.
 - `GET /api/charger-connections` is an alias for charger connection history. Requires admin session.
 - `GET /api/sessions` lists recent charging sessions. Requires admin session.
+- `GET /api/active-session-audit?chargerId=...` lists active sessions that may have missed `StopTransaction`, with latest meter/status context and active proxy mappings. Requires admin session.
 - `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` to the connected charger for an active session. Requires admin session.
 - `POST /api/sessions/:id/close` locally closes a lingering active session record without sending an OCPP command. Requires admin session.
 - `GET /api/logs` lists recent log/activity entries with safe context and without raw metadata. Requires admin session.
@@ -109,7 +111,7 @@ Authorization uses the SQLite `tags` allowlist and `tag_charger_access`. Known e
 
 Proxy targets are scoped directly to one charger. A charger with no enabled proxy targets does not mirror traffic. `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction` are forwarded to enabled proxy targets for the active charger.
 
-Virtual OCPP keeps one upstream OCPP websocket connection per charger and proxy target. The connection uses the target `stationId` as the upstream OCPP identity when configured, otherwise it uses the local charger id. If a proxy call or connection fails, the connection is closed, a short exponential reconnect backoff is recorded in memory, and the next eligible outbound call reconnects after that backoff window. Proxy connect, reconnect, close, and outage events are written to activity logs without exposing passwords.
+Virtual OCPP keeps one upstream OCPP websocket connection per charger and proxy target. The connection uses the target `stationId` as the upstream OCPP identity when configured, otherwise it uses the local charger id. When a charger connects, enabled proxy targets for that charger are warmed immediately instead of waiting for the next authorization or transaction call. If a proxy call or connection fails, the connection is closed, a short exponential reconnect backoff is recorded in memory, and the service keeps retrying while the local charger remains connected. Runtime proxy state is available through the dashboard and `GET /api/proxy-health`; proxy connect, reconnect, close, and outage events are also written to logs without exposing passwords.
 
 Enabled deny-capable proxy targets are also checked during `Authorize` and `StartTransaction`. If any deny-capable target returns a non-`Accepted` tag status, Virtual OCPP rejects the local authorization. If a deny-capable target is unavailable, its outage policy controls the local decision:
 
@@ -181,11 +183,11 @@ The current frontend includes global tag management, selected-charger tag access
 - Edit, toggle, or delete proxy targets.
 - View whether a proxy target has stored credentials without exposing the username or password.
 - Add per-proxy tag mappings so an upstream receives a different idTag than the charger sends locally.
-- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, proxy target health, active charging energy/power/current/voltage when available, summary metrics, and quick links to operational pages.
+- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, runtime proxy target health, active charging energy/power/current/voltage when available, missing-stop audit warnings, and quick links to operational pages.
 - View recent charging sessions.
+- Review missing-stop audit warnings for active sessions where the charger appears available/disconnected or an accepted remote stop has not produced `StopTransaction`.
 - Request a real OCPP remote stop for active sessions when the charger is connected.
 - Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
-- View charger connection activity and recent logs.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.
 
 Tag access and proxy target changes affect OCPP behavior immediately because the server reads current SQLite state during authorization and proxied calls. Proxy target edits and deletes are rejected while that charger/target has an active mirrored transaction mapping, so in-flight upstream sessions are not silently orphaned.

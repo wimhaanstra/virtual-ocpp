@@ -44,7 +44,7 @@ describe('communication journal', () => {
     closeDb = tempDb.close;
 
     const journal = new CommunicationJournalService(tempDb.db, 24);
-    const createdAt = new Date('2026-06-19T10:00:00.000Z');
+    const createdAt = new Date(Date.now() - 60_000);
     expect(
       redactCommunicationPayload({
         password: 'root-secret',
@@ -107,7 +107,7 @@ describe('communication journal', () => {
           status: 'Accepted'
         }
       },
-      createdAt: new Date('2026-06-19T10:05:00.000Z')
+      createdAt: new Date(createdAt.getTime() + 5_000)
     });
 
     const app = await buildApp({ config: testConfig(), db: tempDb.db });
@@ -124,7 +124,7 @@ describe('communication journal', () => {
       items: [
         {
           id: expect.any(String),
-          createdAt: '2026-06-19T10:00:00.000Z',
+          createdAt: createdAt.toISOString(),
           direction: 'inbound',
           sourceType: 'charger',
           sourceId: 'CHARGER-1',

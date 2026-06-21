@@ -15,6 +15,8 @@ But it will also include an OCPP Proxy, allowing charging sessions to be mirrore
 - SQL lite database to store charging sessions, tag, etc
 - Logs when connections to other OCPP services are disconnected etc.
 - Home dashboard with charger connection information and current connection state.
+- Runtime proxy health so operators can see whether upstream OCPP targets are connected, retrying, disabled, or waiting for the charger.
+- Session audit warnings for active sessions that likely missed `StopTransaction`, with enough meter/proxy context to safely review before force closing.
 - OCPP charger simulator for development, demos, and deployment smoke tests.
 - Deployable to a docker image which we will publish to docker hub later.
 

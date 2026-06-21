@@ -43,11 +43,19 @@ type ReconnectBackoff = {
   nextAttemptAt: number;
 };
 type ReconnectTimer = ReturnType<typeof setTimeout>;
+type RuntimeHealth = {
+  lastConnectedAt: Date | null;
+  lastDisconnectedAt: Date | null;
+  lastSuccessAt: Date | null;
+  lastFailureAt: Date | null;
+  lastErrorCode: string | null;
+};
 
 export class ProxyAuthorizationService {
   private readonly connections = new Map<string, UpstreamConnection>();
   private readonly reconnectBackoffs = new Map<string, ReconnectBackoff>();
   private readonly reconnectTimers = new Map<string, ReconnectTimer>();
+  private readonly runtimeHealth = new Map<string, RuntimeHealth>();
   private closed = false;
 
   constructor(
@@ -237,6 +245,64 @@ export class ProxyAuthorizationService {
     );
   }
 
+  getHealth(chargerId?: string) {
+    const targets = chargerId
+      ? this.db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, chargerId)).all()
+      : this.db.select().from(proxyTargets).all();
+
+    const items = targets.map((target) => {
+      const targetChargerId = target.chargerId ?? '';
+      const key = this.connectionKey(targetChargerId, target.id);
+      const connection = this.connections.get(key);
+      const backoff = this.reconnectBackoffs.get(key);
+      const runtime = this.runtimeHealth.get(key);
+      const chargerConnected = target.chargerId ? this.hasActiveChargerConnection(target.chargerId) : false;
+      const connected = Boolean(connection?.connected || connection?.client?.state === RPCClient.OPEN);
+      const connecting = Boolean(connection?.connectPromise);
+      const nextReconnectAt = backoff?.nextAttemptAt ? new Date(backoff.nextAttemptAt) : null;
+      const state = getProxyHealthState({
+        enabled: target.enabled,
+        chargerConnected,
+        connected,
+        connecting,
+        nextReconnectAt,
+        hadSuccessfulConnection: connection?.hadSuccessfulConnection ?? Boolean(runtime?.lastConnectedAt)
+      });
+
+      return {
+        proxyTargetId: target.id,
+        name: target.name,
+        chargerId: target.chargerId,
+        enabled: target.enabled,
+        mode: target.mode,
+        outagePolicy: target.outagePolicy,
+        connected,
+        state,
+        detail: getProxyHealthDetail(state),
+        upstreamIdentity: target.stationId ?? target.chargerId,
+        hadSuccessfulConnection: connection?.hadSuccessfulConnection ?? Boolean(runtime?.lastConnectedAt),
+        lastConnectedAt: runtime?.lastConnectedAt?.toISOString() ?? null,
+        lastDisconnectedAt: runtime?.lastDisconnectedAt?.toISOString() ?? null,
+        lastSuccessAt: runtime?.lastSuccessAt?.toISOString() ?? null,
+        lastFailureAt: runtime?.lastFailureAt?.toISOString() ?? null,
+        nextReconnectAt: nextReconnectAt?.toISOString() ?? null,
+        lastErrorCode: runtime?.lastErrorCode ?? null
+      };
+    });
+
+    return {
+      chargerId: chargerId ?? null,
+      summary: {
+        total: items.length,
+        connected: items.filter((item) => item.state === 'connected').length,
+        backoff: items.filter((item) => item.state === 'backoff').length,
+        waitingForCharger: items.filter((item) => item.state === 'waiting_for_charger').length,
+        disabled: items.filter((item) => item.state === 'disabled').length
+      },
+      targets: items
+    };
+  }
+
   private async forwardToTargets(
     chargerId: string,
     method: string,
@@ -345,6 +411,10 @@ export class ProxyAuthorizationService {
     }
 
     if (caughtError) {
+      this.updateRuntimeHealth(chargerId, target.id, {
+        lastFailureAt: new Date(),
+        lastErrorCode: getErrorCode(caughtError)
+      });
       await this.evictConnection(chargerId, target, 'proxy target connection evicted after call failure');
       this.communicationJournal?.recordProxyError({
         chargerId,
@@ -377,6 +447,10 @@ export class ProxyAuthorizationService {
     }
 
     const status = response?.idTagInfo?.status ?? 'Accepted';
+    this.updateRuntimeHealth(chargerId, target.id, {
+      lastSuccessAt: new Date(),
+      lastErrorCode: null
+    });
     this.communicationJournal?.recordProxyResult({
       chargerId,
       proxyTargetId: target.id,
@@ -553,6 +627,10 @@ export class ProxyAuthorizationService {
     client.on('open', () => {
       if (connection.suppressLifecycleLogs) return;
       connection.connected = true;
+      this.updateRuntimeHealth(chargerId, target.id, {
+        lastConnectedAt: new Date(),
+        lastErrorCode: null
+      });
       const reconnecting = connection.hadSuccessfulConnection;
       connection.hadSuccessfulConnection = true;
       this.recordProxyLog({
@@ -569,6 +647,11 @@ export class ProxyAuthorizationService {
     client.on('disconnect', ({ code, reason }) => {
       if (connection.suppressLifecycleLogs) return;
       connection.connected = false;
+      this.updateRuntimeHealth(chargerId, target.id, {
+        lastDisconnectedAt: new Date(),
+        lastFailureAt: new Date(),
+        lastErrorCode: typeof code === 'number' ? String(code) : null
+      });
       this.recordProxyLog({
         level: 'warn',
         message: 'proxy target connection disconnected',
@@ -719,6 +802,57 @@ export class ProxyAuthorizationService {
       identity: target.stationId ?? chargerId,
       password: target.basicAuthPassword ?? null
     });
+  }
+
+  private updateRuntimeHealth(chargerId: string, proxyTargetId: string, update: Partial<RuntimeHealth>) {
+    const key = this.connectionKey(chargerId, proxyTargetId);
+    const current = this.runtimeHealth.get(key) ?? {
+      lastConnectedAt: null,
+      lastDisconnectedAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastErrorCode: null
+    };
+    this.runtimeHealth.set(key, {
+      ...current,
+      ...update
+    });
+  }
+}
+
+function getProxyHealthState(input: {
+  enabled: boolean;
+  chargerConnected: boolean;
+  connected: boolean;
+  connecting: boolean;
+  nextReconnectAt: Date | null;
+  hadSuccessfulConnection: boolean;
+}) {
+  if (!input.enabled) return 'disabled';
+  if (!input.chargerConnected) return 'waiting_for_charger';
+  if (input.connected) return 'connected';
+  if (input.connecting) return 'connecting';
+  if (input.nextReconnectAt && input.nextReconnectAt.getTime() > Date.now()) return 'backoff';
+  if (input.hadSuccessfulConnection) return 'disconnected';
+  return 'unknown';
+}
+
+function getProxyHealthDetail(state: string) {
+  switch (state) {
+    case 'connected':
+      return 'Upstream connection is open.';
+    case 'connecting':
+      return 'Connecting to upstream target.';
+    case 'backoff':
+      return 'Reconnect backoff is active.';
+    case 'waiting_for_charger':
+      return 'Waiting for the local charger to connect.';
+    case 'disabled':
+      return 'Target is disabled.';
+    case 'disconnected':
+      return 'Upstream connection is disconnected.';
+    default:
+      return 'No runtime proxy activity yet.';
   }
 }
 

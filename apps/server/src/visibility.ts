@@ -11,6 +11,7 @@ import type { StopTransactionRequest } from './ocpp/types.js';
 
 const RECENT_LIMIT = 50;
 const RECENT_LOG_LIMIT = 100;
+const REMOTE_STOP_GRACE_MS = 30_000;
 
 const ChargerScopedQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
@@ -54,6 +55,33 @@ export function registerVisibilityRoutes(
       : query.orderBy(desc(chargingSessions.startedAt)).limit(RECENT_LIMIT).all();
 
     return rows.map(toPublicChargingSession);
+  });
+
+  app.get('/api/active-session-audit', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = ChargerScopedQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_active_session_audit_query', details: parsed.error.flatten() });
+    }
+
+    const query = db.select().from(chargingSessions);
+    const rows = parsed.data.chargerId
+      ? query
+          .where(and(eq(chargingSessions.status, 'active'), eq(chargingSessions.chargerId, parsed.data.chargerId)))
+          .orderBy(desc(chargingSessions.startedAt))
+          .limit(RECENT_LIMIT)
+          .all()
+      : query.where(eq(chargingSessions.status, 'active')).orderBy(desc(chargingSessions.startedAt)).limit(RECENT_LIMIT).all();
+    const items = rows.map((session) => buildActiveSessionAuditItem(db, session));
+
+    return {
+      summary: {
+        activeSessions: items.length,
+        flaggedSessions: items.filter((item) => item.warnings.length > 0).length
+      },
+      items
+    };
   });
 
   app.get<{ Params: { id: string } }>('/api/sessions/:id/force-close-preview', async (request, reply) => {
@@ -268,6 +296,147 @@ function recordSessionLog(
     metadata: JSON.stringify(input.metadata),
     createdAt: new Date()
   }).run();
+}
+
+function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessions.$inferSelect) {
+  const activeConnection = db
+    .select()
+    .from(chargerConnections)
+    .where(and(eq(chargerConnections.chargerId, session.chargerId), isNull(chargerConnections.disconnectedAt)))
+    .limit(1)
+    .get();
+  const latestStatus = findLatestConnectorStatus(db, session);
+  const latestEnergy = findLatestEnergySampleForSession(db, session);
+  const proxyMappings = getActiveProxyMappings(db, session).map(({ mapping, target }) => ({
+    proxyTargetId: mapping.proxyTargetId,
+    proxyTargetName: target?.name ?? mapping.proxyTargetId,
+    externalTransactionId: mapping.externalTransactionId,
+    stoppedAt: mapping.stoppedAt?.toISOString() ?? null
+  }));
+  const warnings = buildActiveSessionWarnings(db, session, {
+    chargerConnected: Boolean(activeConnection),
+    latestStatus
+  });
+
+  return {
+    sessionId: session.id,
+    chargerId: session.chargerId,
+    connectorId: session.connectorId,
+    transactionId: session.transactionId,
+    startedAt: session.startedAt.toISOString(),
+    chargerConnected: Boolean(activeConnection),
+    latestStatus: latestStatus?.status ?? null,
+    latestStatusAt: latestStatus?.createdAt.toISOString() ?? null,
+    latestMeterSampleAt: latestEnergy?.sampledAt.toISOString() ?? null,
+    latestMeterWh: latestEnergy ? Math.round(latestEnergy.meterWh) : null,
+    forceCloseMeterSource: latestEnergy ? 'latest-meter-sample' : typeof session.startMeterWh === 'number' ? 'start-meter' : 'unknown',
+    proxyMappings,
+    warnings,
+    recommendedAction: warnings.length > 0 || !activeConnection ? 'force_close_preview' : 'remote_stop'
+  };
+}
+
+function buildActiveSessionWarnings(
+  db: Database,
+  session: typeof chargingSessions.$inferSelect,
+  context: {
+    chargerConnected: boolean;
+    latestStatus: ReturnType<typeof findLatestConnectorStatus>;
+  }
+) {
+  const warnings: Array<{ code: string; severity: 'warn'; message: string; createdAt: string | null }> = [];
+
+  if (context.latestStatus && ['Available', 'Finishing'].includes(context.latestStatus.status)) {
+    warnings.push({
+      code: `connector_${context.latestStatus.status.toLowerCase()}_without_stop_transaction`,
+      severity: 'warn',
+      message: `Connector is ${context.latestStatus.status} while the session is still active.`,
+      createdAt: context.latestStatus.createdAt.toISOString()
+    });
+  }
+
+  if (!context.chargerConnected) {
+    const latestConnection = db
+      .select()
+      .from(chargerConnections)
+      .where(eq(chargerConnections.chargerId, session.chargerId))
+      .orderBy(desc(chargerConnections.connectedAt))
+      .limit(1)
+      .get();
+    warnings.push({
+      code: 'charger_disconnected_without_stop_transaction',
+      severity: 'warn',
+      message: 'Charger is disconnected while the session is still active.',
+      createdAt: latestConnection?.disconnectedAt?.toISOString() ?? null
+    });
+  }
+
+  const remoteStop = findLatestAcceptedRemoteStopLog(db, session);
+  if (remoteStop && Date.now() - remoteStop.createdAt.getTime() > REMOTE_STOP_GRACE_MS) {
+    warnings.push({
+      code: 'remote_stop_accepted_waiting_for_stop_transaction',
+      severity: 'warn',
+      message: 'Remote stop was accepted but StopTransaction has not arrived.',
+      createdAt: remoteStop.createdAt.toISOString()
+    });
+  }
+
+  return warnings;
+}
+
+function findLatestConnectorStatus(db: Database, session: typeof chargingSessions.$inferSelect) {
+  const rows = db
+    .select()
+    .from(logs)
+    .where(and(eq(logs.category, 'status'), eq(logs.chargerId, session.chargerId)))
+    .orderBy(desc(logs.createdAt))
+    .limit(RECENT_LOG_LIMIT)
+    .all();
+
+  for (const row of rows) {
+    if (row.createdAt < session.startedAt) continue;
+    const metadata = parseLogMetadata(row.metadata);
+    const connectorId = typeof metadata.connectorId === 'number' ? metadata.connectorId : Number(metadata.connectorId);
+    if (connectorId !== session.connectorId) continue;
+    if (typeof metadata.status !== 'string') continue;
+
+    return {
+      status: metadata.status,
+      createdAt: row.createdAt
+    };
+  }
+
+  return null;
+}
+
+function findLatestAcceptedRemoteStopLog(db: Database, session: typeof chargingSessions.$inferSelect) {
+  const rows = db
+    .select()
+    .from(logs)
+    .where(and(eq(logs.category, 'session'), eq(logs.chargerId, session.chargerId), eq(logs.transactionId, session.transactionId)))
+    .orderBy(desc(logs.createdAt))
+    .limit(RECENT_LOG_LIMIT)
+    .all();
+
+  for (const row of rows) {
+    if (row.createdAt < session.startedAt) continue;
+    if (row.message !== 'remote stop transaction requested') continue;
+    const metadata = parseLogMetadata(row.metadata);
+    if (metadata.status !== 'Accepted') continue;
+    return row;
+  }
+
+  return null;
+}
+
+function parseLogMetadata(metadata: string | null) {
+  if (!metadata) return {} as Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }
 
 function buildForceClosePreview(db: Database, session: typeof chargingSessions.$inferSelect, stoppedAt: Date) {

@@ -77,9 +77,11 @@ describe('app', () => {
     const routes = [
       { method: 'GET', url: '/api/chargers' },
       { method: 'GET', url: '/api/proxy-targets?chargerId=CHARGER-1' },
+      { method: 'GET', url: '/api/proxy-health?chargerId=CHARGER-1' },
       { method: 'GET', url: '/api/tags' },
       { method: 'GET', url: '/api/charger-connections' },
       { method: 'GET', url: '/api/sessions' },
+      { method: 'GET', url: '/api/active-session-audit' },
       { method: 'POST', url: '/api/sessions/session-1/remote-stop' },
       { method: 'GET', url: '/api/charging-stats' },
       { method: 'GET', url: '/api/logs' },
@@ -906,6 +908,131 @@ describe('app', () => {
             timestamp: '2026-06-19T09:15:00.000Z',
             reason: 'Local'
           }
+        }
+      ]
+    });
+
+    await app.close();
+  });
+
+  it('returns active session audit warnings and proxy mapping context', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-audit',
+      chargerId: 'SMART-EVSE-AUDIT',
+      connectorId: 1,
+      transactionId: 501,
+      idTag: 'AUDIT-TAG',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+    tempDb.db.insert(chargerConnections).values({
+      id: 'connection-audit',
+      chargerId: 'SMART-EVSE-AUDIT',
+      connectedAt: new Date('2026-06-19T08:55:00.000Z'),
+      disconnectedAt: new Date('2026-06-19T09:20:00.000Z')
+    }).run();
+    tempDb.db.insert(proxyTargets).values({
+      id: 'proxy-audit',
+      chargerId: 'SMART-EVSE-AUDIT',
+      name: 'Audit CSMS',
+      url: 'ws://127.0.0.1:65535',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      createdAt: new Date('2026-06-19T09:00:00.000Z'),
+      updatedAt: new Date('2026-06-19T09:00:00.000Z')
+    }).run();
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'mapping-audit',
+      chargerId: 'SMART-EVSE-AUDIT',
+      proxyTargetId: 'proxy-audit',
+      localTransactionId: 501,
+      externalTransactionId: 1501,
+      createdAt: new Date('2026-06-19T09:01:00.000Z'),
+      stoppedAt: null
+    }).run();
+    tempDb.db.insert(meterSamples).values({
+      id: 'sample-audit-energy',
+      chargerId: 'SMART-EVSE-AUDIT',
+      connectorId: 1,
+      transactionId: null,
+      sampledAt: new Date('2026-06-19T09:10:00.000Z'),
+      value: '1.4',
+      numericValue: 1.4,
+      normalizedValue: 1400,
+      normalizedUnit: 'Wh',
+      measurand: 'Energy.Active.Import.Register',
+      unit: 'kWh'
+    }).run();
+    tempDb.db.insert(logs).values([
+      {
+        id: 'log-audit-status',
+        level: 'info',
+        category: 'status',
+        message: 'charger status notification',
+        chargerId: 'SMART-EVSE-AUDIT',
+        transactionId: null,
+        metadata: JSON.stringify({ connectorId: 1, status: 'Available', timestamp: '2026-06-19T09:15:00.000Z' }),
+        createdAt: new Date('2026-06-19T09:15:00.000Z')
+      },
+      {
+        id: 'log-audit-remote-stop',
+        level: 'info',
+        category: 'session',
+        message: 'remote stop transaction requested',
+        chargerId: 'SMART-EVSE-AUDIT',
+        transactionId: 501,
+        metadata: JSON.stringify({ connectorId: 1, status: 'Accepted' }),
+        createdAt: new Date('2026-06-19T09:16:00.000Z')
+      }
+    ]).run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/active-session-audit?chargerId=SMART-EVSE-AUDIT',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      summary: {
+        activeSessions: 1,
+        flaggedSessions: 1
+      },
+      items: [
+        {
+          sessionId: 'session-audit',
+          chargerId: 'SMART-EVSE-AUDIT',
+          connectorId: 1,
+          transactionId: 501,
+          chargerConnected: false,
+          latestStatus: 'Available',
+          latestMeterWh: 1400,
+          forceCloseMeterSource: 'latest-meter-sample',
+          recommendedAction: 'force_close_preview',
+          proxyMappings: [
+            {
+              proxyTargetId: 'proxy-audit',
+              proxyTargetName: 'Audit CSMS',
+              externalTransactionId: 1501,
+              stoppedAt: null
+            }
+          ],
+          warnings: expect.arrayContaining([
+            expect.objectContaining({ code: 'connector_available_without_stop_transaction' }),
+            expect.objectContaining({ code: 'charger_disconnected_without_stop_transaction' }),
+            expect.objectContaining({ code: 'remote_stop_accepted_waiting_for_stop_transaction' })
+          ])
         }
       ]
     });

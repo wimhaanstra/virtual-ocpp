@@ -109,6 +109,73 @@ type ChargingStats = {
   latestPowerContext: string | null;
 };
 
+type ProxyHealthResponse = {
+  chargerId: string | null;
+  summary: {
+    total: number;
+    connected: number;
+    backoff: number;
+    waitingForCharger: number;
+    disabled: number;
+  };
+  targets: ProxyHealthTarget[];
+};
+
+type ProxyHealthTarget = {
+  proxyTargetId: string;
+  name: string;
+  chargerId: string | null;
+  enabled: boolean;
+  mode: string;
+  outagePolicy: string;
+  connected: boolean;
+  state: "disabled" | "waiting_for_charger" | "connected" | "connecting" | "backoff" | "disconnected" | "unknown";
+  detail: string;
+  upstreamIdentity: string | null;
+  hadSuccessfulConnection: boolean;
+  lastConnectedAt: string | null;
+  lastDisconnectedAt: string | null;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  nextReconnectAt: string | null;
+  lastErrorCode: string | null;
+};
+
+type ActiveSessionAuditResponse = {
+  summary: {
+    activeSessions: number;
+    flaggedSessions: number;
+  };
+  items: ActiveSessionAuditItem[];
+};
+
+type ActiveSessionAuditItem = {
+  sessionId: string;
+  chargerId: string;
+  connectorId: number;
+  transactionId: number;
+  startedAt: string;
+  chargerConnected: boolean;
+  latestStatus: string | null;
+  latestStatusAt: string | null;
+  latestMeterSampleAt: string | null;
+  latestMeterWh: number | null;
+  forceCloseMeterSource: "latest-meter-sample" | "start-meter" | "unknown";
+  proxyMappings: Array<{
+    proxyTargetId: string;
+    proxyTargetName: string;
+    externalTransactionId: number;
+    stoppedAt: string | null;
+  }>;
+  warnings: Array<{
+    code: string;
+    severity: "warn";
+    message: string;
+    createdAt: string | null;
+  }>;
+  recommendedAction: "remote_stop" | "force_close_preview";
+};
+
 type ForceClosePreview = {
   session: ChargingSession;
   localStopTransaction: {
@@ -412,6 +479,20 @@ function formatDuration(seconds: number) {
   return `${minutes}m`;
 }
 
+function formatProxyHealthState(state: ProxyHealthTarget["state"]) {
+  return state.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function proxyHealthTone(state: ProxyHealthTarget["state"]) {
+  if (state === "connected") return "pill-good";
+  if (state === "backoff" || state === "disconnected") return "pill-warning";
+  return "pill-neutral";
+}
+
+function findAuditForSession(audit: ActiveSessionAuditResponse | null, session: ChargingSession) {
+  return audit?.items.find((item) => item.sessionId === session.id || item.transactionId === session.transactionId) ?? null;
+}
+
 function formatTagMappingCount(count: number) {
   if (count === 0) return "None";
   return `${count} mapping${count === 1 ? "" : "s"}`;
@@ -482,66 +563,6 @@ function proxyUrlIncludesStationId(url: string, stationId: string) {
   return Boolean(trimmedUrl && trimmedStationId && trimmedUrl.endsWith(`/${trimmedStationId}`));
 }
 
-function getProxyHealth(target: ProxyTarget, logs: LogEntry[]) {
-  if (!target.enabled) {
-    return {
-      label: "Disabled",
-      tone: "warning" as const,
-      detail: "Target is disabled.",
-      at: null as string | null
-    };
-  }
-
-  const latest = logs.find((entry) => entry.category === "proxy" && entry.context?.proxyTargetId === target.id);
-  if (!latest) {
-    return {
-      label: "Unknown",
-      tone: "neutral" as const,
-      detail: "No proxy activity logged yet.",
-      at: null as string | null
-    };
-  }
-
-  const connectedMessages = new Set([
-    "proxy target connection established",
-    "proxy target connection reconnected",
-    "proxy target call accepted"
-  ]);
-  const failingMessages = new Set([
-    "proxy target connection failed",
-    "proxy target connection reconnect failed",
-    "proxy target connection disconnected",
-    "proxy target unavailable, failing open",
-    "proxy target unavailable, failing closed",
-    "proxy target connection reset after call failure"
-  ]);
-
-  if (connectedMessages.has(latest.message)) {
-    return {
-      label: "Connected",
-      tone: "good" as const,
-      detail: latest.message,
-      at: latest.createdAt
-    };
-  }
-
-  if (failingMessages.has(latest.message) || latest.level === "error" || latest.level === "warn") {
-    return {
-      label: "Failing",
-      tone: "warning" as const,
-      detail: latest.message,
-      at: latest.createdAt
-    };
-  }
-
-  return {
-    label: "Active",
-    tone: "neutral" as const,
-    detail: latest.message,
-    at: latest.createdAt
-  };
-}
-
 export default function App() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -552,6 +573,8 @@ export default function App() {
   const [chargers, setChargers] = useState<ChargerRegistryRow[]>([]);
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
   const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
+  const [proxyHealth, setProxyHealth] = useState<ProxyHealthResponse | null>(null);
+  const [activeSessionAudit, setActiveSessionAudit] = useState<ActiveSessionAuditResponse | null>(null);
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [forceClosePreview, setForceClosePreview] = useState<ForceClosePreview | null>(null);
   const [forceCloseLoading, setForceCloseLoading] = useState(false);
@@ -579,20 +602,43 @@ export default function App() {
   const selectedChargerLabel = selectedCharger ? getChargerDisplayLabel(selectedCharger) : "All chargers";
   const proxyTargetHealth = useMemo(
     () =>
-      proxyTargets.map((target) => ({
-        target,
-        health: getProxyHealth(target, logs),
-        connectionUrl: buildProxyTargetConnectionUrl(target.url, getProxyTargetUpstreamIdentity(target, selectedChargerId))
-      })),
-    [logs, proxyTargets, selectedChargerId]
+      (proxyHealth?.targets ?? proxyTargets.map((target) => ({
+        proxyTargetId: target.id,
+        name: target.name,
+        chargerId: target.chargerId ?? null,
+        enabled: target.enabled,
+        mode: target.mode,
+        outagePolicy: target.outagePolicy,
+        connected: false,
+        state: target.enabled ? "unknown" as const : "disabled" as const,
+        detail: target.enabled ? "No runtime proxy health loaded yet." : "Target is disabled.",
+        upstreamIdentity: getProxyTargetUpstreamIdentity(target, selectedChargerId),
+        hadSuccessfulConnection: false,
+        lastConnectedAt: null,
+        lastDisconnectedAt: null,
+        lastSuccessAt: null,
+        lastFailureAt: null,
+        nextReconnectAt: null,
+        lastErrorCode: null
+      }))).map((health) => {
+        const target = proxyTargets.find((entry) => entry.id === health.proxyTargetId);
+        return {
+          target,
+          health,
+          connectionUrl: target
+            ? buildProxyTargetConnectionUrl(target.url, health.upstreamIdentity ?? getProxyTargetUpstreamIdentity(target, selectedChargerId))
+            : health.upstreamIdentity ?? ""
+        };
+      }),
+    [proxyHealth, proxyTargets, selectedChargerId]
   );
   const proxyHealthCounts = useMemo(
     () => ({
-      connected: proxyTargetHealth.filter((entry) => entry.health.label === "Connected").length,
-      failing: proxyTargetHealth.filter((entry) => entry.health.label === "Failing").length,
-      enabled: proxyTargetHealth.filter((entry) => entry.target.enabled).length
+      connected: proxyHealth?.summary.connected ?? proxyTargetHealth.filter((entry) => entry.health.state === "connected").length,
+      failing: proxyTargetHealth.filter((entry) => entry.health.state === "backoff" || entry.health.state === "disconnected").length,
+      enabled: proxyTargetHealth.filter((entry) => entry.health.enabled).length
     }),
-    [proxyTargetHealth]
+    [proxyHealth, proxyTargetHealth]
   );
   const proxyTargetFormIdentity = proxyTargetForm.stationId.trim() || selectedChargerId;
   const proxyTargetFormConnectionUrl = buildProxyTargetConnectionUrl(proxyTargetForm.url, proxyTargetFormIdentity);
@@ -703,6 +749,8 @@ export default function App() {
     setProxyTargetModalOpen(false);
     setCommunicationJournal([]);
     setCommunicationRetentionHours(null);
+    setProxyHealth(null);
+    setActiveSessionAudit(null);
     setCommunicationFilters(emptyCommunicationJournalFilters());
     setExpandedCommunicationJournalId(null);
     setSelectedChargerId("");
@@ -730,6 +778,8 @@ export default function App() {
   async function loadScopedData(chargerId = selectedChargerId) {
     await Promise.all([
       loadProxyTargets(chargerId),
+      loadProxyHealth(chargerId),
+      loadActiveSessionAudit(chargerId),
       loadTags(chargerId),
       loadChargingSessions(chargerId),
       loadLogs(chargerId),
@@ -790,6 +840,30 @@ export default function App() {
       return;
     }
     setChargingSessions(data);
+  }
+
+  async function loadProxyHealth(chargerId = selectedChargerId) {
+    if (!chargerId) {
+      setProxyHealth(null);
+      return;
+    }
+    const data = await fetchAdminJson<ProxyHealthResponse>(withChargerContext("/api/proxy-health", chargerId));
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load proxy health.");
+      return;
+    }
+    setProxyHealth(data);
+  }
+
+  async function loadActiveSessionAudit(chargerId = selectedChargerId) {
+    const data = await fetchAdminJson<ActiveSessionAuditResponse>(withChargerContext("/api/active-session-audit", chargerId));
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load session audit.");
+      return;
+    }
+    setActiveSessionAudit(data);
   }
 
   async function loadChargingStats(chargerId = selectedChargerId) {
@@ -858,7 +932,7 @@ export default function App() {
       const failed = result.proxyResults?.filter((entry) => entry.attempted && !entry.ok).length ?? 0;
       setForceClosePreview(null);
       setMessage(failed > 0 ? `Force closed session ${result.session.transactionId}; ${failed} proxy stop attempt failed.` : `Force closed session ${result.session.transactionId}.`);
-      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadLogs(selectedChargerId), loadCommunicationJournal(selectedChargerId)]);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadActiveSessionAudit(selectedChargerId), loadLogs(selectedChargerId), loadCommunicationJournal(selectedChargerId)]);
     } finally {
       setForceCloseLoading(false);
       setBusy(false);
@@ -889,7 +963,7 @@ export default function App() {
 
       const result = (await response.json().catch(() => null)) as { status?: string } | null;
       setMessage(result?.status === "Accepted" ? `Remote stop accepted for session ${session.transactionId}.` : `Remote stop returned ${result?.status ?? "Unknown"}.`);
-      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadLogs(selectedChargerId)]);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadActiveSessionAudit(selectedChargerId), loadLogs(selectedChargerId)]);
     } finally {
       setBusy(false);
     }
@@ -1594,7 +1668,43 @@ export default function App() {
                     <p className="status-copy">Start a charging session to see live meter values from OCPP MeterValues.</p>
                   )}
                 </section>
-              </section>
+            </section>
+          </section>
+
+            <section className="panel table-panel">
+              <div className="topbar-actions page-section-header">
+                <div>
+                  <p className="eyebrow">Session audit</p>
+                  <h2>Missing stop checks</h2>
+                  <p className="status-copy">Flagged active sessions scoped to {selectedChargerLabel}.</p>
+                </div>
+                <Button type="button" className="button-secondary" onClick={() => navigateToView("Sessions")}>
+                  Sessions
+                  <ArrowRight aria-hidden="true" />
+                </Button>
+              </div>
+              {!activeSessionAudit || activeSessionAudit.items.filter((item) => item.warnings.length > 0).length === 0 ? (
+                <p>No active sessions need attention.</p>
+              ) : (
+                <div className="session-audit-list">
+                  {activeSessionAudit.items.filter((item) => item.warnings.length > 0).map((item) => (
+                    <article className="session-audit-item" key={item.sessionId}>
+                      <div className="proxy-health-item__header">
+                        <div>
+                          <h3>Transaction {item.transactionId}</h3>
+                          <p className="status-copy">
+                            Connector {item.connectorId}
+                            {item.latestMeterWh !== null ? `; latest meter ${formatEnergyWh(item.latestMeterWh)}` : ""}
+                            {item.latestStatus ? `; status ${item.latestStatus}` : ""}
+                          </p>
+                        </div>
+                        <span className="pill pill-warning">Needs review</span>
+                      </div>
+                      <p className="status-copy">{item.warnings[0]?.message}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section className="panel table-panel">
@@ -1616,19 +1726,21 @@ export default function App() {
               ) : (
                 <div className="proxy-health-grid">
                   {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
-                    <article className="proxy-health-item" key={target.id}>
+                    <article className="proxy-health-item" key={health.proxyTargetId}>
                       <div className="proxy-health-item__header">
                         <div>
-                          <h3>{target.name}</h3>
+                          <h3>{health.name}</h3>
                           <p className="mono">{connectionUrl}</p>
                         </div>
-                        <span className={`pill ${health.tone === "good" ? "pill-good" : health.tone === "warning" ? "pill-warning" : "pill-neutral"}`}>
-                          {health.label}
+                        <span className={`pill ${proxyHealthTone(health.state)}`}>
+                          {formatProxyHealthState(health.state)}
                         </span>
                       </div>
                       <p className="status-copy">
                         {health.detail}
-                        {health.at ? ` at ${formatDateTime(health.at)}` : ""}
+                        {health.lastSuccessAt ? ` Last success ${formatDateTime(health.lastSuccessAt)}.` : ""}
+                        {health.nextReconnectAt ? ` Next retry ${formatDateTime(health.nextReconnectAt)}.` : ""}
+                        {!target ? " Target configuration is not loaded." : ""}
                       </p>
                     </article>
                   ))}
@@ -1644,7 +1756,7 @@ export default function App() {
                 <h2>Recent sessions</h2>
                 <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
               </div>
-              <Button type="button" className="button-secondary" onClick={() => void loadChargingSessions(selectedChargerId)} disabled={busy}>
+              <Button type="button" className="button-secondary" onClick={() => void Promise.all([loadChargingSessions(selectedChargerId), loadActiveSessionAudit(selectedChargerId)])} disabled={busy}>
                 <RefreshCcw aria-hidden="true" />
                 <span className="button-label">Refresh</span>
               </Button>
@@ -1669,55 +1781,75 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {chargingSessions.map((session) => (
-                      <tr key={session.id}>
-                        <td className="mono">{session.chargerId}</td>
-                        <td>{session.connectorId}</td>
-                        <td>{session.transactionId}</td>
-                        <td className="mono">{session.idTag || "None"}</td>
-                        <td>
-                          <span className={`pill ${session.active ? "pill-good" : "pill-neutral"}`}>
-                            {session.status}
-                          </span>
-                        </td>
-                        <td>{formatDateTime(session.startedAt)}</td>
-                        <td>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</td>
-                        <td>
-                          {session.startMeterWh ?? "-"}
-                          {" / "}
-                          {session.stopMeterWh ?? "-"}
-                        </td>
-                        <td>{session.stopReason || "-"}</td>
-                        <td>
-                          {session.active ? (
-                            <div className="action-row compact-action-row">
-                              <Button
-                                type="button"
-                                className="button-secondary icon-button"
-                                onClick={() => void remoteStopChargingSession(session)}
-                                disabled={busy}
-                                title="Remote stop transaction"
-                                aria-label={`Remote stop session ${session.transactionId}`}
-                              >
-                                <Power aria-hidden="true" />
-                              </Button>
-                              <Button
-                                type="button"
-                                className="button-secondary icon-button"
-                                onClick={() => void previewForceCloseChargingSession(session)}
-                                disabled={busy}
-                                title="Force close with preview"
-                                aria-label={`Force close session ${session.transactionId}`}
-                              >
-                                <PowerOff aria-hidden="true" />
-                              </Button>
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {chargingSessions.map((session) => {
+                      const audit = findAuditForSession(activeSessionAudit, session);
+                      return (
+                        <Fragment key={session.id}>
+                          <tr>
+                            <td className="mono">{session.chargerId}</td>
+                            <td>{session.connectorId}</td>
+                            <td>{session.transactionId}</td>
+                            <td className="mono">{session.idTag || "None"}</td>
+                            <td>
+                              <div className="status-stack">
+                                <span className={`pill ${session.active ? "pill-good" : "pill-neutral"}`}>
+                                  {session.status}
+                                </span>
+                                {audit && audit.warnings.length > 0 ? <span className="pill pill-warning">Missing stop?</span> : null}
+                              </div>
+                            </td>
+                            <td>{formatDateTime(session.startedAt)}</td>
+                            <td>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</td>
+                            <td>
+                              {session.startMeterWh ?? "-"}
+                              {" / "}
+                              {session.stopMeterWh ?? "-"}
+                            </td>
+                            <td>{session.stopReason || "-"}</td>
+                            <td>
+                              {session.active ? (
+                                <div className="action-row compact-action-row">
+                                  <Button
+                                    type="button"
+                                    className="button-secondary icon-button"
+                                    onClick={() => void remoteStopChargingSession(session)}
+                                    disabled={busy}
+                                    title="Remote stop transaction"
+                                    aria-label={`Remote stop session ${session.transactionId}`}
+                                  >
+                                    <Power aria-hidden="true" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    className="button-secondary icon-button"
+                                    onClick={() => void previewForceCloseChargingSession(session)}
+                                    disabled={busy}
+                                    title="Force close with preview"
+                                    aria-label={`Force close session ${session.transactionId}`}
+                                  >
+                                    <PowerOff aria-hidden="true" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          </tr>
+                          {audit ? (
+                            <tr>
+                              <td className="session-audit-row" colSpan={10}>
+                                <div className="session-audit-inline">
+                                  <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
+                                  <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>
+                                  <span>Status: {audit.latestStatus ?? "-"}</span>
+                                  <span>Proxy mappings: {audit.proxyMappings.length}</span>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

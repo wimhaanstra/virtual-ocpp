@@ -59,8 +59,32 @@ const UpdateProxyTargetSchema = z.object({
 const ListProxyTargetsQuerySchema = z.object({
   chargerId: z.string().trim().min(1)
 });
+const ProxyHealthQuerySchema = z.object({
+  chargerId: z.string().trim().min(1).optional()
+});
 
 export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, proxyAuthorization?: ProxyAuthorizationService) {
+  app.get('/api/proxy-health', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = ProxyHealthQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_proxy_health_query', details: parsed.error.flatten() });
+    }
+
+    return proxyAuthorization?.getHealth(parsed.data.chargerId) ?? {
+      chargerId: parsed.data.chargerId ?? null,
+      summary: {
+        total: 0,
+        connected: 0,
+        backoff: 0,
+        waitingForCharger: 0,
+        disabled: 0
+      },
+      targets: []
+    };
+  });
+
   app.get('/api/proxy-targets', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 

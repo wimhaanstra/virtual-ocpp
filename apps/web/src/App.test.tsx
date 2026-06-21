@@ -87,6 +87,22 @@ const emptyVisibilityResponses = (url: string, method: string) => {
   if (path === "/api/communication-journal" && method === "GET") {
     return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
   }
+
+  if (path === "/api/proxy-health" && method === "GET") {
+    return new Response(
+      JSON.stringify({
+        chargerId: null,
+        summary: { total: 0, connected: 0, backoff: 0, waitingForCharger: 0, disabled: 0 },
+        targets: []
+      }),
+      { status: 200 }
+    );
+  }
+
+  if (path === "/api/active-session-audit" && method === "GET") {
+    return new Response(JSON.stringify({ summary: { activeSessions: 0, flaggedSessions: 0 }, items: [] }), { status: 200 });
+  }
+
   return null;
 };
 
@@ -156,6 +172,41 @@ describe("App", () => {
           ]),
           { status: 200 }
         );
+      }
+
+      if (url.startsWith("/api/proxy-health") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            chargerId: "SMART-EVSE-1",
+            summary: { total: 1, connected: 1, backoff: 0, waitingForCharger: 0, disabled: 0 },
+            targets: [
+              {
+                proxyTargetId: "proxy-1",
+                name: "Tap Electric",
+                chargerId: "SMART-EVSE-1",
+                enabled: true,
+                mode: "deny-capable",
+                outagePolicy: "fail-closed",
+                connected: true,
+                state: "connected",
+                detail: "Persistent upstream socket is open.",
+                upstreamIdentity: "STATION-1",
+                hadSuccessfulConnection: true,
+                lastConnectedAt: "2026-06-19T09:55:00.000Z",
+                lastDisconnectedAt: null,
+                lastSuccessAt: "2026-06-19T10:01:00.000Z",
+                lastFailureAt: null,
+                nextReconnectAt: null,
+                lastErrorCode: null
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/active-session-audit") && method === "GET") {
+        return new Response(JSON.stringify({ summary: { activeSessions: 1, flaggedSessions: 0 }, items: [] }), { status: 200 });
       }
 
       if (url === "/api/dashboard-config" && method === "GET") {
@@ -249,7 +300,7 @@ describe("App", () => {
               id: "log-1",
               level: "info",
               category: "proxy",
-              message: "proxy target connection established",
+              message: "proxy target disconnected",
               chargerId: "SMART-EVSE-1",
               transactionId: null,
               createdAt: "2026-06-19T10:00:00.000Z",
@@ -267,6 +318,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -295,9 +348,11 @@ describe("App", () => {
     expect(screen.getByText("230 V")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upstream targets" })).toBeInTheDocument();
     expect(screen.getByText("wss://tap.example/ocpp/STATION-1")).toBeInTheDocument();
-    expect(screen.getByText(/proxy target connection established at /)).toBeInTheDocument();
+    expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Persistent upstream socket is open\./)).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
   });
 
   it("keeps the current page in the URL and restores it on browser back", async () => {
@@ -353,6 +408,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -398,6 +455,8 @@ describe("App", () => {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -499,6 +558,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: journalRows, retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -554,6 +615,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -686,6 +749,8 @@ describe("App", () => {
         );
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -771,6 +836,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ deletedCount: 1, retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -834,6 +901,8 @@ describe("App", () => {
         return new Response(JSON.stringify(tags[0]), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -964,6 +1033,8 @@ describe("App", () => {
         return new Response(JSON.stringify(proxyTargets[0]), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1123,6 +1194,8 @@ describe("App", () => {
         return new Response(JSON.stringify(proxyTargets[0]), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1215,6 +1288,49 @@ describe("App", () => {
               active: !sessionClosed
             }
           ]),
+          { status: 200 }
+        );
+      }
+
+      if (url === "/api/active-session-audit" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            summary: { activeSessions: sessionClosed ? 0 : 1, flaggedSessions: sessionClosed ? 0 : 1 },
+            items: sessionClosed
+              ? []
+              : [
+                  {
+                    sessionId: "session-1",
+                    chargerId: "SMART-EVSE-1",
+                    connectorId: 1,
+                    transactionId: 42,
+                    startedAt: "2026-06-19T09:05:00.000Z",
+                    chargerConnected: true,
+                    latestStatus: "Available",
+                    latestStatusAt: "2026-06-19T09:26:00.000Z",
+                    latestMeterSampleAt: "2026-06-19T09:25:00.000Z",
+                    latestMeterWh: 1550,
+                    forceCloseMeterSource: "latest-meter-sample",
+                    proxyMappings: [
+                      {
+                        proxyTargetId: "proxy-1",
+                        proxyTargetName: "TapElectric",
+                        externalTransactionId: 4242,
+                        stoppedAt: null
+                      }
+                    ],
+                    warnings: [
+                      {
+                        code: "connector_available_without_stop_transaction",
+                        severity: "warn",
+                        message: "Connector is Available but the session is still active; the charger may have missed StopTransaction.",
+                        createdAt: "2026-06-19T09:26:00.000Z"
+                      }
+                    ],
+                    recommendedAction: "force_close_preview"
+                  }
+                ]
+          }),
           { status: 200 }
         );
       }
@@ -1378,6 +1494,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1392,6 +1510,10 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
+    expect(screen.getByText("Missing stop?")).toBeInTheDocument();
+    expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
+    expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();
+    expect(screen.getByText("Status: Available")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Remote stop session 42" }));
     await screen.findByText("Remote stop accepted for session 42.");
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/remote-stop" && init?.method === "POST")).toBe(true);
@@ -1599,6 +1721,8 @@ describe("App", () => {
         );
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1706,6 +1830,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1788,6 +1914,8 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
       }
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 
@@ -1829,6 +1957,8 @@ describe("App", () => {
       const visibilityResponse = emptyVisibilityResponses(url, method);
       if (visibilityResponse) return visibilityResponse;
 
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
     });
 

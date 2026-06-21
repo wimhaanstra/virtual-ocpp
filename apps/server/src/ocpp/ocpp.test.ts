@@ -640,6 +640,64 @@ describe('OCPP 1.6 local primary', () => {
     });
   });
 
+  it('reports runtime proxy health for warmed upstream targets', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    insertProxyTarget(server.db, {
+      id: 'proxy-health-runtime',
+      chargerId: 'SMART-EVSE-HEALTH',
+      name: 'Health CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-HEALTH',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-HEALTH');
+    cleanup.push(async () => { await charger.close({}); });
+    await waitForCondition(() => {
+      expect(proxy.clients).toEqual(['UPSTREAM-HEALTH']);
+    });
+
+    const cookie = await loginAdmin(server.app);
+    const response = await server.app.inject({
+      method: 'GET',
+      url: '/api/proxy-health?chargerId=SMART-EVSE-HEALTH',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      chargerId: 'SMART-EVSE-HEALTH',
+      summary: {
+        total: 1,
+        connected: 1,
+        backoff: 0,
+        waitingForCharger: 0,
+        disabled: 0
+      },
+      targets: [
+        {
+          proxyTargetId: 'proxy-health-runtime',
+          name: 'Health CSMS',
+          chargerId: 'SMART-EVSE-HEALTH',
+          enabled: true,
+          connected: true,
+          state: 'connected',
+          upstreamIdentity: 'UPSTREAM-HEALTH',
+          hadSuccessfulConnection: true,
+          lastErrorCode: null
+        }
+      ]
+    });
+    expect(response.json().targets[0].lastConnectedAt).toEqual(expect.any(String));
+    expect(response.json().targets[0].lastSuccessAt).toEqual(expect.any(String));
+  });
+
   it('reconnects on demand after an upstream target disconnects and comes back', async () => {
     const firstProxy = await startRecordingProxyServer();
     const server = await startTestServer();
