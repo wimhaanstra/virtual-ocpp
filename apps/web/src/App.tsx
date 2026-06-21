@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pencil,
   Plus,
@@ -120,12 +120,14 @@ export default function App() {
   const [chargerWizardKnownIds, setChargerWizardKnownIds] = useState<string[]>([]);
   const [chargerWizardLabel, setChargerWizardLabel] = useState("");
   const [chargerWizardLoading, setChargerWizardLoading] = useState(false);
+  const [chargerWizardMode, setChargerWizardMode] = useState<"add-charger" | "manual-onboarding" | "first-run-onboarding">("add-charger");
   const [selectedChargerId, setSelectedChargerId] = useState(() => getSearchParam("chargerId"));
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getInitialSidebarCollapsed());
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [message, setMessage] = useState("Sign in to manage proxy targets.");
   const [busy, setBusy] = useState(false);
+  const onboardingSettingsRequestId = useRef(0);
 
   const connectedChargerCount = useMemo(() => chargers.filter((charger) => charger.active).length, [chargers]);
   const selectedCharger = useMemo(
@@ -352,6 +354,7 @@ export default function App() {
     setChargerWizardLabel("");
     setChargerWizardStartedAt("");
     setChargerWizardLoading(false);
+    setChargerWizardMode("add-charger");
     setCommunicationJournal([]);
     setCommunicationRetentionHours(null);
     setProxyHealth(null);
@@ -399,7 +402,7 @@ export default function App() {
   }
 
   async function loadAdminData(chargerId = selectedChargerId) {
-    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings()]);
+    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings({ autoOpen: true })]);
   }
 
   async function loadScopedData(chargerId = selectedChargerId) {
@@ -428,11 +431,14 @@ export default function App() {
     setDashboardConfig(data);
   }
 
-  async function loadOnboardingSettings() {
+  async function loadOnboardingSettings(options: { autoOpen?: boolean } = {}) {
+    const requestId = onboardingSettingsRequestId.current + 1;
+    onboardingSettingsRequestId.current = requestId;
     setOnboardingSettingsStatus("loading");
 
     const response = await fetch("/api/settings/onboarding", { credentials: "include" });
     if (handleUnauthorized(response)) return;
+    if (requestId !== onboardingSettingsRequestId.current) return;
     if (response.status === 404) {
       setOnboardingSettings(null);
       setOnboardingSettingsStatus("unavailable");
@@ -448,6 +454,33 @@ export default function App() {
     const data = (await response.json()) as OnboardingSettings;
     setOnboardingSettings(data);
     setOnboardingSettingsStatus("ready");
+
+    if (options.autoOpen && !data.completedAt && !data.skippedAt) {
+      void openChargerWizard("first-run-onboarding");
+    }
+  }
+
+  async function updateOnboardingSettings(action: "completed" | "skipped" | "reset") {
+    const requestId = onboardingSettingsRequestId.current + 1;
+    onboardingSettingsRequestId.current = requestId;
+    const response = await fetch("/api/settings/onboarding", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [action]: true })
+    });
+
+    if (handleUnauthorized(response)) return null;
+    if (requestId !== onboardingSettingsRequestId.current) return null;
+    if (!response.ok) {
+      setMessage("Could not update onboarding state.");
+      return null;
+    }
+
+    const data = (await response.json()) as OnboardingSettings;
+    setOnboardingSettings(data);
+    setOnboardingSettingsStatus("ready");
+    return data;
   }
 
   async function loadTags() {
@@ -582,8 +615,9 @@ export default function App() {
     }
   }
 
-  async function openChargerWizard() {
+  async function openChargerWizard(mode: "add-charger" | "manual-onboarding" | "first-run-onboarding" = "add-charger") {
     setChargerWizardLabel("");
+    setChargerWizardMode(mode);
     setChargerWizardOpen(true);
     setChargerWizardLoading(true);
     const startedAt = new Date().toISOString();
@@ -602,13 +636,22 @@ export default function App() {
     void loadDashboardConfig();
   }
 
-  function closeChargerWizard() {
+  async function closeChargerWizard() {
+    const shouldSkipFirstRun = chargerWizardMode === "first-run-onboarding";
     setChargerWizardOpen(false);
     setChargerWizardLabel("");
     setChargerWizardKnownIds([]);
     setChargerWizardStartedAt("");
     setChargerWizardLoading(false);
+    setChargerWizardMode("add-charger");
     setMessage("");
+
+    if (shouldSkipFirstRun) {
+      const updated = await updateOnboardingSettings("skipped");
+      if (updated) {
+        setMessage("Onboarding skipped.");
+      }
+    }
   }
 
   async function copyChargerWizardUrl(url: string) {
@@ -647,7 +690,17 @@ export default function App() {
       }
 
       await loadChargers();
-      closeChargerWizard();
+      const shouldCompleteFirstRun = chargerWizardMode === "first-run-onboarding";
+      setChargerWizardOpen(false);
+      setChargerWizardLabel("");
+      setChargerWizardKnownIds([]);
+      setChargerWizardStartedAt("");
+      setChargerWizardLoading(false);
+      setChargerWizardMode("add-charger");
+      if (shouldCompleteFirstRun) {
+        const updated = await updateOnboardingSettings("completed");
+        if (!updated) return;
+      }
       setSelectedChargerId(chargerId);
       setActiveView("Charger dashboard");
       setMessage(label ? `Charger ${label} added.` : `Charger ${chargerId} added.`);
@@ -1482,7 +1535,7 @@ export default function App() {
           <ChargersView
             busy={busy}
             chargers={chargers}
-            onAddCharger={() => void openChargerWizard()}
+            onAddCharger={() => void openChargerWizard("add-charger")}
             onDelete={(charger) => void startChargerDelete(charger)}
             onEditLabel={(charger) => void startChargerLabelEdit(charger)}
             onRefresh={() => void loadChargers()}
@@ -1493,7 +1546,7 @@ export default function App() {
             onboardingSettings={onboardingSettings}
             onboardingSettingsStatus={onboardingSettingsStatus}
             onRefreshOnboarding={() => void loadOnboardingSettings()}
-            onRunOnboarding={() => void openChargerWizard()}
+            onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
           />
         ) : activeView === "Sessions" ? (
           <>
@@ -2102,7 +2155,7 @@ export default function App() {
           knownChargerCount={chargerWizardKnownIds.length}
           label={chargerWizardLabel}
           startedAt={chargerWizardStartedAt}
-          onClose={closeChargerWizard}
+          onClose={() => void closeChargerWizard()}
           onCopyUrl={(url) => void copyChargerWizardUrl(url)}
           onFinish={() => void finishChargerWizard()}
           onLabelChange={setChargerWizardLabel}

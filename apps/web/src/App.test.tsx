@@ -81,17 +81,16 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
   }
 
   if (path === "/api/settings/onboarding" && method === "GET") {
-    return new Response(JSON.stringify({ completed: false, completedAt: null, skippedAt: null }), { status: 200 });
+    return new Response(JSON.stringify({ completed: true, completedAt: "2026-06-19T08:30:00.000Z", skippedAt: null }), { status: 200 });
   }
 
   if (path === "/api/settings/onboarding" && method === "PATCH") {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     return new Response(
       JSON.stringify({
-        completed: false,
-        completedAt: null,
-        skippedAt: null,
-        ...body
+        completed: Boolean(body.completed),
+        completedAt: body.completed ? "2026-06-19T08:30:00.000Z" : null,
+        skippedAt: body.skipped ? "2026-06-19T08:30:00.000Z" : null
       }),
       { status: 200 }
     );
@@ -100,6 +99,8 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
   if (
     (path === "/api/chargers" ||
       path === "/api/charger-connections" ||
+      path === "/api/tags" ||
+      path === "/api/proxy-targets" ||
       path === "/api/sessions" ||
       path === "/api/session-summary" ||
       path === "/api/charging-stats" ||
@@ -1142,6 +1143,12 @@ describe("App", () => {
     fireEvent.click(within(wizard).getByRole("button", { name: "Save and switch" }));
 
     await waitFor(() => expect(patchCalls).toEqual([{ url: "/api/chargers/SMART-EVSE-NEW", body: { label: "Garage" } }]));
+    expect(
+      fetchMock.mock.calls.some(([input, init]) => {
+        const path = new URL(String(input), "http://localhost").pathname;
+        return path === "/api/settings/onboarding" && init?.method === "PATCH";
+      })
+    ).toBe(false);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
     await screen.findByRole("heading", { name: "Charger dashboard" });
     expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-NEW").length).toBeGreaterThan(0);
@@ -1332,6 +1339,135 @@ describe("App", () => {
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
     expect(within(wizard).getByText("Charger onboarding")).toBeInTheDocument();
     expect(within(wizard).getByText("Waiting for a new charger")).toBeInTheDocument();
+
+    fireEvent.click(within(wizard).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
+    expect(
+      fetchMock.mock.calls.some(([input, init]) => {
+        const path = new URL(String(input), "http://localhost").pathname;
+        return path === "/api/settings/onboarding" && init?.method === "PATCH";
+      })
+    ).toBe(false);
+  });
+
+  it("opens first-run onboarding automatically and persists skip on cancel", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const path = new URL(url, "http://localhost").pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/settings/onboarding" && method === "GET") {
+        return new Response(JSON.stringify({ completed: false, completedAt: null, skippedAt: null }), { status: 200 });
+      }
+
+      if (path === "/api/settings/onboarding" && method === "PATCH") {
+        return new Response(JSON.stringify({ completed: false, completedAt: null, skippedAt: "2026-06-19T08:35:00.000Z" }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method, init);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const wizard = await screen.findByRole("dialog", { name: "Add charger" });
+    expect(within(wizard).getByText("Waiting for a new charger")).toBeInTheDocument();
+
+    fireEvent.click(within(wizard).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/settings/onboarding",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ skipped: true })
+        })
+      );
+    });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
+    expect(await screen.findByText("Onboarding skipped.")).toBeInTheDocument();
+  });
+
+  it("persists completion when first-run onboarding finishes", async () => {
+    let includeNewCharger = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const path = new URL(url, "http://localhost").pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/settings/onboarding" && method === "GET") {
+        return new Response(JSON.stringify({ completed: false, completedAt: null, skippedAt: null }), { status: 200 });
+      }
+
+      if (path === "/api/settings/onboarding" && method === "PATCH") {
+        return new Response(JSON.stringify({ completed: true, completedAt: "2026-06-19T08:35:00.000Z", skippedAt: null }), { status: 200 });
+      }
+
+      if (path === "/api/chargers" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "SMART-EVSE-1",
+              label: null,
+              lastSeenAt: "2026-06-19T09:00:00.000Z",
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              active: true
+            },
+            ...(includeNewCharger
+              ? [
+                  {
+                    id: "SMART-EVSE-FIRST-RUN",
+                    label: null,
+                    lastSeenAt: "2026-06-19T10:00:00.000Z",
+                    connectedAt: "2026-06-19T10:00:00.000Z",
+                    disconnectedAt: null,
+                    active: true
+                  }
+                ]
+              : [])
+          ]),
+          { status: 200 }
+        );
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method, init);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    const wizard = await screen.findByRole("dialog", { name: "Add charger" });
+    includeNewCharger = true;
+    fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
+
+    expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
+    fireEvent.click(within(wizard).getByRole("button", { name: "Save and switch" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/settings/onboarding",
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({ completed: true })
+        })
+      );
+    });
+    expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
   });
 
   it("keeps the current page in the URL and restores it on browser back", async () => {

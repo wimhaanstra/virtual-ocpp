@@ -31,6 +31,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Charger dashboard simplification: charger-specific dashboard replaces the bulky ingress panel with a compact hero backed by protected stored session totals, and upstream proxy health is shown as a compact target/state list.
 - Proxy target form polish: modal sections align fields without inline description offsets, stored credentials use masked inputs with dirty-state updates, clear checkboxes are removed, and tag mappings live as the final form section.
 - Settings foundation and onboarding state: global Settings page, protected persisted onboarding settings API, SQLite migration, completion/skip/reset actions, and manual onboarding relaunch entry point.
+- First-run onboarding shell: pending onboarding state automatically opens the charger setup wizard after admin login, first-run cancel marks onboarding skipped, first-run completion marks onboarding completed, and manual Settings relaunch leaves stored state unchanged.
 
 ## Next Candidate Slices
 

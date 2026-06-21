@@ -71,7 +71,7 @@ The protected Settings page is the global home for operator preferences and setu
 - `GET /api/settings/onboarding` returns `{ completed, completedAt, skippedAt }`.
 - `PATCH /api/settings/onboarding` accepts exactly one action: `{ "completed": true }`, `{ "skipped": true }`, or `{ "reset": true }`.
 
-Onboarding settings are stored in SQLite as installation-level state, not browser-only state. The Settings page shows the current onboarding state and has a manual "Run onboarding" action that opens the current charger onboarding workflow without changing stored completion or skip timestamps.
+Onboarding settings are stored in SQLite as installation-level state, not browser-only state. When neither `completedAt` nor `skippedAt` is set, the frontend automatically opens the charger setup wizard after admin login. Canceling that first-run wizard marks onboarding skipped; finishing it marks onboarding completed. The Settings page shows the current onboarding state and has a manual "Run onboarding" action that opens the current charger onboarding workflow without changing stored completion or skip timestamps.
 
 ## Testing
 
