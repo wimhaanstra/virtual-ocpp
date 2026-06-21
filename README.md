@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages with stale-session audit checks, runtime proxy health, and a redacted communication journal for protocol troubleshooting. The production Docker image is planned but not implemented yet.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages with stale-session audit checks, runtime proxy health, a redacted communication journal for protocol troubleshooting, and a production Docker image.
 
 ## Stack
 
@@ -58,6 +58,20 @@ npm run db:migrate   # apply Drizzle migrations
 The frontend dev server runs at `http://localhost:5173`. It proxies `/api` and `/health` to the backend at `http://localhost:3000`.
 
 Protected frontend pages use client-side routes so refresh and browser back/forward keep the current page: `/`, `/proxy-targets`, `/tags`, `/sessions`, and `/communication`. The selected charger context is preserved in `?chargerId=...`.
+
+## Deployment
+
+The production Docker image serves the API, OCPP websocket endpoint, and built frontend from one Fastify process:
+
+```sh
+docker build -t virtual-ocpp:local .
+docker run --rm -p 3000:3000 -v virtual-ocpp-data:/data \
+  -e SESSION_SECRET=replace-with-at-least-32-random-characters \
+  -e ADMIN_PASSWORD=replace-me-with-at-least-8-characters \
+  virtual-ocpp:local
+```
+
+See `docs/deployment.md` for Docker Compose, reverse proxy, TLS, and smoke-test notes.
 
 ## Current Endpoints
 

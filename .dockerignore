@@ -1,0 +1,10 @@
+.env
+.git
+.DS_Store
+data
+node_modules
+apps/*/dist
+apps/*/node_modules
+apps/**/*.tsbuildinfo
+docs/ui-examples/*.png
+npm-debug.log*

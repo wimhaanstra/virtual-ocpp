@@ -1,0 +1,22 @@
+services:
+  virtual-ocpp:
+    build: .
+    image: virtual-ocpp:local
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      SQLITE_PATH: /data/virtual-ocpp.sqlite
+      SESSION_SECRET: replace-with-at-least-32-random-characters
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: replace-me-with-at-least-8-characters
+      OCPP_PUBLIC_URL: ws://localhost:3000/ocpp/:chargerId
+      COMMUNICATION_LOG_RETENTION_HOURS: 24
+    volumes:
+      - virtual-ocpp-data:/data
+    restart: unless-stopped
+
+volumes:
+  virtual-ocpp-data:

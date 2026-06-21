@@ -20,12 +20,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Per-proxy tag mapping: proxy targets can rewrite local charger idTags for outbound `Authorize` and `StartTransaction` calls while preserving local authorization/session tags.
 - Remote stop support: operator action sends OCPP `RemoteStopTransaction` to connected chargers for active sessions while keeping local stale-record cleanup separate.
 - Session reliability and runtime health: active-session audit warnings for likely missing `StopTransaction`, dashboard/session UI for stale-session context, and protected runtime proxy health based on persistent upstream socket state.
+- Production Docker image: compiled backend and frontend in one container, persistent `/data` SQLite volume, healthcheck, compose example, and deployment documentation.
 
 ## Next Candidate Slices
-
-### Slice 5.4: Production Docker Image
-
-Goal: package the backend and frontend for deployment with a persistent SQLite volume.
 
 ### Slice 5.5: Frontend Component Split
 
