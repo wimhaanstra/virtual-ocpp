@@ -746,14 +746,13 @@ export default function App() {
         return;
       }
       const preview = (await previewResponse.json()) as MeterGapRecoveryPreview;
-      if (preview.targets.filter((target) => target.canSubmit).length === 0) {
-        setMessage("No recovery-enabled proxy target is available for this gap.");
-        return;
-      }
       setMeterGapSubmitPreview(preview);
       setMeterGapSubmitStartAt(preview.startAt);
       setMeterGapSubmitStopAt(preview.stopAt);
       setMeterGapSubmitResult(null);
+      if (preview.targets.filter((target) => target.canSubmit).length === 0) {
+        setMessage(preview.targets.length === 0 ? "No proxy targets are enabled for meter-gap recovery." : "All recovery-enabled proxy targets are busy.");
+      }
     } finally {
       setMeterGapSubmitLoading(false);
       setBusy(false);
@@ -1910,8 +1909,9 @@ export default function App() {
               </section>
               <section className="modal-form-section">
                 <h3>Target payload</h3>
-                <div className="recovery-preview-grid">
-                  {meterGapSubmitPreview.targets.map((target) => (
+                {meterGapSubmitPreview.targets.length > 0 ? (
+                  <div className="recovery-preview-grid">
+                    {meterGapSubmitPreview.targets.map((target) => (
                     <article className="recovery-preview-target" key={target.proxyTargetId}>
                       <div className="proxy-health-item__header">
                         <div>
@@ -1923,16 +1923,19 @@ export default function App() {
                       <pre>
                         {JSON.stringify(
                           {
-                            StartTransaction: { ...target.startTransaction, timestamp: meterGapSubmitStartAt },
-                            StopTransaction: { ...target.stopTransaction, timestamp: meterGapSubmitStopAt }
+                            StartTransaction: target.startTransaction ? { ...target.startTransaction, timestamp: meterGapSubmitStartAt } : null,
+                            StopTransaction: target.stopTransaction ? { ...target.stopTransaction, timestamp: meterGapSubmitStopAt } : null
                           },
                           null,
                           2
                         )}
                       </pre>
                     </article>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="status-copy">No proxy target has recovery submissions enabled. Enable it on a proxy target before submitting this gap.</p>
+                )}
               </section>
               {meterGapSubmitResult ? (
                 <section className="modal-form-section">
@@ -1956,7 +1959,17 @@ export default function App() {
                 <Button type="button" className="button-secondary" onClick={cancelMeterGapSubmit} disabled={busy}>
                   Cancel
                 </Button>
-                <Button type="button" onClick={() => void submitMeterGapRecovery()} disabled={busy || meterGapSubmitLoading || !meterGapSubmitStartAt || !meterGapSubmitStopAt}>
+                <Button
+                  type="button"
+                  onClick={() => void submitMeterGapRecovery()}
+                  disabled={
+                    busy ||
+                    meterGapSubmitLoading ||
+                    !meterGapSubmitStartAt ||
+                    !meterGapSubmitStopAt ||
+                    meterGapSubmitPreview.targets.filter((target) => target.canSubmit).length === 0
+                  }
+                >
                   Submit recovery
                 </Button>
               </div>

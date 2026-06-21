@@ -480,6 +480,65 @@ describe("App", () => {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
+      if (url.startsWith("/api/meter-gap-events/gap-1/recovery-preview") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            event: {
+              id: "gap-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              previousSessionId: "session-previous",
+              newSessionId: "session-1",
+              previousStoppedAt: "2026-06-19T08:30:00.000Z",
+              newStartedAt: "2026-06-19T09:05:00.000Z",
+              previousMeterWh: 1000,
+              newMeterStartWh: 2500,
+              deltaWh: 1500,
+              thresholdWh: 500,
+              status: "pending",
+              createdAt: "2026-06-19T09:05:00.000Z",
+              updatedAt: "2026-06-19T09:05:00.000Z",
+              submissionResult: null
+            },
+            idTag: "TAG-1",
+            startAt: "2026-06-19T08:30:00.000Z",
+            stopAt: "2026-06-19T09:05:00.000Z",
+            meterStart: 1000,
+            meterStop: 2500,
+            deltaWh: 1500,
+            targets: []
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/meter-gap-events") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "gap-1",
+                chargerId: "SMART-EVSE-1",
+                connectorId: 1,
+                previousSessionId: "session-previous",
+                newSessionId: "session-1",
+                previousStoppedAt: "2026-06-19T08:30:00.000Z",
+                newStartedAt: "2026-06-19T09:05:00.000Z",
+                previousMeterWh: 1000,
+                newMeterStartWh: 2500,
+                deltaWh: 1500,
+                thresholdWh: 500,
+                status: "pending",
+                createdAt: "2026-06-19T09:05:00.000Z",
+                updatedAt: "2026-06-19T09:05:00.000Z",
+                submissionResult: null
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+
       if (url.startsWith("/api/proxy-health") && method === "GET") {
         return new Response(
           JSON.stringify({
@@ -596,6 +655,12 @@ describe("App", () => {
     expect(screen.getByText("1.00 kWh")).toBeInTheDocument();
     expect(screen.getByText("Charging", { selector: ".charging-session-status" })).toBeInTheDocument();
     expect(screen.getByText(/Charging, waiting for first MeterValues\./)).toBeInTheDocument();
+    expect(screen.getByText("1.50 kWh gap")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit meter gap gap-1" }));
+    expect(await screen.findByRole("heading", { name: "Submit meter gap" })).toBeInTheDocument();
+    expect(screen.getByText("No proxy target has recovery submissions enabled. Enable it on a proxy target before submitting this gap.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit recovery" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => {
