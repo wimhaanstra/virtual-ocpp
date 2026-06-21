@@ -26,3 +26,59 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 ### Slice 5.4: Production Docker Image
 
 Goal: package the backend and frontend for deployment with a persistent SQLite volume.
+
+### Slice 5.5: Frontend Component Split
+
+Goal: break the current large React app file into focused components and hooks without changing operator behavior.
+
+Scope:
+
+- Extract the app shell, sidebar/topbar, dashboard, sessions, communication, proxy targets, tags, and modal forms into separate files.
+- Extract shared formatting, API loading helpers, charger context helpers, and form state helpers into reusable modules.
+- Keep current routes, visuals, tests, and API behavior stable.
+- Add or adjust frontend tests around the extracted components where behavior risk is highest.
+
+Acceptance criteria:
+
+- `apps/web/src/App.tsx` becomes a thin composition layer instead of the main implementation file.
+- Existing admin workflows still pass tests: dashboard, sessions, communication, tags, proxy targets, auth/logout, theme/sidebar preferences, and charger context routing.
+- No UI redesign is included unless required by the extraction.
+
+### Slice 5.6: Live Operator Updates
+
+Goal: connect the frontend to the backend with a protected websocket/SSE-style live update channel so operators do not need manual refresh buttons for normal state changes.
+
+Scope:
+
+- Add an authenticated backend live updates endpoint for admin clients.
+- Publish events when charger connections, sessions, charging stats, proxy health, active-session audit state, logs, or communication journal rows change.
+- Update the frontend to subscribe after login and refresh only the affected data slices.
+- Keep manual refresh actions as fallback controls.
+- Handle reconnects, auth expiry, and browser tab resume without duplicate subscriptions.
+
+Acceptance criteria:
+
+- Dashboard charger state, live charging stats, proxy health, and missing-stop warnings update automatically after relevant backend events.
+- Sessions and Communication pages update without requiring operator refresh for new session/log/protocol rows.
+- If the live channel disconnects, the UI shows a small stale/live indicator and retries.
+- Tests cover backend event publishing and frontend subscription/update behavior.
+
+### Slice 5.7: Charger Onboarding Wizard
+
+Goal: add a guided modal workflow for adding a charger by waiting for a new charger connection and then helping the operator configure it.
+
+Scope:
+
+- Add a top-level "Add charger" action that opens a modal wizard.
+- Show the exact OCPP websocket URL, protocol, and optional Basic Auth guidance.
+- Wait for an unassigned/new charger to connect and display candidate charger ids as they appear.
+- Let the operator confirm the detected charger, optionally set a label, then continue to initial tag/proxy-target setup.
+- Use live updates when Slice 5.6 is available; otherwise use a temporary polling fallback.
+- Avoid creating placeholder chargers that never connected unless a later explicit manual-registration option is designed.
+
+Acceptance criteria:
+
+- An operator can open the wizard, point a charger at Virtual OCPP, see the charger appear, confirm it, and end with that charger selected as context.
+- The wizard clearly distinguishes newly detected chargers from already known chargers.
+- The flow works when there are no chargers yet.
+- The wizard can be cancelled without leaving partial configuration behind.
