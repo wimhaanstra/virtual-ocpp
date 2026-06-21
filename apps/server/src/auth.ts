@@ -3,7 +3,9 @@ import { and, eq, gt, isNull } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppConfig } from './config.js';
 import type { Database } from './db/client.js';
-import { logs, sessions } from './db/schema.js';
+import { sessions } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
+import { recordLogEntry } from './log-writer.js';
 
 const SESSION_COOKIE = 'virtual_ocpp_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
@@ -13,17 +15,16 @@ type LoginBody = {
   password?: string;
 };
 
-export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, db: Database) {
+export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, db: Database, liveUpdates?: LiveUpdateBus) {
   app.post<{ Body: LoginBody }>('/api/auth/login', async (request, reply) => {
     const username = request.body?.username ?? '';
     const password = request.body?.password ?? '';
 
     if (!safeEquals(username, config.adminUsername) || !safeEquals(password, config.adminPassword)) {
-      await db.insert(logs).values({
-        id: randomUUID(),
+      recordLogEntry(db, liveUpdates, {
         level: 'warn',
-        message: 'admin login failed',
-        createdAt: new Date()
+        category: 'auth',
+        message: 'admin login failed'
       });
 
       return reply.code(401).send({ error: 'invalid_credentials' });

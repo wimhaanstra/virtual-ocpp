@@ -6,6 +6,7 @@ import type { IncomingMessage } from 'node:http';
 import type { AppConfig } from '../config.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { Database } from '../db/client.js';
+import type { LiveUpdateBus } from '../live-updates.js';
 import { ChargerCommandService } from './charger-command-service.js';
 import { OcppHandlers } from './handlers.js';
 import { ProxyAuthorizationService } from './proxy-service.js';
@@ -29,9 +30,10 @@ export async function registerOcppServer(
   db: Database,
   communicationJournal?: CommunicationJournalService,
   proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal),
-  chargerCommands = new ChargerCommandService(communicationJournal)
+  chargerCommands = new ChargerCommandService(communicationJournal),
+  liveUpdates?: LiveUpdateBus
 ) {
-  const repository = new OcppRepository(db, communicationJournal);
+  const repository = new OcppRepository(db, communicationJournal, liveUpdates);
   const handlers = new OcppHandlers(repository, proxyAuthorization);
   const rpcServer = new RPCServer({
     protocols: ['ocpp1.6'],

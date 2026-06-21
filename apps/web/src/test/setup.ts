@@ -18,3 +18,9 @@ if (typeof window.localStorage?.getItem !== "function") {
     }
   });
 }
+
+Object.defineProperty(window, "EventSource", {
+  configurable: true,
+  value: undefined,
+  writable: true
+});

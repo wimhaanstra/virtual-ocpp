@@ -4,7 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargers, logs, proxySessionMappings, proxyTagMappings, proxyTargets } from './db/schema.js';
+import { chargers, proxySessionMappings, proxyTagMappings, proxyTargets } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
+import { recordLogEntry } from './log-writer.js';
 import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 
 const ModeSchema = z.enum(['monitor-only', 'deny-capable']);
@@ -63,7 +65,7 @@ const ProxyHealthQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
 });
 
-export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, proxyAuthorization?: ProxyAuthorizationService) {
+export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, proxyAuthorization?: ProxyAuthorizationService, liveUpdates?: LiveUpdateBus) {
   app.get('/api/proxy-health', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -128,7 +130,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
 
     db.insert(proxyTargets).values(target).run();
     replaceProxyTagMappings(db, id, body.data.tagMappings ?? []);
-    recordProxyLog(db, 'proxy target created', {
+    recordProxyLog(db, liveUpdates, 'proxy target created', {
       proxyTargetId: id,
       chargerId: target.chargerId,
       mode: target.mode,
@@ -182,7 +184,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     if (existing.chargerId && (disablingTarget || hasDisruptiveUpdate)) {
       await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after update');
     }
-    recordProxyLog(db, 'proxy target updated', {
+    recordProxyLog(db, liveUpdates, 'proxy target updated', {
       proxyTargetId: request.params.id,
       chargerId: existing.chargerId,
       mode: update.mode,
@@ -212,7 +214,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     if (existing.chargerId) {
       await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after delete');
     }
-    recordProxyLog(db, 'proxy target deleted', { proxyTargetId: request.params.id, chargerId: existing.chargerId });
+    recordProxyLog(db, liveUpdates, 'proxy target deleted', { proxyTargetId: request.params.id, chargerId: existing.chargerId });
 
     return { ok: true };
   });
@@ -311,13 +313,11 @@ function hasDisruptiveProxyTargetUpdate(existing: typeof proxyTargets.$inferSele
   );
 }
 
-function recordProxyLog(db: Database, message: string, metadata: Record<string, unknown>) {
-  db.insert(logs).values({
-    id: randomUUID(),
+function recordProxyLog(db: Database, liveUpdates: LiveUpdateBus | undefined, message: string, metadata: Record<string, unknown>) {
+  recordLogEntry(db, liveUpdates, {
     level: 'info',
     category: 'proxy',
     message,
-    metadata: JSON.stringify(metadata),
-    createdAt: new Date()
-  }).run();
+    metadata
+  });
 }

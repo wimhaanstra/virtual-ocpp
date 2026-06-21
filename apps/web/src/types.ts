@@ -13,6 +13,30 @@ export type ChargerAccessState = {
   enabled: boolean;
 };
 
+export type LiveUpdateTopic =
+  | "charger"
+  | "sessions"
+  | "charging-stats"
+  | "logs"
+  | "communication"
+  | "proxy-targets"
+  | "proxy-health"
+  | "tags";
+
+export type LiveUpdateEvent = {
+  type: string;
+  topic?: LiveUpdateTopic;
+  chargerId?: string | null;
+};
+
+export type LiveUpdateEnvelope = {
+  id: string;
+  occurredAt: string;
+  event: LiveUpdateEvent;
+};
+
+export type LiveStatus = "connecting" | "live" | "stale";
+
 export type ProxyTarget = {
   id: string;
   name: string;

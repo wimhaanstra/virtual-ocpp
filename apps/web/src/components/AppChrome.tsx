@@ -11,7 +11,7 @@ import {
   Tags as TagsIcon,
   type LucideIcon
 } from "lucide-react";
-import type { ActiveView, ChargerRegistryRow, ThemeMode } from "../types";
+import type { ActiveView, ChargerRegistryRow, LiveStatus, ThemeMode } from "../types";
 import { getChargerContextId, getChargerDisplayLabel, sortChargers } from "../app-helpers";
 import { Button } from "./ui/button";
 
@@ -32,6 +32,7 @@ type AppChromeProps = {
   selectedChargerId: string;
   sidebarCollapsed: boolean;
   theme: ThemeMode;
+  liveStatus: LiveStatus;
   onLogout: () => void;
   onNavigate: (view: ActiveView) => void;
   onSelectedChargerChange: (chargerId: string) => void;
@@ -48,6 +49,7 @@ export function AppChrome({
   selectedChargerId,
   sidebarCollapsed,
   theme,
+  liveStatus,
   onLogout,
   onNavigate,
   onSelectedChargerChange,
@@ -99,6 +101,10 @@ export function AppChrome({
             <h1>{activeView === "Home" ? "Home dashboard" : activeView}</h1>
           </div>
           <div className="topbar-actions topbar-controls">
+            <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
+              <span aria-hidden="true" />
+              {liveStatus === "live" ? "Live" : liveStatus === "stale" ? "Stale" : "Connecting"}
+            </span>
             <label className="field topbar-field">
               <span>Charger context</span>
               <select value={selectedChargerId} onChange={(event) => onSelectedChargerChange(event.target.value)}>

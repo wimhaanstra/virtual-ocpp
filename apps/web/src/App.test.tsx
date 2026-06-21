@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -103,12 +103,19 @@ const emptyVisibilityResponses = (url: string, method: string) => {
     return new Response(JSON.stringify({ summary: { activeSessions: 0, flaggedSessions: 0 }, items: [] }), { status: 200 });
   }
 
+  if ((path === "/api/live-updates" || path === "/api/events") && method === "GET") {
+    return new Response("", {
+      status: 404
+    });
+  }
+
   return null;
 };
 
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.localStorage.clear();
     document.documentElement.removeAttribute("data-theme");
     window.history.replaceState({}, "", "/");
@@ -328,6 +335,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(screen.getByText(/Live|Connecting|Stale/, { selector: ".live-indicator" })).toBeInTheDocument();
     expect(screen.getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
     expect(screen.getByText("Use wss:// when this service is served behind TLS.")).toBeInTheDocument();
     expect(screen.getByText("ocpp1.6")).toBeInTheDocument();
@@ -353,6 +361,192 @@ describe("App", () => {
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
+  });
+
+  it("refreshes charger-scoped slices from live updates when the event stream is available", async () => {
+    const chargerId = "SMART-EVSE-1";
+    let latestPowerW = 7200;
+    let latestSampleAt = "2026-06-19T09:36:00.000Z";
+
+    class FakeEventSource {
+      static instances: FakeEventSource[] = [];
+      readonly url: string;
+      readonly listeners = new Map<string, Set<(event: Event) => void>>();
+      onopen: ((event: Event) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+
+      constructor(url: string) {
+        this.url = url;
+        FakeEventSource.instances.push(this);
+        queueMicrotask(() => {
+          this.onopen?.(new Event("open"));
+          this.listeners.get("open")?.forEach((listener) => listener(new Event("open")));
+        });
+      }
+
+      addEventListener(type: string, listener: (event: Event) => void) {
+        const listeners = this.listeners.get(type) ?? new Set();
+        listeners.add(listener);
+        this.listeners.set(type, listeners);
+      }
+
+      removeEventListener(type: string, listener: (event: Event) => void) {
+        this.listeners.get(type)?.delete(listener);
+      }
+
+      emit(data: unknown, type = "message") {
+        const event = new MessageEvent(type, { data: JSON.stringify(data) });
+        if (type === "message") {
+          this.listeners.get("message")?.forEach((listener) => listener(event));
+        }
+        this.listeners.get(type)?.forEach((listener) => listener(event));
+      }
+
+      close() {
+        this.listeners.clear();
+      }
+    }
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/live-updates" && method === "GET") {
+        return new Response("", {
+          status: 200,
+          headers: {
+            "content-type": "text/event-stream"
+          }
+        });
+      }
+
+      if (path === "/api/chargers" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "SMART-EVSE-1",
+              label: null,
+              lastSeenAt: "2026-06-19T09:00:00.000Z",
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              active: true
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/dashboard-config" && method === "GET") {
+        return emptyVisibilityResponses(url, method)!;
+      }
+
+      if (path === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/proxy-health" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            chargerId,
+            summary: { total: 0, connected: 0, backoff: 0, waitingForCharger: 0, disabled: 0 },
+            targets: []
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/active-session-audit" && method === "GET") {
+        return new Response(JSON.stringify({ summary: { activeSessions: 1, flaggedSessions: 0 }, items: [] }), { status: 200 });
+      }
+
+      if (path === "/api/sessions" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/charging-stats" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              sessionId: "session-1",
+              chargerId,
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              elapsedSeconds: 1860,
+              startMeterWh: 1000,
+              latestMeterWh: 2650,
+              energyUsedWh: 1650,
+              latestPowerW,
+              latestCurrentA: 31.3,
+              latestVoltageV: 230,
+              latestSampleAt,
+              latestEnergyContext: "Sample.Periodic",
+              latestPowerContext: "Sample.Periodic"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/logs" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/communication-journal" && method === "GET") {
+        return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("EventSource", FakeEventSource as unknown as typeof EventSource);
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByText("Live", { selector: ".live-indicator" })).toBeInTheDocument();
+    expect(screen.getByText("7.2 kW")).toBeInTheDocument();
+
+    latestPowerW = 4200;
+    latestSampleAt = "2026-06-19T09:46:00.000Z";
+
+    const liveEvent = FakeEventSource.instances[0];
+    expect(liveEvent).toBeDefined();
+    await act(async () => {
+      liveEvent.emit(
+        {
+          id: "evt-1",
+          occurredAt: "2026-06-19T09:46:01.000Z",
+          event: {
+            type: "meter.sample.recorded",
+            chargerId
+          }
+        },
+        "live-update"
+      );
+    });
+
+    await screen.findByText("4.2 kW");
+    expect(
+      fetchMock.mock.calls.filter(([input]) => {
+        const url = new URL(String(input), "http://localhost");
+        return url.pathname === "/api/charging-stats";
+      }).length
+    ).toBeGreaterThan(1);
   });
 
   it("keeps the current page in the URL and restores it on browser back", async () => {

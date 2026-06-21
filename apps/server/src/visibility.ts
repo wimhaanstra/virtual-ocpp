@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
 import { chargerConnections, chargingSessions, logs, meterSamples, proxySessionMappings, proxyTargets } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
+import { recordLogEntry } from './log-writer.js';
 import { ChargerCommandError, type ChargerCommandService } from './ocpp/charger-command-service.js';
 import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import type { StopTransactionRequest } from './ocpp/types.js';
@@ -21,7 +22,8 @@ export function registerVisibilityRoutes(
   app: FastifyInstance,
   db: Database,
   chargerCommands?: ChargerCommandService,
-  proxyAuthorization?: ProxyAuthorizationService
+  proxyAuthorization?: ProxyAuthorizationService,
+  liveUpdates?: LiveUpdateBus
 ) {
   const listConnections = async (request: FastifyRequest, reply: FastifyReply) => {
     if (await requireAdmin(request, reply, db)) return;
@@ -123,22 +125,30 @@ export function registerVisibilityRoutes(
       .where(eq(chargingSessions.id, session.id))
       .run();
 
-    db.insert(logs).values({
-      id: randomUUID(),
+    recordSessionLog(db, liveUpdates, {
       level: proxyResults.some((result) => result.attempted && !result.ok) ? 'warn' : 'info',
-      category: 'session',
       message: 'charging session force closed',
       chargerId: session.chargerId,
       transactionId: session.transactionId,
-      metadata: JSON.stringify({
+      metadata: {
         connectorId: session.connectorId,
         reason: 'OperatorForceClosed',
         meterStop: preview.localStopTransaction.meterStop ?? null,
         meterSource: preview.meterSource,
         proxyResults
-      }),
+      },
       createdAt: stoppedAt
-    }).run();
+    });
+
+    liveUpdates?.publish({
+      type: 'session.stopped',
+      chargerId: session.chargerId,
+      sessionId: session.id,
+      transactionId: session.transactionId,
+      connectorId: session.connectorId,
+      stoppedAt: stoppedAt.toISOString(),
+      reason: 'OperatorForceClosed'
+    });
 
     return {
       ...preview,
@@ -186,19 +196,27 @@ export function registerVisibilityRoutes(
       )
       .run();
 
-    db.insert(logs).values({
-      id: randomUUID(),
+    recordSessionLog(db, liveUpdates, {
       level: 'warn',
-      category: 'session',
       message: 'charging session manually closed',
       chargerId: session.chargerId,
       transactionId: session.transactionId,
-      metadata: JSON.stringify({
+      metadata: {
         connectorId: session.connectorId,
         reason: 'OperatorClosed'
-      }),
+      },
       createdAt: stoppedAt
-    }).run();
+    });
+
+    liveUpdates?.publish({
+      type: 'session.stopped',
+      chargerId: session.chargerId,
+      sessionId: session.id,
+      transactionId: session.transactionId,
+      connectorId: session.connectorId,
+      stoppedAt: stoppedAt.toISOString(),
+      reason: 'OperatorClosed'
+    });
 
     return toPublicChargingSession({
       ...session,
@@ -226,7 +244,7 @@ export function registerVisibilityRoutes(
 
     try {
       const result = await chargerCommands.remoteStopTransaction(session.chargerId, session.transactionId);
-      recordSessionLog(db, {
+      recordSessionLog(db, liveUpdates, {
         level: result.status === 'Accepted' ? 'info' : 'warn',
         message: 'remote stop transaction requested',
         chargerId: session.chargerId,
@@ -242,7 +260,7 @@ export function registerVisibilityRoutes(
       };
     } catch (error) {
       const statusCode = error instanceof ChargerCommandError && error.code === 'charger_not_connected' ? 409 : 502;
-      recordSessionLog(db, {
+      recordSessionLog(db, liveUpdates, {
         level: 'warn',
         message: 'remote stop transaction failed',
         chargerId: session.chargerId,
@@ -278,24 +296,25 @@ export function registerVisibilityRoutes(
 
 function recordSessionLog(
   db: Database,
+  liveUpdates: LiveUpdateBus | undefined,
   input: {
     level: 'info' | 'warn';
     message: string;
     chargerId: string;
     transactionId: number;
     metadata: Record<string, unknown>;
+    createdAt?: Date;
   }
 ) {
-  db.insert(logs).values({
-    id: randomUUID(),
+  recordLogEntry(db, liveUpdates, {
     level: input.level,
     category: 'session',
     message: input.message,
     chargerId: input.chargerId,
     transactionId: input.transactionId,
-    metadata: JSON.stringify(input.metadata),
-    createdAt: new Date()
-  }).run();
+    metadata: input.metadata,
+    createdAt: input.createdAt
+  });
 }
 
 function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessions.$inferSelect) {

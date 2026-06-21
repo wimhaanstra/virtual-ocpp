@@ -85,7 +85,8 @@ describe('app', () => {
       { method: 'POST', url: '/api/sessions/session-1/remote-stop' },
       { method: 'GET', url: '/api/charging-stats' },
       { method: 'GET', url: '/api/logs' },
-      { method: 'GET', url: '/api/communication-journal' }
+      { method: 'GET', url: '/api/communication-journal' },
+      { method: 'GET', url: '/api/live-updates' }
     ] as const;
 
     for (const { method, url } of routes) {

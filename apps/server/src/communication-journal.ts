@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, lt, lte } from 'drizzle-orm';
 import type { Database } from './db/client.js';
 import { communicationJournal } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
 
 const PURGE_THROTTLE_MS = 10 * 60 * 1000;
 const DEFAULT_LIST_WINDOW_HOURS = 24;
@@ -71,7 +72,8 @@ export class CommunicationJournalService {
 
   constructor(
     private readonly db: Database,
-    private readonly retentionHours: number = 24
+    private readonly retentionHours: number = 24,
+    private readonly liveUpdates?: LiveUpdateBus
   ) {}
 
   getRetentionHours() {
@@ -224,8 +226,9 @@ export class CommunicationJournalService {
 
   recordEntry(input: CommunicationJournalEntryInput) {
     const createdAt = input.createdAt ?? new Date();
+    const id = randomUUID();
     this.db.insert(communicationJournal).values({
-      id: randomUUID(),
+      id,
       createdAt,
       direction: input.direction,
       sourceType: input.sourceType,
@@ -245,13 +248,29 @@ export class CommunicationJournalService {
     }).run();
 
     this.purgeIfDue(new Date());
+    this.liveUpdates?.publish({
+      type: 'journal.recorded',
+      journalId: id,
+      chargerId: input.chargerId ?? null,
+      proxyTargetId: input.proxyTargetId ?? null,
+      messageType: input.messageType,
+      ocppMethod: input.ocppMethod ?? null
+    });
   }
 
   purgeExpired(now = new Date()) {
     this.lastRuntimePurgeAt = now.getTime();
     const cutoff = new Date(now.getTime() - this.retentionHours * 60 * 60 * 1000);
     const result = this.db.delete(communicationJournal).where(lt(communicationJournal.createdAt, cutoff)).run();
-    return toChanges(result);
+    const deletedCount = toChanges(result);
+    if (deletedCount > 0) {
+      this.liveUpdates?.publish({
+        type: 'journal.purged',
+        retentionHours: this.retentionHours,
+        deletedCount
+      });
+    }
+    return deletedCount;
   }
 
   list(filters: CommunicationJournalListFilters = {}) {

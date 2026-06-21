@@ -8,6 +8,8 @@ import { CommunicationJournalService } from './communication-journal.js';
 import { registerCommunicationJournalRoutes } from './communication-journal-routes.js';
 import { registerChargerRoutes } from './chargers.js';
 import { registerDashboardConfigRoutes } from './dashboard-config.js';
+import { LiveUpdateBus } from './live-updates.js';
+import { registerLiveUpdateRoutes } from './live-updates-routes.js';
 import { ChargerCommandService } from './ocpp/charger-command-service.js';
 import { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import { registerOcppServer } from './ocpp/server.js';
@@ -22,16 +24,20 @@ type BuildAppOptions = {
   db: Database;
 };
 
-export async function buildApp({ config, db }: BuildAppOptions): Promise<FastifyInstance> {
-  const communicationJournal = new CommunicationJournalService(db, config.communicationLogRetentionHours);
-  const proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal);
+type AppWithLiveUpdates = FastifyInstance & { liveUpdates: LiveUpdateBus };
+
+export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWithLiveUpdates> {
+  const liveUpdates = new LiveUpdateBus();
+  const communicationJournal = new CommunicationJournalService(db, config.communicationLogRetentionHours, liveUpdates);
+  const proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal, liveUpdates);
   const chargerCommands = new ChargerCommandService(communicationJournal);
   const app = Fastify({
     logger: {
       level: config.nodeEnv === 'test' ? 'silent' : 'info',
       redact: ['req.headers.authorization', 'request.headers.authorization', '*.password']
     }
-  });
+  }) as unknown as AppWithLiveUpdates;
+  app.liveUpdates = liveUpdates;
 
   await app.register(cookie, {
     secret: config.sessionSecret
@@ -42,17 +48,18 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<Fastify
   }));
 
   communicationJournal.purgeExpired();
-  closeStaleChargerConnections(db);
+  closeStaleChargerConnections(db, liveUpdates);
 
-  registerAuthRoutes(app, config, db);
+  registerAuthRoutes(app, config, db, liveUpdates);
+  registerLiveUpdateRoutes(app, db, liveUpdates);
   registerDashboardConfigRoutes(app, config, db);
   registerChargingStatsRoutes(app, db);
-  registerChargerRoutes(app, db);
-  registerTagRoutes(app, db);
-  registerProxyTargetRoutes(app, db, proxyAuthorization);
+  registerChargerRoutes(app, db, liveUpdates);
+  registerTagRoutes(app, db, liveUpdates);
+  registerProxyTargetRoutes(app, db, proxyAuthorization, liveUpdates);
   registerCommunicationJournalRoutes(app, db, communicationJournal);
-  registerVisibilityRoutes(app, db, chargerCommands, proxyAuthorization);
-  await registerOcppServer(app, config, db, communicationJournal, proxyAuthorization, chargerCommands);
+  registerVisibilityRoutes(app, db, chargerCommands, proxyAuthorization, liveUpdates);
+  await registerOcppServer(app, config, db, communicationJournal, proxyAuthorization, chargerCommands, liveUpdates);
   if (config.nodeEnv === 'production') {
     registerStaticAssetRoutes(app);
   }

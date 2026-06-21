@@ -2,22 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
-import {
-  chargerConnections,
-  chargers,
-  chargingSessions,
-  logs,
-  meterSamples,
-  proxySessionMappings,
-  tagChargerAccess,
-  tags
-} from '../db/schema.js';
+import type { LiveUpdateBus } from '../live-updates.js';
+import { chargerConnections, chargers, chargingSessions, meterSamples, proxySessionMappings, tagChargerAccess, tags } from '../db/schema.js';
+import { recordLogEntry } from '../log-writer.js';
 import type { StopTransactionRequest } from './types.js';
 
 export class OcppRepository {
   constructor(
     private readonly db: Database,
-    private readonly communicationJournal?: CommunicationJournalService
+    private readonly communicationJournal?: CommunicationJournalService,
+    private readonly liveUpdates?: LiveUpdateBus
   ) {}
 
   recordLog(input: {
@@ -28,32 +22,38 @@ export class OcppRepository {
     transactionId?: number;
     metadata?: Record<string, unknown>;
   }) {
-    this.db.insert(logs).values({
-      id: randomUUID(),
-      level: input.level ?? 'info',
-      category: input.category,
-      message: input.message,
-      chargerId: input.chargerId,
-      transactionId: input.transactionId,
-      metadata: input.metadata ? JSON.stringify(input.metadata) : null,
-      createdAt: new Date()
-    }).run();
+    recordLogEntry(this.db, this.liveUpdates, input);
   }
 
   recordConnected(chargerId: string) {
     this.upsertChargerSeen(chargerId);
     const connectionId = randomUUID();
+    const connectedAt = new Date();
+    const openConnections = this.db
+      .select()
+      .from(chargerConnections)
+      .where(and(eq(chargerConnections.chargerId, chargerId), isNull(chargerConnections.disconnectedAt)))
+      .all();
 
     this.db
       .update(chargerConnections)
-      .set({ disconnectedAt: new Date() })
+      .set({ disconnectedAt: connectedAt })
       .where(and(eq(chargerConnections.chargerId, chargerId), isNull(chargerConnections.disconnectedAt)))
       .run();
+
+    for (const connection of openConnections) {
+      this.liveUpdates?.publish({
+        type: 'charger.disconnected',
+        chargerId,
+        connectionId: connection.id,
+        disconnectedAt: connectedAt.toISOString()
+      });
+    }
 
     this.db.insert(chargerConnections).values({
       id: connectionId,
       chargerId,
-      connectedAt: new Date()
+      connectedAt
     }).run();
 
     this.recordLog({
@@ -62,7 +62,15 @@ export class OcppRepository {
       chargerId
     });
 
+    this.liveUpdates?.publish({
+      type: 'charger.connected',
+      chargerId,
+      connectionId,
+      connectedAt: connectedAt.toISOString()
+    });
+
     this.communicationJournal?.recordChargerConnection(chargerId);
+    this.publishChargerState(chargerId);
 
     return connectionId;
   }
@@ -89,14 +97,28 @@ export class OcppRepository {
       })
       .where(eq(chargers.id, chargerId))
       .run();
+    this.publishChargerState(chargerId);
   }
 
   recordSeen(chargerId: string) {
     this.upsertChargerSeen(chargerId);
+    this.liveUpdates?.publish({
+      type: 'charger.updated',
+      chargerId,
+      updatedAt: new Date().toISOString(),
+      reason: 'seen'
+    });
   }
 
   recordDisconnected(chargerId: string, connectionId?: string) {
     const now = new Date();
+    const openConnections = connectionId
+      ? []
+      : this.db
+          .select()
+          .from(chargerConnections)
+          .where(and(eq(chargerConnections.chargerId, chargerId), isNull(chargerConnections.disconnectedAt)))
+          .all();
     const result = connectionId
       ? this.db
           .update(chargerConnections)
@@ -118,6 +140,24 @@ export class OcppRepository {
     });
 
     this.communicationJournal?.recordChargerDisconnect(chargerId);
+    if (connectionId) {
+      this.liveUpdates?.publish({
+        type: 'charger.disconnected',
+        chargerId,
+        connectionId,
+        disconnectedAt: now.toISOString()
+      });
+    } else {
+      for (const connection of openConnections) {
+        this.liveUpdates?.publish({
+          type: 'charger.disconnected',
+          chargerId,
+          connectionId: connection.id,
+          disconnectedAt: now.toISOString()
+        });
+      }
+    }
+    this.publishChargerState(chargerId);
   }
 
   isTagAllowed(chargerId: string, idTag: string | undefined) {
@@ -144,9 +184,10 @@ export class OcppRepository {
     meterStart?: number;
   }) {
     this.closeActiveSessionsForConnector(input.chargerId, input.connectorId, input.startedAt, 'ReplacedByNewTransaction');
+    const sessionId = randomUUID();
 
     this.db.insert(chargingSessions).values({
-      id: randomUUID(),
+      id: sessionId,
       chargerId: input.chargerId,
       connectorId: input.connectorId,
       transactionId: input.transactionId,
@@ -165,6 +206,14 @@ export class OcppRepository {
         connectorId: input.connectorId,
         hasTag: Boolean(input.idTag)
       }
+    });
+    this.liveUpdates?.publish({
+      type: 'session.created',
+      chargerId: input.chargerId,
+      sessionId,
+      transactionId: input.transactionId,
+      connectorId: input.connectorId,
+      startedAt: input.startedAt.toISOString()
     });
   }
 
@@ -202,6 +251,13 @@ export class OcppRepository {
     meterStop?: number;
     reason?: string;
   }) {
+    const session = this.db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, input.chargerId), eq(chargingSessions.transactionId, input.transactionId)))
+      .limit(1)
+      .get();
+
     this.db
       .update(chargingSessions)
       .set({
@@ -221,6 +277,15 @@ export class OcppRepository {
       metadata: {
         reason: input.reason
       }
+    });
+    this.liveUpdates?.publish({
+      type: 'session.stopped',
+      chargerId: input.chargerId,
+      sessionId: session?.id ?? String(input.transactionId),
+      transactionId: input.transactionId,
+      connectorId: session?.connectorId ?? 0,
+      stoppedAt: input.stoppedAt.toISOString(),
+      reason: input.reason ?? null
     });
   }
 
@@ -257,6 +322,14 @@ export class OcppRepository {
       location: input.location,
       format: input.format
     }).run();
+    this.liveUpdates?.publish({
+      type: 'meter.sample.recorded',
+      chargerId: input.chargerId,
+      connectorId: input.connectorId,
+      transactionId: input.transactionId ?? null,
+      sampledAt: input.sampledAt.toISOString(),
+      measurand: input.measurand ?? null
+    });
   }
 
   private closeActiveSessionsForConnector(chargerId: string, connectorId: number, stoppedAt: Date, reason: string) {
@@ -299,6 +372,15 @@ export class OcppRepository {
           connectorId,
           reason
         }
+      });
+      this.liveUpdates?.publish({
+        type: 'session.stopped',
+        chargerId,
+        sessionId: session.id,
+        transactionId: session.transactionId,
+        connectorId,
+        stoppedAt: stoppedAt.toISOString(),
+        reason
       });
     }
   }
@@ -350,6 +432,15 @@ export class OcppRepository {
       createdAt: seenAt,
       updatedAt: seenAt
     }).run();
+  }
+
+  private publishChargerState(chargerId: string) {
+    this.liveUpdates?.publish({
+      type: 'charger.updated',
+      chargerId,
+      updatedAt: new Date().toISOString(),
+      reason: 'state_changed'
+    });
   }
 }
 

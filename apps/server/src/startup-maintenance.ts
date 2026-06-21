@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
 import { isNull } from 'drizzle-orm';
 import type { Database } from './db/client.js';
-import { chargerConnections, logs } from './db/schema.js';
+import { chargerConnections } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
+import { recordLogEntry } from './log-writer.js';
 
-export function closeStaleChargerConnections(db: Database, stoppedAt = new Date()) {
+export function closeStaleChargerConnections(db: Database, liveUpdates?: LiveUpdateBus, stoppedAt = new Date()) {
   const openConnections = db
     .select()
     .from(chargerConnections)
@@ -19,18 +20,23 @@ export function closeStaleChargerConnections(db: Database, stoppedAt = new Date(
     .run();
 
   for (const connection of openConnections) {
-    db.insert(logs).values({
-      id: randomUUID(),
+    recordLogEntry(db, liveUpdates, {
       level: 'warn',
       category: 'charger',
       message: 'stale charger connection closed on startup',
       chargerId: connection.chargerId,
-      metadata: JSON.stringify({
+      metadata: {
         connectionId: connection.id,
         connectedAt: connection.connectedAt.toISOString()
-      }),
+      },
       createdAt: stoppedAt
-    }).run();
+    });
+    liveUpdates?.publish({
+      type: 'charger.disconnected',
+      chargerId: connection.chargerId,
+      connectionId: connection.id,
+      disconnectedAt: stoppedAt.toISOString()
+    });
   }
 
   return openConnections.length;

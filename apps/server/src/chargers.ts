@@ -1,10 +1,11 @@
 import { desc, and, eq, isNull } from 'drizzle-orm';
-import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargerConnections, chargers, logs } from './db/schema.js';
+import { chargerConnections, chargers } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
+import { recordLogEntry } from './log-writer.js';
 
 const ListChargersQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
@@ -15,7 +16,7 @@ const UpdateChargerSchema = z.object({
   enabled: z.boolean().optional()
 });
 
-export function registerChargerRoutes(app: FastifyInstance, db: Database) {
+export function registerChargerRoutes(app: FastifyInstance, db: Database, liveUpdates?: LiveUpdateBus) {
   app.get('/api/chargers', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -84,18 +85,22 @@ export function registerChargerRoutes(app: FastifyInstance, db: Database) {
 
     db.update(chargers).set(update).where(eq(chargers.id, request.params.id)).run();
 
-    db.insert(logs).values({
-      id: randomUUID(),
+    recordLogEntry(db, liveUpdates, {
       level: 'info',
       category: 'charger',
       message: 'charger updated',
       chargerId: request.params.id,
-      metadata: JSON.stringify({
+      metadata: {
         enabled: update.enabled,
         label: update.label
-      }),
-      createdAt: new Date()
-    }).run();
+      }
+    });
+    liveUpdates?.publish({
+      type: 'charger.updated',
+      chargerId: request.params.id,
+      updatedAt: update.updatedAt.toISOString(),
+      reason: 'admin_update'
+    });
 
     return {
       id: request.params.id,

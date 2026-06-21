@@ -4,7 +4,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargers, logs, tagChargerAccess, tags } from './db/schema.js';
+import { chargers, tagChargerAccess, tags } from './db/schema.js';
+import type { LiveUpdateBus } from './live-updates.js';
+import { recordLogEntry } from './log-writer.js';
 
 const CreateTagSchema = z.object({
   uuid: z.string().trim().min(1).max(64),
@@ -22,7 +24,7 @@ const UpdateTagAccessSchema = z.object({
   enabled: z.boolean().default(true)
 });
 
-export function registerTagRoutes(app: FastifyInstance, db: Database) {
+export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdates?: LiveUpdateBus) {
   app.get('/api/tags', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -73,7 +75,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
       throw error;
     }
 
-    recordTagLog(db, 'tag created', { tagId: id, enabled: body.data.enabled });
+    recordTagLog(db, liveUpdates, 'tag created', { tagId: id, enabled: body.data.enabled });
 
     return reply.code(201).send({
       id,
@@ -112,7 +114,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
       throw error;
     }
 
-    recordTagLog(db, 'tag updated', { tagId: request.params.id, enabled: update.enabled });
+    recordTagLog(db, liveUpdates, 'tag updated', { tagId: request.params.id, enabled: update.enabled });
 
     return {
       id: request.params.id,
@@ -132,7 +134,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
     }
 
     db.delete(tags).where(eq(tags.id, request.params.id)).run();
-    recordTagLog(db, 'tag deleted', { tagId: request.params.id });
+    recordTagLog(db, liveUpdates, 'tag deleted', { tagId: request.params.id });
 
     return { ok: true };
   });
@@ -168,7 +170,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
         .set({ enabled: body.data.enabled, updatedAt: now })
         .where(eq(tagChargerAccess.id, existing.id))
         .run();
-      recordTagLog(db, 'tag charger access updated', {
+      recordTagLog(db, liveUpdates, 'tag charger access updated', {
         tagId: request.params.id,
         chargerId: request.params.chargerId,
         enabled: body.data.enabled
@@ -192,7 +194,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
       createdAt: now,
       updatedAt: now
     }).run();
-    recordTagLog(db, 'tag charger access granted', {
+    recordTagLog(db, liveUpdates, 'tag charger access granted', {
       tagId: request.params.id,
       chargerId: request.params.chargerId,
       enabled: body.data.enabled
@@ -222,7 +224,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
     }
 
     db.delete(tagChargerAccess).where(eq(tagChargerAccess.id, existing.id)).run();
-    recordTagLog(db, 'tag charger access revoked', {
+    recordTagLog(db, liveUpdates, 'tag charger access revoked', {
       tagId: request.params.id,
       chargerId: request.params.chargerId
     });
@@ -231,13 +233,11 @@ export function registerTagRoutes(app: FastifyInstance, db: Database) {
   });
 }
 
-function recordTagLog(db: Database, message: string, metadata: Record<string, unknown>) {
-  db.insert(logs).values({
-    id: randomUUID(),
+function recordTagLog(db: Database, liveUpdates: LiveUpdateBus | undefined, message: string, metadata: Record<string, unknown>) {
+  recordLogEntry(db, liveUpdates, {
     level: 'info',
     category: 'tag',
     message,
-    metadata: JSON.stringify(metadata),
-    createdAt: new Date()
-  }).run();
+    metadata
+  });
 }

@@ -22,27 +22,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Session reliability and runtime health: active-session audit warnings for likely missing `StopTransaction`, dashboard/session UI for stale-session context, and protected runtime proxy health based on persistent upstream socket state.
 - Production Docker image: compiled backend and frontend in one container, persistent `/data` SQLite volume, healthcheck, compose example, and deployment documentation.
 - Frontend component split: shared frontend types/helpers plus extracted app chrome, auth, dashboard, sessions, communication, and force-close modal components while preserving existing operator behavior.
+- Live operator updates: authenticated SSE stream with replayed typed events, frontend live/stale indicator, and targeted REST refreshes for changed dashboard/session/log/protocol slices.
 
 ## Next Candidate Slices
-
-### Slice 5.6: Live Operator Updates
-
-Goal: connect the frontend to the backend with a protected websocket/SSE-style live update channel so operators do not need manual refresh buttons for normal state changes.
-
-Scope:
-
-- Add an authenticated backend live updates endpoint for admin clients.
-- Publish events when charger connections, sessions, charging stats, proxy health, active-session audit state, logs, or communication journal rows change.
-- Update the frontend to subscribe after login and refresh only the affected data slices.
-- Keep manual refresh actions as fallback controls.
-- Handle reconnects, auth expiry, and browser tab resume without duplicate subscriptions.
-
-Acceptance criteria:
-
-- Dashboard charger state, live charging stats, proxy health, and missing-stop warnings update automatically after relevant backend events.
-- Sessions and Communication pages update without requiring operator refresh for new session/log/protocol rows.
-- If the live channel disconnects, the UI shows a small stale/live indicator and retries.
-- Tests cover backend event publishing and frontend subscription/update behavior.
 
 ### Slice 5.7: Charger Onboarding Wizard
 

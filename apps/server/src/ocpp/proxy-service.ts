@@ -3,7 +3,9 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { RPCClient } from 'ocpp-rpc';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { Database } from '../db/client.js';
-import { chargerConnections, chargers, logs, proxySessionMappings, proxyTagMappings, proxyTargets } from '../db/schema.js';
+import { chargerConnections, chargers, proxySessionMappings, proxyTagMappings, proxyTargets } from '../db/schema.js';
+import type { LiveUpdateBus } from '../live-updates.js';
+import { recordLogEntry } from '../log-writer.js';
 import type {
   AuthorizeRequest,
   BootNotificationRequest,
@@ -60,7 +62,8 @@ export class ProxyAuthorizationService {
 
   constructor(
     private readonly db: Database,
-    private readonly communicationJournal?: CommunicationJournalService
+    private readonly communicationJournal?: CommunicationJournalService,
+    private readonly liveUpdates?: LiveUpdateBus
   ) {}
 
   async authorize(chargerId: string, params: AuthorizeRequest): Promise<AuthorizationDecision> {
@@ -535,18 +538,16 @@ export class ProxyAuthorizationService {
     proxyTargetId: string;
     metadata: Record<string, unknown>;
   }) {
-    this.db.insert(logs).values({
-      id: randomUUID(),
+    recordLogEntry(this.db, this.liveUpdates, {
       level: input.level,
       category: 'proxy',
       message: input.message,
       chargerId: input.chargerId,
-      metadata: JSON.stringify({
+      metadata: {
         proxyTargetId: input.proxyTargetId,
         ...input.metadata
-      }),
-      createdAt: new Date()
-    }).run();
+      }
+    });
   }
 
   private async getConnectedClient(chargerId: string, target: ProxyTarget) {
@@ -771,6 +772,9 @@ export class ProxyAuthorizationService {
     try {
       connection.suppressLifecycleLogs = true;
       connection.connected = false;
+      this.updateRuntimeHealth(chargerId, proxyTargetId, {
+        lastDisconnectedAt: new Date()
+      });
       await connection.client?.close({ code: 1000, reason: message, awaitPending: false });
     } catch (error) {
       this.recordProxyLog({
@@ -816,6 +820,20 @@ export class ProxyAuthorizationService {
     this.runtimeHealth.set(key, {
       ...current,
       ...update
+    });
+    this.liveUpdates?.publish({
+      type: 'proxy.health.changed',
+      chargerId,
+      proxyTargetId,
+      reason: update.lastDisconnectedAt
+        ? 'disconnected'
+        : update.lastConnectedAt
+          ? 'connected'
+          : update.lastFailureAt
+            ? 'failure'
+            : update.lastSuccessAt
+              ? 'success'
+              : 'updated'
     });
   }
 }

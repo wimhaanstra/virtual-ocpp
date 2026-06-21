@@ -25,6 +25,9 @@ import type {
   CommunicationJournalResponse,
   DashboardConfig,
   ForceClosePreview,
+  LiveStatus,
+  LiveUpdateEnvelope,
+  LiveUpdateEvent,
   LogEntry,
   ProxyHealthResponse,
   ProxyTagMapping,
@@ -83,6 +86,7 @@ export default function App() {
   const [selectedChargerId, setSelectedChargerId] = useState(() => getSearchParam("chargerId"));
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getInitialSidebarCollapsed());
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [message, setMessage] = useState("Sign in to manage proxy targets.");
   const [busy, setBusy] = useState(false);
 
@@ -199,9 +203,37 @@ export default function App() {
   }, [authenticated, selectedChargerId]);
 
   useEffect(() => {
-    if (!authenticated || activeView !== "Home") return;
-    void loadChargingStats(selectedChargerId);
-  }, [authenticated, activeView, selectedChargerId]);
+    if (!authenticated) {
+      setLiveStatus("connecting");
+      return;
+    }
+
+    setLiveStatus("connecting");
+    if (typeof EventSource === "undefined") {
+      setLiveStatus("stale");
+      return;
+    }
+
+    const events = new EventSource("/api/live-updates", { withCredentials: true });
+
+    events.onopen = () => setLiveStatus("live");
+    events.onerror = () => setLiveStatus("stale");
+    const handleLiveEvent = (event: MessageEvent<string>) => {
+      setLiveStatus("live");
+      try {
+        const parsed = JSON.parse(event.data) as LiveUpdateEnvelope | LiveUpdateEvent;
+        const liveEvent = "event" in parsed && parsed.event ? parsed.event : (parsed as LiveUpdateEvent);
+        handleLiveUpdate(liveEvent);
+      } catch {
+        handleLiveUpdate({ type: "refresh", topic: "sessions" });
+      }
+    };
+
+    events.addEventListener("message", handleLiveEvent as EventListener);
+    events.addEventListener("live-update", handleLiveEvent as EventListener);
+
+    return () => events.close();
+  }, [authenticated, selectedChargerId]);
 
   async function loadSession() {
     const response = await fetch("/api/auth/session", { credentials: "include" });
@@ -247,6 +279,7 @@ export default function App() {
     setExpandedCommunicationJournalId(null);
     setSelectedChargerId("");
     setActiveView("Home");
+    setLiveStatus("connecting");
     setMessage("Session expired. Sign in again.");
   }
 
@@ -263,17 +296,32 @@ export default function App() {
     return (await response.json()) as T;
   }
 
+  function eventAppliesToSelectedCharger(event: LiveUpdateEvent) {
+    return !selectedChargerId || !event.chargerId || event.chargerId === selectedChargerId;
+  }
+
+  function handleLiveUpdate(event: LiveUpdateEvent) {
+    if (!eventAppliesToSelectedCharger(event)) {
+      void loadChargers();
+      return;
+    }
+
+    void loadScopedData(selectedChargerId);
+  }
+
   async function loadAdminData(chargerId = selectedChargerId) {
     await Promise.all([loadDashboardConfig(), loadChargers()]);
   }
 
   async function loadScopedData(chargerId = selectedChargerId) {
     await Promise.all([
+      loadChargers(),
       loadProxyTargets(chargerId),
       loadProxyHealth(chargerId),
       loadActiveSessionAudit(chargerId),
       loadTags(chargerId),
       loadChargingSessions(chargerId),
+      loadChargingStats(chargerId),
       loadLogs(chargerId),
       loadCommunicationJournal(chargerId)
     ]);
@@ -943,6 +991,7 @@ export default function App() {
       selectedChargerId={selectedChargerId}
       sidebarCollapsed={sidebarCollapsed}
       theme={theme}
+      liveStatus={liveStatus}
       onLogout={() => void logout()}
       onNavigate={navigateToView}
       onSelectedChargerChange={setSelectedChargerId}
@@ -962,7 +1011,7 @@ export default function App() {
             selectedConnectionStatus={selectedConnectionStatus}
             selectedConnectionTone={selectedConnectionTone}
             onNavigate={navigateToView}
-            onRefresh={() => void loadAdminData()}
+            onRefresh={() => void loadScopedData(selectedChargerId)}
           />
         ) : activeView === "Sessions" ? (
           <SessionsView
@@ -971,7 +1020,7 @@ export default function App() {
             chargingSessions={chargingSessions}
             selectedChargerLabel={selectedChargerLabel}
             onForceClose={(session) => void previewForceCloseChargingSession(session)}
-            onRefresh={() => void Promise.all([loadChargingSessions(selectedChargerId), loadActiveSessionAudit(selectedChargerId)])}
+            onRefresh={() => void loadScopedData(selectedChargerId)}
             onRemoteStop={(session) => void remoteStopChargingSession(session)}
           />
         ) : activeView === "Communication" ? (
@@ -988,7 +1037,7 @@ export default function App() {
             onCommunicationFiltersChange={setCommunicationFilters}
             onExpandedCommunicationJournalIdChange={setExpandedCommunicationJournalId}
             onPurge={() => void purgeCommunicationJournal()}
-            onRefresh={() => void loadCommunicationJournal(selectedChargerId, communicationFilters)}
+            onRefresh={() => void loadScopedData(selectedChargerId)}
             onRenderEndpoint={renderCommunicationEndpoint}
             onResetFilters={() => void resetCommunicationFilters()}
           />

@@ -4,7 +4,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargerProxyAssignments, logs, proxySessionMappings, proxyTargets } from './db/schema.js';
+import { chargerProxyAssignments, proxySessionMappings, proxyTargets } from './db/schema.js';
+import { recordLogEntry } from './log-writer.js';
 
 const ModeSchema = z.enum(['monitor-only', 'deny-capable']);
 const OutagePolicySchema = z.enum(['fail-open', 'fail-closed']);
@@ -198,14 +199,12 @@ function toPublicAssignment(
 }
 
 function recordAssignmentLog(db: Database, message: string, metadata: Record<string, unknown>) {
-  db.insert(logs).values({
-    id: randomUUID(),
+  recordLogEntry(db, undefined, {
     level: 'info',
     category: 'proxy',
     message,
-    metadata: JSON.stringify(metadata),
-    createdAt: new Date()
-  }).run();
+    metadata
+  });
 }
 
 function hasActiveProxyMappings(db: Database, chargerId: string, proxyTargetId: string) {
