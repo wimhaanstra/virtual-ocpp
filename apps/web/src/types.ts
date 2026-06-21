@@ -304,10 +304,10 @@ export type ProxyTargetFormState = {
   mode: ProxyTarget["mode"];
   outagePolicy: ProxyTarget["outagePolicy"];
   basicAuthPassword: string;
-  clearUsername: boolean;
-  clearBasicAuthPassword: boolean;
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
+  usernameDirty: boolean;
+  basicAuthPasswordDirty: boolean;
   tagMappings: ProxyTagMapping[];
   tagMappingsDirty: boolean;
 };

@@ -29,5 +29,6 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Charger management with destructive delete: global Chargers page lists the charger registry, supports label edits, and requires admin password plus exact charger id confirmation before deleting charger-owned data and runtime connections.
 - Operator UI density cleanup: repeated table and page-level utility actions use compact icon buttons with descriptive titles/accessibility labels, table/action spacing is tighter, the sidebar has a compact title-level collapse button plus bottom-aligned global links and wider footer controls, and `/` is now a clean global dashboard while the charger-specific dashboard lives at `/charger-dashboard`.
 - Charger dashboard simplification: charger-specific dashboard replaces the bulky ingress panel with a compact hero backed by protected stored session totals, and upstream proxy health is shown as a compact target/state list.
+- Proxy target form polish: modal sections align fields without inline description offsets, stored credentials use masked inputs with dirty-state updates, clear checkboxes are removed, and tag mappings live as the final form section.
 
 ## Next Candidate Slices

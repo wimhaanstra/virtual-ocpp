@@ -195,7 +195,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Add unlimited proxy targets per charger with name, URL, optional credentials, station id, mode, outage policy, and enabled state.
 - Enter the proxy target URL as the upstream base websocket URL. Virtual OCPP appends the configured station id, or the local charger id when station id is blank, as the OCPP websocket identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 - Edit, toggle, or delete proxy targets.
-- View whether a proxy target has stored credentials without exposing the username or password.
+- Edit proxy credentials through masked inputs; unchanged masks preserve stored values, cleared inputs remove stored values.
 - Add per-proxy tag mappings so an upstream receives a different idTag than the charger sends locally.
 - Open the protected default global dashboard for a clean fleet overview of connected chargers, active sessions, live charge details when available, and sessions needing attention.
 - Use the charger-scoped dashboard for a compact charger summary with session totals, stored energy, last-session energy, active-session state, local OCPP connection info, runtime proxy target state, live charging energy/power/current/voltage when available, and missing-stop audit warnings.

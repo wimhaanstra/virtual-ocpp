@@ -120,6 +120,8 @@ Target fields:
 - `basicAuthPassword`: optional outbound Basic Auth password, masked in API responses.
 - `tagMappings`: optional local-to-outbound idTag mappings for this proxy target.
 
+When editing a proxy target, stored credentials are shown as masked input values. Leaving a masked credential unchanged preserves the stored value and omits it from the update request. Replacing the input stores the new value, and clearing the input sends `null` to remove the stored credential. Tag mappings are edited in the final form section because they affect proxy authentication behavior rather than the base connection.
+
 During `Authorize` and `StartTransaction`, Virtual OCPP first checks the global tag and charger-specific access. If the tag is locally rejected, proxy targets are not consulted. If the tag is locally accepted, enabled `deny-capable` targets for that charger are called in order. Any non-`Accepted` proxy response rejects the local operation.
 
 Per-proxy tag mappings are applied only to outbound `Authorize` and `StartTransaction` calls. Local allowlist checks, local session records, and charger responses keep the original charger-supplied idTag. The communication journal records the actual outbound proxy payload, so a mapped proxy call shows the outbound idTag.

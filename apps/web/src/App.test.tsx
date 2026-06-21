@@ -1701,15 +1701,13 @@ describe("App", () => {
     expect(proxyTargetEditor.getByLabelText("Name")).toHaveValue("Tap Electric");
     expect(proxyTargetEditor.getByLabelText("URL")).toHaveValue("wss://tap.example/ocpp");
     expect(proxyTargetEditor.getByLabelText("Station ID")).toHaveValue("STATION-1");
-    expect(proxyTargetEditor.getByLabelText("Username")).toHaveValue("");
-    expect(proxyTargetEditor.getByLabelText("Password")).toHaveValue("");
-    expect(proxyTargetEditor.getByLabelText("Clear stored username")).not.toBeChecked();
-    expect(proxyTargetEditor.getByLabelText("Clear stored password")).not.toBeChecked();
+    expect(proxyTargetEditor.getByLabelText("Username")).toHaveValue("********");
+    expect(proxyTargetEditor.getByLabelText("Password")).toHaveValue("********");
+    expect(proxyTargetEditor.queryByLabelText("Clear stored username")).not.toBeInTheDocument();
+    expect(proxyTargetEditor.queryByLabelText("Clear stored password")).not.toBeInTheDocument();
     expect(proxyTargetEditor.getByDisplayValue("LOCAL-TAG")).toBeInTheDocument();
     expect(proxyTargetEditor.getByDisplayValue("REMOTE-TAG")).toBeInTheDocument();
 
-    fireEvent.click(proxyTargetEditor.getByLabelText("Clear stored username"));
-    fireEvent.click(proxyTargetEditor.getByLabelText("Clear stored password"));
     fireEvent.click(proxyTargetEditor.getByRole("button", { name: "Save changes" }));
 
     await screen.findByText("Proxy target updated.");
@@ -1722,7 +1720,21 @@ describe("App", () => {
       stationId: "STATION-1",
       enabled: true,
       mode: "deny-capable",
-      outagePolicy: "fail-closed",
+      outagePolicy: "fail-closed"
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    const credentialEditor = within(screen.getByRole("heading", { name: "Edit target" }).closest("section") as HTMLElement);
+    fireEvent.change(credentialEditor.getByLabelText("Username"), { target: { value: "" } });
+    fireEvent.change(credentialEditor.getByLabelText("Password"), { target: { value: "" } });
+    fireEvent.click(credentialEditor.getByRole("button", { name: "Save changes" }));
+    await screen.findByText("Proxy target updated.");
+
+    const clearedCredentialPatchCall = fetchMock.mock.calls
+      .filter(([input, init]) => String(input) === "/api/proxy-targets/proxy-1" && init?.method === "PATCH")
+      .at(-1);
+    expect(clearedCredentialPatchCall).toBeDefined();
+    expect(JSON.parse(String(clearedCredentialPatchCall?.[1]?.body))).toMatchObject({
       username: null,
       basicAuthPassword: null
     });

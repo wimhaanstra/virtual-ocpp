@@ -1027,16 +1027,16 @@ export default function App() {
       id: target.id,
       name: target.name,
       url: target.url,
-      username: "",
+      username: target.hasUsername ? "********" : "",
       stationId: target.stationId ?? "",
       enabled: target.enabled,
       mode: target.mode,
       outagePolicy: target.outagePolicy,
-      basicAuthPassword: "",
-      clearUsername: false,
-      clearBasicAuthPassword: false,
+      basicAuthPassword: target.hasBasicAuthPassword ? "********" : "",
       hasUsername: target.hasUsername,
       hasBasicAuthPassword: target.hasBasicAuthPassword,
+      usernameDirty: false,
+      basicAuthPasswordDirty: false,
       tagMappings: target.tagMappings?.map((mapping) => ({ ...mapping })) ?? [],
       tagMappingsDirty: false
     });
@@ -1106,18 +1106,14 @@ export default function App() {
       }
 
       if (isEditingProxyTarget) {
-        if (proxyTargetForm.username.trim()) {
-          body.username = proxyTargetForm.username.trim();
-        } else if (proxyTargetForm.clearUsername) {
-          body.username = null;
+        if (proxyTargetForm.usernameDirty) {
+          body.username = proxyTargetForm.username.trim() ? proxyTargetForm.username.trim() : null;
         }
 
         body.stationId = proxyTargetForm.stationId.trim() ? proxyTargetForm.stationId.trim() : null;
 
-        if (proxyTargetForm.basicAuthPassword.trim()) {
-          body.basicAuthPassword = proxyTargetForm.basicAuthPassword.trim();
-        } else if (proxyTargetForm.clearBasicAuthPassword) {
-          body.basicAuthPassword = null;
+        if (proxyTargetForm.basicAuthPasswordDirty) {
+          body.basicAuthPassword = proxyTargetForm.basicAuthPassword.trim() ? proxyTargetForm.basicAuthPassword.trim() : null;
         }
       } else {
         if (proxyTargetForm.username.trim()) {
@@ -1486,111 +1482,125 @@ export default function App() {
                       <X aria-hidden="true" />
                     </Button>
                   </div>
-                  <form className="form-grid modal-form-grid" onSubmit={submitProxyTarget}>
-                    <label className="field">
-                      <span>Name</span>
-                      <input
-                        value={proxyTargetForm.name}
-                        onChange={(event) => setProxyTargetForm((current) => ({ ...current, name: event.target.value }))}
-                        placeholder="Backend CSMS"
-                      />
-                    </label>
-                    <label className="field">
-                      <span>URL</span>
-                      <input
-                        aria-label="URL"
-                        value={proxyTargetForm.url}
-                        onChange={(event) => setProxyTargetForm((current) => ({ ...current, url: event.target.value }))}
-                        placeholder="ws://evcc.local:8887"
-                      />
-                      <small>Use the upstream base URL. The station ID is appended as the OCPP identity path.</small>
-                    </label>
-                    <label className="field">
-                      <span>Username</span>
-                      <input
-                        value={proxyTargetForm.username}
-                        onChange={(event) =>
-                          setProxyTargetForm((current) => ({
-                            ...current,
-                            username: event.target.value,
-                            clearUsername: event.target.value ? false : current.clearUsername
-                          }))
-                        }
-                        placeholder={isEditingProxyTarget ? "Leave blank to keep current username" : "Optional"}
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Station ID</span>
-                      <input
-                        aria-label="Station ID"
-                        value={proxyTargetForm.stationId}
-                        onChange={(event) => setProxyTargetForm((current) => ({ ...current, stationId: event.target.value }))}
-                        placeholder="Defaults to charger ID"
-                      />
-                      <small>Example: URL <span className="mono">ws://10.210.1.1:8887</span> and Station ID <span className="mono">8889</span> connects to <span className="mono">/8889</span>.</small>
-                    </label>
-                    <div className={`connection-preview ${proxyTargetFormHasDuplicatedStationPath ? "connection-preview-warning" : ""}`}>
-                      <p className="eyebrow">Computed upstream URL</p>
-                      <p className="mono">{proxyTargetFormConnectionUrl || "Enter a URL to preview the connection path."}</p>
-                      {proxyTargetFormHasDuplicatedStationPath ? (
-                        <p className="status-copy">
-                          The URL already ends with the station ID. This would duplicate the path. Put the station only in Station ID.
-                        </p>
-                      ) : null}
-                    </div>
-                    <label className="field">
-                      <span>Password</span>
-                      <input
-                        value={proxyTargetForm.basicAuthPassword}
-                        onChange={(event) =>
-                          setProxyTargetForm((current) => ({
-                            ...current,
-                            basicAuthPassword: event.target.value,
-                            clearBasicAuthPassword: event.target.value ? false : current.clearBasicAuthPassword
-                          }))
-                        }
-                        type="password"
-                        placeholder={isEditingProxyTarget ? "Leave blank to keep current password" : "Optional"}
-                      />
-                    </label>
-                    {isEditingProxyTarget ? (
-                      <>
-                        <p className="status-copy">
-                          {proxyTargetForm.hasUsername ? "Stored username is set." : "No stored username is set."}
-                        </p>
-                        <label className="check-row">
+                  <form className="modal-section-form" onSubmit={submitProxyTarget}>
+                    <section className="modal-form-section">
+                      <div>
+                        <h3>Connection</h3>
+                      </div>
+                      <div className="form-grid modal-form-grid">
+                        <label className="field">
+                          <span>Name</span>
                           <input
-                            checked={proxyTargetForm.clearUsername}
+                            value={proxyTargetForm.name}
+                            onChange={(event) => setProxyTargetForm((current) => ({ ...current, name: event.target.value }))}
+                            placeholder="Backend CSMS"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>URL</span>
+                          <input
+                            aria-label="URL"
+                            value={proxyTargetForm.url}
+                            onChange={(event) => setProxyTargetForm((current) => ({ ...current, url: event.target.value }))}
+                            placeholder="ws://evcc.local:8887"
+                          />
+                        </label>
+                        <label className="field">
+                          <span>Station ID</span>
+                          <input
+                            aria-label="Station ID"
+                            value={proxyTargetForm.stationId}
+                            onChange={(event) => setProxyTargetForm((current) => ({ ...current, stationId: event.target.value }))}
+                            placeholder="Defaults to charger ID"
+                          />
+                        </label>
+                        <div className={`connection-preview ${proxyTargetFormHasDuplicatedStationPath ? "connection-preview-warning" : ""}`}>
+                          <p className="eyebrow">Computed upstream URL</p>
+                          <p className="mono">{proxyTargetFormConnectionUrl || "Enter a URL to preview the connection path."}</p>
+                          {proxyTargetFormHasDuplicatedStationPath ? (
+                            <p className="status-copy">
+                              The URL already ends with the station ID. This would duplicate the path. Put the station only in Station ID.
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="modal-form-section">
+                      <div>
+                        <h3>Credentials</h3>
+                      </div>
+                      <div className="form-grid modal-form-grid">
+                        <label className="field">
+                          <span>Username</span>
+                          <input
+                            value={proxyTargetForm.username}
                             onChange={(event) =>
                               setProxyTargetForm((current) => ({
                                 ...current,
-                                clearUsername: event.target.checked,
-                                username: event.target.checked ? "" : current.username
+                                username: event.target.value,
+                                usernameDirty: true
                               }))
                             }
-                            type="checkbox"
+                            placeholder="Optional"
                           />
-                          Clear stored username
                         </label>
-                        <p className="status-copy">
-                          {proxyTargetForm.hasBasicAuthPassword ? "Stored password is set." : "No stored password is set."}
-                        </p>
-                        <label className="check-row">
+                        <label className="field">
+                          <span>Password</span>
                           <input
-                            checked={proxyTargetForm.clearBasicAuthPassword}
+                            value={proxyTargetForm.basicAuthPassword}
                             onChange={(event) =>
                               setProxyTargetForm((current) => ({
                                 ...current,
-                                clearBasicAuthPassword: event.target.checked,
-                                basicAuthPassword: event.target.checked ? "" : current.basicAuthPassword
+                                basicAuthPassword: event.target.value,
+                                basicAuthPasswordDirty: true
                               }))
                             }
+                            type="password"
+                            placeholder="Optional"
+                          />
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="modal-form-section">
+                      <div>
+                        <h3>Behavior</h3>
+                      </div>
+                      <div className="form-grid modal-form-grid">
+                        <label className="field">
+                          <span>Mode</span>
+                          <select
+                            value={proxyTargetForm.mode}
+                            onChange={(event) => setProxyTargetForm((current) => ({ ...current, mode: event.target.value as ProxyTarget["mode"] }))}
+                          >
+                            <option value="monitor-only">Monitor only</option>
+                            <option value="deny-capable">Deny capable</option>
+                          </select>
+                        </label>
+                        <label className="field">
+                          <span>Outage policy</span>
+                          <select
+                            value={proxyTargetForm.outagePolicy}
+                            onChange={(event) =>
+                              setProxyTargetForm((current) => ({ ...current, outagePolicy: event.target.value as ProxyTarget["outagePolicy"] }))
+                            }
+                          >
+                            <option value="fail-open">Fail open</option>
+                            <option value="fail-closed">Fail closed</option>
+                          </select>
+                        </label>
+                        <label className="check-row">
+                          <input
+                            checked={proxyTargetForm.enabled}
+                            onChange={(event) => setProxyTargetForm((current) => ({ ...current, enabled: event.target.checked }))}
                             type="checkbox"
                           />
-                          Clear stored password
+                          Enabled
                         </label>
-                      </>
-                    ) : null}
+                      </div>
+                    </section>
+
                     <section className="tag-mapping-editor">
                       <div className="topbar-actions page-section-header">
                         <div>
@@ -1654,36 +1664,6 @@ export default function App() {
                         ))}
                       </datalist>
                     </section>
-                    <label className="field">
-                      <span>Mode</span>
-                      <select
-                        value={proxyTargetForm.mode}
-                        onChange={(event) => setProxyTargetForm((current) => ({ ...current, mode: event.target.value as ProxyTarget["mode"] }))}
-                      >
-                        <option value="monitor-only">Monitor only</option>
-                        <option value="deny-capable">Deny capable</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Outage policy</span>
-                      <select
-                        value={proxyTargetForm.outagePolicy}
-                        onChange={(event) =>
-                          setProxyTargetForm((current) => ({ ...current, outagePolicy: event.target.value as ProxyTarget["outagePolicy"] }))
-                        }
-                      >
-                        <option value="fail-open">Fail open</option>
-                        <option value="fail-closed">Fail closed</option>
-                      </select>
-                    </label>
-                    <label className="check-row">
-                      <input
-                        checked={proxyTargetForm.enabled}
-                        onChange={(event) => setProxyTargetForm((current) => ({ ...current, enabled: event.target.checked }))}
-                        type="checkbox"
-                      />
-                      Enabled
-                    </label>
                     <div className="action-row modal-actions">
                       <Button type="button" className="button-secondary" onClick={cancelProxyTargetEdit} disabled={busy}>
                         Cancel

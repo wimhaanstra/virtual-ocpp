@@ -43,10 +43,10 @@ export const emptyProxyTargetForm = (): ProxyTargetFormState => ({
   mode: "monitor-only",
   outagePolicy: "fail-open",
   basicAuthPassword: "",
-  clearUsername: false,
-  clearBasicAuthPassword: false,
   hasUsername: false,
   hasBasicAuthPassword: false,
+  usernameDirty: false,
+  basicAuthPasswordDirty: false,
   tagMappings: [],
   tagMappingsDirty: false
 });
