@@ -1704,8 +1704,8 @@ a {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  align-items: center;
-  margin: 8px 0;
+  align-items: start;
+  margin: 0;
 }
 
 .wizard-meta {
@@ -1717,6 +1717,7 @@ a {
 .wizard-meta div {
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr);
+  align-items: start;
   gap: 8px;
   min-width: 0;
 }
@@ -1725,13 +1726,20 @@ a {
   color: var(--muted);
   font-size: 11px;
   font-weight: 760;
+  line-height: 1.35;
+  padding-top: 2px;
   text-transform: uppercase;
 }
 
 .wizard-meta dd {
   margin: 0;
   min-width: 0;
+  line-height: 1.35;
   word-break: break-word;
+}
+
+.wizard-meta .copy-row .button {
+  margin-top: -6px;
 }
 
 .detected-charger-box {
