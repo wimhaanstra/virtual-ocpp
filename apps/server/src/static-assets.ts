@@ -71,5 +71,5 @@ function fileExists(path: string) {
 }
 
 function isReservedBackendPath(path: string) {
-  return path === '/health' || path.startsWith('/api/') || path === '/api' || path === '/ocpp' || path.startsWith('/ocpp/');
+  return path === '/health' || path === '/ready' || path.startsWith('/api/') || path === '/api' || path === '/ocpp' || path.startsWith('/ocpp/');
 }

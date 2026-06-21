@@ -12,9 +12,14 @@ export function createDatabase(config: Pick<AppConfig, 'sqlitePath'>) {
   const path = resolve(config.sqlitePath);
   mkdirSync(dirname(path), { recursive: true });
 
-  const client = new Database(path);
-  applyMigrations(client);
-  return drizzle(client, { schema });
+  try {
+    const client = new Database(path);
+    applyMigrations(client);
+    return drizzle(client, { schema });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`SQLite database path is not writable or cannot be opened: ${path}. ${detail}`);
+  }
 }
 
 export function applyMigrations(client: Database.Database) {

@@ -43,6 +43,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
 
   const sqlitePath = parsed.data.DB_PATH ?? parsed.data.SQLITE_PATH;
+  const productionSecretErrors = validateProductionSecrets(parsed.data);
+  if (productionSecretErrors.length > 0) {
+    throw new Error(`Invalid environment: ${productionSecretErrors.join('; ')}`);
+  }
 
   return {
     nodeEnv: parsed.data.NODE_ENV,
@@ -58,6 +62,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     chargerSilentAfterSeconds: parsed.data.CHARGER_SILENT_AFTER_SECONDS,
     meterGapThresholdWh: parsed.data.METER_GAP_THRESHOLD_WH
   };
+}
+
+function validateProductionSecrets(data: z.infer<typeof ConfigSchema>) {
+  if (data.NODE_ENV !== 'production') {
+    return [];
+  }
+
+  const errors: string[] = [];
+  if (data.SESSION_SECRET === 'replace-with-at-least-32-random-characters') {
+    errors.push('SESSION_SECRET must be replaced before production startup');
+  }
+  if (data.ADMIN_PASSWORD === 'replace-me' || data.ADMIN_PASSWORD === 'replace-me-with-at-least-8-characters') {
+    errors.push('ADMIN_PASSWORD must be replaced before production startup');
+  }
+  return errors;
 }
 
 export function loadConfigFromProcess(): AppConfig {

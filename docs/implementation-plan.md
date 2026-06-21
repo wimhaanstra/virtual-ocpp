@@ -34,26 +34,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - First-run onboarding shell: pending onboarding state automatically opens the charger setup wizard after admin login, first-run cancel marks onboarding skipped, first-run completion marks onboarding completed, and manual Settings relaunch leaves stored state unchanged.
 - First-run onboarding setup steps: onboarding modes can create or select a tag, grant it to the detected charger, optionally create a charger-scoped proxy target, and only then mark onboarding completed.
 - Documentation refresh: project, development, and deployment docs now describe current onboarding, charger context, tag access, proxy target, communication journal, simulator, live-update, Docker, and destructive charger delete behavior.
+- Deployment hardening: production placeholder secrets are rejected, SQLite startup failures include the resolved database path, `/ready` verifies database access, the Docker healthcheck uses readiness, and deployment docs explain health versus readiness.
 
 ## Next Candidate Slices
-
-### Deployment hardening
-
-Harden production deployment so operators get clearer startup failures, steadier runtime behavior, and a smaller gap between local and deployed environments.
-
-Scope:
-
-- Tighten backend startup validation for required runtime configuration, writable data paths, and deployment-specific misconfiguration.
-- Improve readiness/health reporting so operators can distinguish healthy, degraded, and not-ready states without reading raw logs.
-- Document reverse-proxy and websocket deployment requirements for keeping chargers continuously connected.
-- Make log and error output more actionable for deployment failures while keeping secrets redacted.
-
-Acceptance criteria:
-
-- Missing or invalid critical runtime configuration fails fast with actionable startup errors.
-- Health/readiness behavior distinguishes process-up from ready-to-serve state.
-- Deployment docs cover websocket forwarding, persistent data volume requirements, and restart expectations.
-- Backend tests cover configuration validation and health-state transitions for common deployment failures.
 
 ### UI density pass
 

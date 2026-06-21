@@ -67,4 +67,22 @@ describe('loadConfig', () => {
 
     expect(config.meterGapThresholdWh).toBe(2500);
   });
+
+  it('rejects placeholder production secrets', () => {
+    expect(() =>
+      loadConfig({
+        ...baseEnv,
+        NODE_ENV: 'production',
+        SESSION_SECRET: 'replace-with-at-least-32-random-characters'
+      })
+    ).toThrow(/SESSION_SECRET must be replaced/);
+
+    expect(() =>
+      loadConfig({
+        ...baseEnv,
+        NODE_ENV: 'production',
+        ADMIN_PASSWORD: 'replace-me'
+      })
+    ).toThrow(/ADMIN_PASSWORD must be replaced/);
+  });
 });

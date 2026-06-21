@@ -15,13 +15,14 @@ docker run --rm \
   --name virtual-ocpp \
   -p 3000:3000 \
   -v virtual-ocpp-data:/data \
-  -e SESSION_SECRET=replace-with-at-least-32-random-characters \
-  -e ADMIN_PASSWORD=replace-me-with-at-least-8-characters \
+  -e SESSION_SECRET="$SESSION_SECRET" \
+  -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   -e OCPP_PUBLIC_URL=ws://localhost:3000/ocpp/:chargerId \
   virtual-ocpp:local
 ```
 
 The container serves the API, OCPP websocket endpoint, and built frontend from one Fastify process on port `3000`.
+Set `SESSION_SECRET` and `ADMIN_PASSWORD` to real values before starting the container. Production startup rejects the placeholders from `.env.example` and `docker-compose.example.yml`.
 
 ## Docker Compose
 
@@ -32,6 +33,7 @@ docker compose -f docker-compose.example.yml up -d --build
 ```
 
 Inside the image, the SQLite database defaults to `/data/virtual-ocpp.sqlite`.
+Replace the example `SESSION_SECRET` and `ADMIN_PASSWORD` values before starting compose.
 
 ## Required Environment
 
@@ -56,12 +58,15 @@ Terminate TLS at your reverse proxy and forward websocket upgrades to the contai
 
 If the public charger URL uses TLS, set `OCPP_PUBLIC_URL` to a `wss://` value so the dashboard shows the correct charger-facing address.
 
-## Smoke Test
+## Health And Smoke Test
+
+`/health` reports that the process is running. `/ready` also verifies database access and is used by the Docker healthcheck.
 
 After the container starts:
 
 ```sh
 curl http://localhost:3000/health
+curl http://localhost:3000/ready
 ```
 
 Open `http://localhost:3000` and sign in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.

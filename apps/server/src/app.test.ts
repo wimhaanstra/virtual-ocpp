@@ -46,6 +46,20 @@ describe('app', () => {
     await app.close();
   });
 
+  it('returns readiness status after database access succeeds', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+
+    const response = await app.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true, database: 'ready' });
+
+    await app.close();
+  });
+
   it('accepts the configured login credentials', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();

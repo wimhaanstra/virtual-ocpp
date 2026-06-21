@@ -19,6 +19,7 @@ import { registerVisibilityRoutes } from './visibility.js';
 import { registerTagRoutes } from './tags.js';
 import { closeStaleChargerConnections } from './startup-maintenance.js';
 import { registerStaticAssetRoutes } from './static-assets.js';
+import { sessions } from './db/schema.js';
 
 type BuildAppOptions = {
   config: AppConfig;
@@ -48,6 +49,16 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWith
     ok: true
   }));
 
+  app.get('/ready', async (_request, reply) => {
+    try {
+      await db.select({ id: sessions.id }).from(sessions).limit(1);
+      return { ok: true, database: 'ready' };
+    } catch (error) {
+      requestLogReadyError(app, error);
+      return reply.code(503).send({ ok: false, database: 'unavailable' });
+    }
+  });
+
   communicationJournal.purgeExpired();
   closeStaleChargerConnections(db, liveUpdates);
 
@@ -67,4 +78,8 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWith
   }
 
   return app;
+}
+
+function requestLogReadyError(app: FastifyInstance, error: unknown) {
+  app.log.warn({ err: error }, 'readiness check failed');
 }
