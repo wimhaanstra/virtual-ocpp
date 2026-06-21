@@ -36,6 +36,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Documentation refresh: project, development, and deployment docs now describe current onboarding, charger context, tag access, proxy target, communication journal, simulator, live-update, Docker, and destructive charger delete behavior.
 - Deployment hardening: production placeholder secrets are rejected, SQLite startup failures include the resolved database path, `/ready` verifies database access, the Docker healthcheck uses readiness, and deployment docs explain health versus readiness.
 - Simulator smoke flow: `--smoke` simulator mode and `npm run smoke:simulator` provide a fast repeatable charger session that ensures tag access, sends meter samples, stops the transaction, and prints a success marker.
+- OCPP version compatibility research: documented why OCPP 1.6j to newer OCPP support should be an explicit upstream adapter layer, with OCPP 2.0.1 as the first future target and unsupported mappings visible to operators.
 
 ## Next Candidate Slices
 
@@ -200,24 +201,6 @@ Acceptance criteria:
 - Critical session/proxy/settings regressions can be reproduced by automated tests without requiring manual charger access.
 - Test helpers and fixtures keep redaction boundaries intact.
 - Development documentation points contributors to the relevant frontend and backend test commands.
-
-### OCPP newer-version research and conversion
-
-Research the path beyond OCPP 1.6j and decide whether Virtual OCPP should stop at protocol translation, support dual-stack operation, or introduce a dedicated conversion boundary.
-
-Scope:
-
-- Compare the relevant newer OCPP version targets and identify the parts that matter most for this product: authorization, transactions, metering, status, firmware, and proxy forwarding.
-- Document which local-primary assumptions break when translating between versions and where an adapter layer would need to sit.
-- Identify the highest-risk call/message conversions and the data that cannot be represented cleanly without explicit policy.
-- Keep this slice decision-oriented first; implementation should be limited to a proof of concept only if it materially derisks the recommendation.
-
-Acceptance criteria:
-
-- A design note or ADR recommends a concrete protocol strategy with clear rationale and known tradeoffs.
-- The recommendation covers charger-facing support, upstream proxy implications, data-model impact, and operator-facing behavior changes.
-- High-risk message conversions and unsupported cases are explicitly listed.
-- No production behavior changes are required unless a narrow proof of concept is intentionally included.
 
 ### Multi-upstream policy
 
