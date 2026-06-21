@@ -1393,6 +1393,38 @@ a {
   justify-content: flex-end;
 }
 
+.recovery-preview-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.recovery-result-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recovery-preview-target {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+}
+
+.recovery-preview-target pre {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .charger-wizard {
   display: grid;
   gap: 18px;

@@ -1,5 +1,7 @@
 import { eq } from 'drizzle-orm';
 import Database from 'better-sqlite3';
+import type { Server } from 'node:http';
+import { RPCServer } from 'ocpp-rpc';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { applyMigrations } from './db/client.js';
@@ -1467,6 +1469,145 @@ describe('app', () => {
     await app.close();
   });
 
+  it('submits a pending meter gap as a synthetic transaction to recovery-enabled proxy targets', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    const proxy = await startRecordingProxyServer();
+    closeDb = () => {
+      proxy.close();
+      tempDb.close();
+    };
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    const now = new Date('2026-06-19T09:00:00.000Z');
+    tempDb.db.insert(chargers).values({
+      id: 'CHARGER-GAP-SUBMIT',
+      label: 'Gap submit',
+      enabled: true,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(chargingSessions).values([
+      {
+        id: 'gap-submit-previous',
+        chargerId: 'CHARGER-GAP-SUBMIT',
+        connectorId: 1,
+        transactionId: 1,
+        idTag: 'TAG-PREVIOUS',
+        startedAt: new Date('2026-06-19T08:30:00.000Z'),
+        stoppedAt: new Date('2026-06-19T09:00:00.000Z'),
+        startMeterWh: 500,
+        stopMeterWh: 1000,
+        stopReason: 'Local',
+        status: 'stopped'
+      },
+      {
+        id: 'gap-submit-next',
+        chargerId: 'CHARGER-GAP-SUBMIT',
+        connectorId: 1,
+        transactionId: 2,
+        idTag: 'TAG-NEXT',
+        startedAt: new Date('2026-06-19T10:00:00.000Z'),
+        stoppedAt: null,
+        startMeterWh: 2500,
+        stopMeterWh: null,
+        stopReason: null,
+        status: 'active'
+      }
+    ]).run();
+    tempDb.db.insert(proxyTargets).values({
+      id: 'target-gap-submit',
+      chargerId: 'CHARGER-GAP-SUBMIT',
+      name: 'Recovery target',
+      url: proxy.endpoint,
+      username: null,
+      stationId: 'REMOTE-GAP-SUBMIT',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      allowRecoverySubmissions: true,
+      basicAuthPassword: null,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(proxyTagMappings).values({
+      id: 'mapping-gap-submit',
+      proxyTargetId: 'target-gap-submit',
+      localIdTag: 'TAG-NEXT',
+      outboundIdTag: 'TAG-REMOTE',
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(meterGapEvents).values({
+      id: 'gap-submit-event',
+      chargerId: 'CHARGER-GAP-SUBMIT',
+      connectorId: 1,
+      previousSessionId: 'gap-submit-previous',
+      newSessionId: 'gap-submit-next',
+      previousStoppedAt: new Date('2026-06-19T09:00:00.000Z'),
+      newStartedAt: new Date('2026-06-19T10:00:00.000Z'),
+      previousMeterWh: 1000,
+      newMeterStartWh: 2500,
+      deltaWh: 1500,
+      thresholdWh: 500,
+      status: 'pending',
+      submissionResultJson: null,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: '/api/meter-gap-events/gap-submit-event/recovery-preview',
+      headers: { cookie }
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({
+      idTag: 'TAG-NEXT',
+      meterStart: 1000,
+      meterStop: 2500,
+      targets: [expect.objectContaining({ proxyTargetName: 'Recovery target', canSubmit: true })]
+    });
+
+    const submitted = await app.inject({
+      method: 'POST',
+      url: '/api/meter-gap-events/gap-submit-event/submit',
+      headers: { cookie },
+      payload: {
+        startAt: '2026-06-19T09:15:00.000Z',
+        stopAt: '2026-06-19T09:45:00.000Z'
+      }
+    });
+    expect(submitted.statusCode).toBe(200);
+    expect(submitted.json()).toMatchObject({ status: 'submitted' });
+    expect(tempDb.db.select().from(meterGapEvents).where(eq(meterGapEvents.id, 'gap-submit-event')).get()?.status).toBe('submitted');
+    expect(proxy.calls.map((call) => call.method)).toEqual(['StartTransaction', 'StopTransaction']);
+    expect(proxy.calls[0]).toMatchObject({
+      identity: 'REMOTE-GAP-SUBMIT',
+      params: {
+        connectorId: 1,
+        idTag: 'TAG-REMOTE',
+        meterStart: 1000,
+        timestamp: '2026-06-19T09:15:00.000Z'
+      }
+    });
+    expect(proxy.calls[1]).toMatchObject({
+      identity: 'REMOTE-GAP-SUBMIT',
+      params: {
+        transactionId: 4242,
+        idTag: 'TAG-REMOTE',
+        meterStop: 2500,
+        timestamp: '2026-06-19T09:45:00.000Z',
+        reason: 'Other'
+      }
+    });
+
+    await app.close();
+  });
+
   it('upgrades existing meter sample tables with normalized columns and indexes', () => {
     const sqlite = new Database(':memory:');
     try {
@@ -1497,6 +1638,36 @@ describe('app', () => {
       sqlite.close();
     }
   });
+
+  it('upgrades existing proxy target tables with the recovery submission flag idempotently', () => {
+    const sqlite = new Database(':memory:');
+    try {
+      sqlite.exec(`
+        CREATE TABLE proxy_targets (
+          id text PRIMARY KEY NOT NULL,
+          charger_id text,
+          name text NOT NULL,
+          url text NOT NULL,
+          username text,
+          station_id text,
+          enabled integer NOT NULL DEFAULT 1,
+          mode text NOT NULL,
+          outage_policy text NOT NULL,
+          basic_auth_password text,
+          created_at integer NOT NULL,
+          updated_at integer NOT NULL
+        );
+      `);
+
+      applyMigrations(sqlite);
+      applyMigrations(sqlite);
+
+      const columns = sqlite.prepare('PRAGMA table_info(proxy_targets)').all() as Array<{ name: string }>;
+      expect(columns.map((column) => column.name)).toContain('allow_recovery_submissions');
+    } finally {
+      sqlite.close();
+    }
+  });
 });
 
 async function login(app: Awaited<ReturnType<typeof buildApp>>) {
@@ -1515,4 +1686,39 @@ async function login(app: Awaited<ReturnType<typeof buildApp>>) {
   }
 
   return cookie;
+}
+
+async function startRecordingProxyServer() {
+  const calls: Array<{ identity?: string; method: string; params: Record<string, unknown> }> = [];
+  const server = new RPCServer({
+    protocols: ['ocpp1.6'],
+    strictMode: false
+  });
+
+  server.auth((accept) => accept());
+  server.on('client', (client) => {
+    client.handle(({ method, params }: { method: string; params: unknown }) => {
+      calls.push({ identity: client.identity, method, params: params as Record<string, unknown> });
+
+      if (method === 'StartTransaction') {
+        return { transactionId: 4242, idTagInfo: { status: 'Accepted' } };
+      }
+      if (method === 'StopTransaction') {
+        return { idTagInfo: { status: 'Accepted' } };
+      }
+      return {};
+    });
+  });
+
+  const httpServer = (await server.listen(0, '127.0.0.1')) as Server;
+  const address = httpServer.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected proxy server to listen on a TCP port');
+  }
+
+  return {
+    calls,
+    endpoint: `ws://127.0.0.1:${address.port}`,
+    close: () => server.close({})
+  };
 }

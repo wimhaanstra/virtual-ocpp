@@ -1,4 +1,4 @@
-import { ArrowRight, Gauge, MessageSquareText, RefreshCcw } from "lucide-react";
+import { ArrowRight, CheckCircle2, Gauge, MessageSquareText, RefreshCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import type {
   ActiveSessionAuditResponse,
@@ -36,7 +36,9 @@ type DashboardViewProps = {
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
   onOpenSessions: () => void;
   onRefresh: () => void;
+  onDismissMeterGap: (event: MeterGapEvent) => void;
   onScanMeterGaps: () => void;
+  onSubmitMeterGap: (event: MeterGapEvent) => void;
 };
 
 export function DashboardView({
@@ -56,7 +58,9 @@ export function DashboardView({
   onOpenCommunication,
   onOpenSessions,
   onRefresh,
-  onScanMeterGaps
+  onDismissMeterGap,
+  onScanMeterGaps,
+  onSubmitMeterGap
 }: DashboardViewProps) {
   const primaryActiveSession = chargingStats[0] ?? null;
   const primarySessionAwaitingMeterValues = primaryActiveSession?.latestSampleAt === null;
@@ -283,7 +287,29 @@ export function DashboardView({
                     Connector {event.connectorId} · {formatDateTime(event.previousStoppedAt)} to {formatDateTime(event.newStartedAt)}
                   </p>
                 </div>
-                <span className="pill pill-warning">{event.status}</span>
+                <div className="action-row compact-action-row">
+                  <span className="pill pill-warning">{event.status}</span>
+                  <Button
+                    type="button"
+                    className="button-secondary icon-button"
+                    onClick={() => onSubmitMeterGap(event)}
+                    disabled={busy}
+                    title="Submit recovery"
+                    aria-label={`Submit meter gap ${event.id}`}
+                  >
+                    <CheckCircle2 aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    className="button-ghost icon-button"
+                    onClick={() => onDismissMeterGap(event)}
+                    disabled={busy}
+                    title="Dismiss gap"
+                    aria-label={`Dismiss meter gap ${event.id}`}
+                  >
+                    <X aria-hidden="true" />
+                  </Button>
+                </div>
               </article>
             ))}
           </div>

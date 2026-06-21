@@ -24,6 +24,7 @@ export function applyMigrations(client: Database.Database) {
     client.exec(migration);
   }
   ensureColumn(client, 'proxy_targets', 'charger_id', 'ALTER TABLE proxy_targets ADD COLUMN charger_id text');
+  ensureColumn(client, 'proxy_targets', 'allow_recovery_submissions', 'ALTER TABLE proxy_targets ADD COLUMN allow_recovery_submissions integer NOT NULL DEFAULT 0');
   ensureColumn(client, 'meter_samples', 'numeric_value', 'ALTER TABLE meter_samples ADD COLUMN numeric_value real');
   ensureColumn(client, 'meter_samples', 'normalized_value', 'ALTER TABLE meter_samples ADD COLUMN normalized_value real');
   ensureColumn(client, 'meter_samples', 'normalized_unit', 'ALTER TABLE meter_samples ADD COLUMN normalized_unit text');

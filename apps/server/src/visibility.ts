@@ -20,6 +20,10 @@ const ChargerScopedQuerySchema = z.object({
 const MeterGapEventsQuerySchema = ChargerScopedQuerySchema.extend({
   status: z.enum(['pending', 'ignored', 'submitted', 'failed']).optional()
 });
+const MeterGapSubmitSchema = z.object({
+  startAt: z.string().datetime().optional(),
+  stopAt: z.string().datetime().optional()
+});
 
 export function registerVisibilityRoutes(
   app: FastifyInstance,
@@ -144,6 +148,84 @@ export function registerVisibilityRoutes(
     return {
       items: rows.map(toPublicMeterGapEvent)
     };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/meter-gap-events/:id/dismiss', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const event = db.select().from(meterGapEvents).where(eq(meterGapEvents.id, request.params.id)).limit(1).get();
+    if (!event) return reply.code(404).send({ error: 'meter_gap_not_found' });
+    if (event.status !== 'pending') return reply.code(409).send({ error: 'meter_gap_not_pending' });
+
+    const now = new Date();
+    db.update(meterGapEvents).set({ status: 'ignored', updatedAt: now }).where(eq(meterGapEvents.id, event.id)).run();
+    recordLogEntry(db, liveUpdates, {
+      level: 'info',
+      category: 'session',
+      message: 'meter gap dismissed',
+      chargerId: event.chargerId,
+      metadata: { meterGapEventId: event.id }
+    });
+    liveUpdates?.publish('sessions', event.chargerId);
+
+    return { ...toPublicMeterGapEvent({ ...event, status: 'ignored', updatedAt: now }) };
+  });
+
+  app.get<{ Params: { id: string } }>('/api/meter-gap-events/:id/recovery-preview', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const event = db.select().from(meterGapEvents).where(eq(meterGapEvents.id, request.params.id)).limit(1).get();
+    if (!event) return reply.code(404).send({ error: 'meter_gap_not_found' });
+    if (event.status !== 'pending') return reply.code(409).send({ error: 'meter_gap_not_pending' });
+
+    return buildMeterGapRecoveryPreview(db, proxyAuthorization, event, event.previousStoppedAt ?? event.newStartedAt, event.newStartedAt);
+  });
+
+  app.post<{ Params: { id: string } }>('/api/meter-gap-events/:id/submit', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const body = MeterGapSubmitSchema.safeParse(request.body ?? {});
+    if (!body.success) return reply.code(400).send({ error: 'invalid_meter_gap_submit', details: body.error.flatten() });
+
+    const event = db.select().from(meterGapEvents).where(eq(meterGapEvents.id, request.params.id)).limit(1).get();
+    if (!event) return reply.code(404).send({ error: 'meter_gap_not_found' });
+    if (event.status !== 'pending') return reply.code(409).send({ error: 'meter_gap_not_pending' });
+    if (!proxyAuthorization) return reply.code(503).send({ error: 'proxy_service_unavailable' });
+
+    const startAt = new Date(body.data.startAt ?? event.previousStoppedAt?.toISOString() ?? event.newStartedAt.toISOString());
+    const stopAt = new Date(body.data.stopAt ?? event.newStartedAt.toISOString());
+    if (!(stopAt > startAt)) return reply.code(400).send({ error: 'invalid_recovery_time_range' });
+    if (event.newMeterStartWh <= event.previousMeterWh) return reply.code(400).send({ error: 'invalid_recovery_meter_range' });
+
+    const preview = buildMeterGapRecoveryPreview(db, proxyAuthorization, event, startAt, stopAt);
+    const results = await proxyAuthorization.submitRecoveryTransaction(event.chargerId, {
+      connectorId: event.connectorId,
+      idTag: preview.idTag,
+      meterStart: event.previousMeterWh,
+      meterStop: event.newMeterStartWh,
+      startAt: startAt.toISOString(),
+      stopAt: stopAt.toISOString()
+    });
+    const status = results.length > 0 && results.every((result) => result.attempted && result.ok) ? 'submitted' : 'pending';
+    const now = new Date();
+    db.update(meterGapEvents)
+      .set({
+        status,
+        submissionResultJson: JSON.stringify({ startAt: startAt.toISOString(), stopAt: stopAt.toISOString(), results }),
+        updatedAt: now
+      })
+      .where(eq(meterGapEvents.id, event.id))
+      .run();
+    recordLogEntry(db, liveUpdates, {
+      level: status === 'submitted' ? 'info' : 'warn',
+      category: 'session',
+      message: status === 'submitted' ? 'meter gap submitted' : 'meter gap submission incomplete',
+      chargerId: event.chargerId,
+      metadata: { meterGapEventId: event.id, results }
+    });
+    liveUpdates?.publish('sessions', event.chargerId);
+
+    return { ...preview, status, results };
   });
 
   app.get<{ Params: { id: string } }>('/api/sessions/:id/force-close-preview', async (request, reply) => {
@@ -680,6 +762,44 @@ function toPublicMeterGapEvent(event: typeof meterGapEvents.$inferSelect) {
     submissionResult: parseSubmissionResult(event.submissionResultJson),
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString()
+  };
+}
+
+function buildMeterGapRecoveryPreview(
+  db: Database,
+  proxyAuthorization: ProxyAuthorizationService | undefined,
+  event: typeof meterGapEvents.$inferSelect,
+  startAt: Date,
+  stopAt: Date
+) {
+  const previousSession = event.previousSessionId
+    ? db.select().from(chargingSessions).where(eq(chargingSessions.id, event.previousSessionId)).limit(1).get()
+    : null;
+  const newSession = db.select().from(chargingSessions).where(eq(chargingSessions.id, event.newSessionId)).limit(1).get();
+  const idTag = newSession?.idTag || previousSession?.idTag || 'RECOVERY';
+  const targets =
+    proxyAuthorization?.getRecoverySubmissionTargets(event.chargerId, {
+      connectorId: event.connectorId,
+      idTag,
+      meterStart: event.previousMeterWh,
+      meterStop: event.newMeterStartWh,
+      startAt: startAt.toISOString(),
+      stopAt: stopAt.toISOString()
+    }) ?? [];
+
+  return {
+    event: toPublicMeterGapEvent(event),
+    idTag,
+    startAt: startAt.toISOString(),
+    stopAt: stopAt.toISOString(),
+    meterStart: event.previousMeterWh,
+    meterStop: event.newMeterStartWh,
+    deltaWh: event.deltaWh,
+    targets: targets.map((target) => ({
+      ...target,
+      enabledForRecovery: true,
+      canSubmit: !target.hasActiveTransaction
+    }))
   };
 }
 

@@ -43,6 +43,7 @@ export const emptyProxyTargetForm = (): ProxyTargetFormState => ({
   enabled: true,
   mode: "monitor-only",
   outagePolicy: "fail-open",
+  allowRecoverySubmissions: false,
   basicAuthPassword: "",
   hasUsername: false,
   hasBasicAuthPassword: false,

@@ -182,6 +182,8 @@ Operators can also run the same detection manually from the charger dashboard me
 
 The first known session for a charger/connector is treated as the meter baseline. Virtual OCPP does not create a meter-gap event before that first session because there is no previous stopped meter value that can be submitted or reconciled.
 
+Pending meter gaps can be dismissed from the dashboard when they are known noise. They can also be submitted as a recovery replay to proxy targets that have `Allow recovery submissions` enabled. OCPP 1.6 does not define a separate historical insert command, so Virtual OCPP sends a synthetic `StartTransaction` and `StopTransaction` with operator-selected timestamps, the previous stopped meter as `meterStart`, and the later session start meter as `meterStop`. Targets with an active proxy transaction are skipped to avoid mixing recovery energy into a live session. The UI previews the exact payloads before submission because upstream platforms may treat historical timestamps differently.
+
 Proxy target forms treat `url` as the upstream base websocket URL and append `stationId`, or the local charger id when `stationId` is blank, as the upstream OCPP identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 
 ## Communication Journal Workflow

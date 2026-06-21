@@ -121,6 +121,7 @@ export const proxyTargets = sqliteTable('proxy_targets', {
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   mode: text('mode').notNull(),
   outagePolicy: text('outage_policy').notNull(),
+  allowRecoverySubmissions: integer('allow_recovery_submissions', { mode: 'boolean' }).notNull().default(false),
   basicAuthPassword: text('basic_auth_password'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull()

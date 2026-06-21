@@ -39,6 +39,8 @@ import type {
   LogEntry,
   MeterGapEvent,
   MeterGapEventsResponse,
+  MeterGapRecoveryPreview,
+  MeterGapRecoverySubmitResponse,
   ProxyHealthResponse,
   ProxyTagMapping,
   ProxyTarget,
@@ -86,6 +88,11 @@ export default function App() {
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [forceClosePreview, setForceClosePreview] = useState<ForceClosePreview | null>(null);
   const [forceCloseLoading, setForceCloseLoading] = useState(false);
+  const [meterGapSubmitPreview, setMeterGapSubmitPreview] = useState<MeterGapRecoveryPreview | null>(null);
+  const [meterGapSubmitStartAt, setMeterGapSubmitStartAt] = useState("");
+  const [meterGapSubmitStopAt, setMeterGapSubmitStopAt] = useState("");
+  const [meterGapSubmitLoading, setMeterGapSubmitLoading] = useState(false);
+  const [meterGapSubmitResult, setMeterGapSubmitResult] = useState<MeterGapRecoverySubmitResponse | null>(null);
   const [remoteStopTarget, setRemoteStopTarget] = useState<ChargingSession | null>(null);
   const [chargerLabelTarget, setChargerLabelTarget] = useState<ChargerRegistryRow | null>(null);
   const [chargerLabelValue, setChargerLabelValue] = useState("");
@@ -711,6 +718,87 @@ export default function App() {
     }
   }
 
+  async function dismissMeterGap(event: MeterGapEvent) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/meter-gap-events/${event.id}/dismiss`, {
+        method: "POST",
+        credentials: "include"
+      });
+      if (!response.ok) {
+        setMessage("Could not dismiss meter gap.");
+        return;
+      }
+      setMessage("Meter gap dismissed.");
+      await loadMeterGapEvents(event.chargerId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openMeterGapSubmit(event: MeterGapEvent) {
+    setBusy(true);
+    setMeterGapSubmitLoading(true);
+    try {
+      const previewResponse = await fetch(`/api/meter-gap-events/${event.id}/recovery-preview`, { credentials: "include" });
+      if (!previewResponse.ok) {
+        setMessage("Could not prepare meter gap submission.");
+        return;
+      }
+      const preview = (await previewResponse.json()) as MeterGapRecoveryPreview;
+      if (preview.targets.filter((target) => target.canSubmit).length === 0) {
+        setMessage("No recovery-enabled proxy target is available for this gap.");
+        return;
+      }
+      setMeterGapSubmitPreview(preview);
+      setMeterGapSubmitStartAt(preview.startAt);
+      setMeterGapSubmitStopAt(preview.stopAt);
+      setMeterGapSubmitResult(null);
+    } finally {
+      setMeterGapSubmitLoading(false);
+      setBusy(false);
+    }
+  }
+
+  function cancelMeterGapSubmit() {
+    setMeterGapSubmitPreview(null);
+    setMeterGapSubmitStartAt("");
+    setMeterGapSubmitStopAt("");
+    setMeterGapSubmitLoading(false);
+    setMeterGapSubmitResult(null);
+  }
+
+  async function submitMeterGapRecovery() {
+    if (!meterGapSubmitPreview) return;
+
+    setBusy(true);
+    setMeterGapSubmitLoading(true);
+    try {
+      const response = await fetch(`/api/meter-gap-events/${meterGapSubmitPreview.event.id}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ startAt: meterGapSubmitStartAt, stopAt: meterGapSubmitStopAt })
+      });
+      if (!response.ok) {
+        setMessage("Could not submit meter gap recovery.");
+        return;
+      }
+      const result = (await response.json()) as MeterGapRecoverySubmitResponse;
+      setMeterGapSubmitResult(result);
+      await loadMeterGapEvents(meterGapSubmitPreview.event.chargerId);
+      if (result.status === "submitted") {
+        setMessage("Meter gap recovery submitted.");
+        cancelMeterGapSubmit();
+      } else {
+        setMessage("Meter gap recovery needs review.");
+      }
+    } finally {
+      setMeterGapSubmitLoading(false);
+      setBusy(false);
+    }
+  }
+
   async function previewForceCloseChargingSession(session: ChargingSession) {
     setBusy(true);
     setForceCloseLoading(true);
@@ -1106,6 +1194,7 @@ export default function App() {
       enabled: target.enabled,
       mode: target.mode,
       outagePolicy: target.outagePolicy,
+      allowRecoverySubmissions: target.allowRecoverySubmissions,
       basicAuthPassword: target.hasBasicAuthPassword ? "********" : "",
       hasUsername: target.hasUsername,
       hasBasicAuthPassword: target.hasBasicAuthPassword,
@@ -1161,7 +1250,8 @@ export default function App() {
         url: proxyTargetForm.url.trim(),
         enabled: proxyTargetForm.enabled,
         mode: proxyTargetForm.mode,
-        outagePolicy: proxyTargetForm.outagePolicy
+        outagePolicy: proxyTargetForm.outagePolicy,
+        allowRecoverySubmissions: proxyTargetForm.allowRecoverySubmissions
       };
 
       if (!isEditingProxyTarget && selectedChargerId) {
@@ -1340,7 +1430,9 @@ export default function App() {
             onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
             onNavigate={navigateToView}
             onRefresh={() => void loadScopedData(selectedChargerId)}
+            onDismissMeterGap={(event) => void dismissMeterGap(event)}
             onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
+            onSubmitMeterGap={(event) => void openMeterGapSubmit(event)}
           />
         ) : activeView === "Chargers" ? (
           <ChargersView
@@ -1487,6 +1579,7 @@ export default function App() {
                           <th>Station ID</th>
                           <th>Mode</th>
                           <th>Outage</th>
+                          <th>Recovery</th>
                           <th>Status</th>
                           <th>Credentials</th>
                           <th>Tag mappings</th>
@@ -1501,6 +1594,7 @@ export default function App() {
                             <td className="mono">{target.stationId || "Default"}</td>
                             <td>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</td>
                             <td>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</td>
+                            <td>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</td>
                             <td>
                               <span className={`pill ${target.enabled ? "pill-good" : "pill-warning"}`}>
                                 {target.enabled ? "Enabled" : "Disabled"}
@@ -1679,6 +1773,14 @@ export default function App() {
                           />
                           Enabled
                         </label>
+                        <label className="check-row">
+                          <input
+                            checked={proxyTargetForm.allowRecoverySubmissions}
+                            onChange={(event) => setProxyTargetForm((current) => ({ ...current, allowRecoverySubmissions: event.target.checked }))}
+                            type="checkbox"
+                          />
+                          Allow recovery submissions
+                        </label>
                       </div>
                     </section>
 
@@ -1771,6 +1873,97 @@ export default function App() {
         onCancel={cancelForceClosePreview}
         onExecute={() => void executeForceCloseChargingSession()}
       />
+      {meterGapSubmitPreview ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="meter-gap-submit-title">
+            <div className="topbar-actions page-section-header">
+              <div>
+                <p className="eyebrow">Recovery replay</p>
+                <h2 id="meter-gap-submit-title">Submit meter gap</h2>
+                <p className="status-copy">Virtual OCPP will replay one synthetic StartTransaction and StopTransaction to recovery-enabled targets.</p>
+              </div>
+              <Button type="button" className="button-ghost icon-button" onClick={cancelMeterGapSubmit} disabled={busy} aria-label="Close meter gap recovery modal">
+                <X aria-hidden="true" />
+              </Button>
+            </div>
+            <div className="modal-section-form">
+              <section className="modal-form-section">
+                <h3>Replay window</h3>
+                <div className="form-grid modal-form-grid">
+                  <label>
+                    Start time
+                    <input value={meterGapSubmitStartAt} onChange={(event) => setMeterGapSubmitStartAt(event.target.value)} />
+                  </label>
+                  <label>
+                    Stop time
+                    <input value={meterGapSubmitStopAt} onChange={(event) => setMeterGapSubmitStopAt(event.target.value)} />
+                  </label>
+                  <label>
+                    Start meter
+                    <input readOnly value={`${meterGapSubmitPreview.meterStart} Wh`} />
+                  </label>
+                  <label>
+                    Stop meter
+                    <input readOnly value={`${meterGapSubmitPreview.meterStop} Wh`} />
+                  </label>
+                </div>
+              </section>
+              <section className="modal-form-section">
+                <h3>Target payload</h3>
+                <div className="recovery-preview-grid">
+                  {meterGapSubmitPreview.targets.map((target) => (
+                    <article className="recovery-preview-target" key={target.proxyTargetId}>
+                      <div className="proxy-health-item__header">
+                        <div>
+                          <strong>{target.proxyTargetName}</strong>
+                          <p className="status-copy mono">{target.proxyTargetId}</p>
+                        </div>
+                        <span className={`pill ${target.canSubmit ? "pill-good" : "pill-warning"}`}>{target.canSubmit ? "Ready" : "Active transaction"}</span>
+                      </div>
+                      <pre>
+                        {JSON.stringify(
+                          {
+                            StartTransaction: { ...target.startTransaction, timestamp: meterGapSubmitStartAt },
+                            StopTransaction: { ...target.stopTransaction, timestamp: meterGapSubmitStopAt }
+                          },
+                          null,
+                          2
+                        )}
+                      </pre>
+                    </article>
+                  ))}
+                </div>
+              </section>
+              {meterGapSubmitResult ? (
+                <section className="modal-form-section">
+                  <h3>Submission result</h3>
+                  <div className="recovery-result-list">
+                    {meterGapSubmitResult.results.map((result) => (
+                      <article className="proxy-health-item" key={result.proxyTargetId}>
+                        <div className="proxy-health-item__header">
+                          <div>
+                            <strong>{result.proxyTargetName}</strong>
+                            <p className="status-copy">{result.reason ?? (result.ok ? `Transaction ${result.externalTransactionId ?? "-"}` : "Submission failed")}</p>
+                          </div>
+                          <span className={`pill ${result.ok ? "pill-good" : "pill-warning"}`}>{result.ok ? "Submitted" : result.attempted ? "Failed" : "Skipped"}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              <div className="action-row modal-actions">
+                <Button type="button" className="button-secondary" onClick={cancelMeterGapSubmit} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={() => void submitMeterGapRecovery()} disabled={busy || meterGapSubmitLoading || !meterGapSubmitStartAt || !meterGapSubmitStopAt}>
+                  Submit recovery
+                </Button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <RemoteStopConfirmModal
         busy={busy}
         session={remoteStopTarget}

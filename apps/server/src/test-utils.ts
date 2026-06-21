@@ -152,6 +152,7 @@ export function createTestDatabase() {
       enabled integer NOT NULL DEFAULT 1,
       mode text NOT NULL,
       outage_policy text NOT NULL,
+      allow_recovery_submissions integer NOT NULL DEFAULT 0,
       basic_auth_password text,
       created_at integer NOT NULL,
       updated_at integer NOT NULL

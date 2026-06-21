@@ -37,6 +37,7 @@ type TestProxyTarget = {
   enabled: boolean;
   mode: "monitor-only" | "deny-capable";
   outagePolicy: "fail-open" | "fail-closed";
+  allowRecoverySubmissions: boolean;
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
   tagMappings?: Array<{ id?: string; localIdTag: string; outboundIdTag: string }>;
@@ -1929,6 +1930,7 @@ describe("App", () => {
         enabled: true,
         mode: "deny-capable" as const,
         outagePolicy: "fail-closed" as const,
+        allowRecoverySubmissions: false,
         hasUsername: true,
         hasBasicAuthPassword: true,
         tagMappings: [{ id: "mapping-1", localIdTag: "LOCAL-TAG", outboundIdTag: "REMOTE-TAG" }],
@@ -1995,6 +1997,7 @@ describe("App", () => {
           enabled?: boolean;
           mode?: "monitor-only" | "deny-capable";
           outagePolicy?: "fail-open" | "fail-closed";
+          allowRecoverySubmissions?: boolean;
           basicAuthPassword?: string | null;
           tagMappings?: Array<{ localIdTag: string; outboundIdTag: string }>;
         };
@@ -2006,6 +2009,7 @@ describe("App", () => {
           enabled: body.enabled ?? target.enabled,
           mode: body.mode ?? target.mode,
           outagePolicy: body.outagePolicy ?? target.outagePolicy,
+          allowRecoverySubmissions: body.allowRecoverySubmissions ?? target.allowRecoverySubmissions,
           hasUsername: body.username === undefined ? target.hasUsername : Boolean(body.username),
           hasBasicAuthPassword: body.basicAuthPassword === undefined ? target.hasBasicAuthPassword : Boolean(body.basicAuthPassword),
           tagMappings: body.tagMappings === undefined ? target.tagMappings : body.tagMappings
@@ -2054,7 +2058,8 @@ describe("App", () => {
       stationId: "STATION-1",
       enabled: true,
       mode: "deny-capable",
-      outagePolicy: "fail-closed"
+      outagePolicy: "fail-closed",
+      allowRecoverySubmissions: false
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
@@ -2163,6 +2168,7 @@ describe("App", () => {
           enabled?: boolean;
           mode?: "monitor-only" | "deny-capable";
           outagePolicy?: "fail-open" | "fail-closed";
+          allowRecoverySubmissions?: boolean;
           stationId?: string | null;
           tagMappings?: Array<{ localIdTag: string; outboundIdTag: string }>;
         };
@@ -2175,6 +2181,7 @@ describe("App", () => {
             enabled: body.enabled ?? true,
             mode: body.mode ?? "monitor-only",
             outagePolicy: body.outagePolicy ?? "fail-open",
+            allowRecoverySubmissions: body.allowRecoverySubmissions ?? false,
             hasUsername: false,
             hasBasicAuthPassword: false,
             tagMappings: body.tagMappings,
@@ -2228,6 +2235,7 @@ describe("App", () => {
       enabled: true,
       mode: "deny-capable",
       outagePolicy: "fail-closed",
+      allowRecoverySubmissions: false,
       chargerId: selectedChargerId,
       stationId: "STATION-1",
       tagMappings: [

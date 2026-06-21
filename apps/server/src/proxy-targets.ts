@@ -41,6 +41,7 @@ const CreateProxyTargetSchema = z.object({
   enabled: z.boolean().default(true),
   mode: ModeSchema.default('monitor-only'),
   outagePolicy: OutagePolicySchema.default('fail-open'),
+  allowRecoverySubmissions: z.boolean().default(false),
   basicAuthPassword: z.string().min(1).nullable().optional(),
   tagMappings: TagMappingsSchema.optional()
 });
@@ -54,6 +55,7 @@ const UpdateProxyTargetSchema = z.object({
   enabled: z.boolean().optional(),
   mode: ModeSchema.optional(),
   outagePolicy: OutagePolicySchema.optional(),
+  allowRecoverySubmissions: z.boolean().optional(),
   basicAuthPassword: z.string().min(1).nullable().optional(),
   tagMappings: TagMappingsSchema.optional()
 });
@@ -123,6 +125,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       enabled: body.data.enabled,
       mode: body.data.mode,
       outagePolicy: body.data.outagePolicy,
+      allowRecoverySubmissions: body.data.allowRecoverySubmissions,
       basicAuthPassword: body.data.basicAuthPassword || null,
       createdAt: now,
       updatedAt: now
@@ -162,6 +165,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       enabled: body.data.enabled ?? existing.enabled,
       mode: body.data.mode ?? existing.mode,
       outagePolicy: body.data.outagePolicy ?? existing.outagePolicy,
+      allowRecoverySubmissions: body.data.allowRecoverySubmissions ?? existing.allowRecoverySubmissions,
       basicAuthPassword:
         body.data.basicAuthPassword === undefined ? existing.basicAuthPassword : body.data.basicAuthPassword || null,
       updatedAt: new Date()
@@ -231,6 +235,7 @@ function toPublicProxyTarget(db: Database, target: typeof proxyTargets.$inferSel
     enabled: target.enabled,
     mode: target.mode,
     outagePolicy: target.outagePolicy,
+    allowRecoverySubmissions: target.allowRecoverySubmissions,
     hasBasicAuthPassword: Boolean(target.basicAuthPassword),
     tagMappings: db
       .select()

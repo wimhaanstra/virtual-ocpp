@@ -46,6 +46,7 @@ export type ProxyTarget = {
   enabled: boolean;
   mode: "monitor-only" | "deny-capable";
   outagePolicy: "fail-open" | "fail-closed";
+  allowRecoverySubmissions: boolean;
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
   tagMappings?: ProxyTagMapping[];
@@ -138,6 +139,46 @@ export type MeterGapEvent = {
 
 export type MeterGapEventsResponse = {
   items: MeterGapEvent[];
+};
+
+export type MeterGapRecoveryPreview = {
+  event: MeterGapEvent;
+  idTag: string;
+  startAt: string;
+  stopAt: string;
+  meterStart: number;
+  meterStop: number;
+  deltaWh: number;
+  targets: Array<{
+    proxyTargetId: string;
+    proxyTargetName: string;
+    hasActiveTransaction: boolean;
+    canSubmit: boolean;
+    startTransaction: {
+      connectorId: number;
+      idTag: string;
+      meterStart: number;
+      timestamp: string;
+    };
+    stopTransaction: {
+      idTag: string;
+      meterStop: number;
+      timestamp: string;
+      reason: string;
+    };
+  }>;
+};
+
+export type MeterGapRecoverySubmitResponse = MeterGapRecoveryPreview & {
+  status: "pending" | "submitted";
+  results: Array<{
+    proxyTargetId: string;
+    proxyTargetName: string;
+    attempted: boolean;
+    ok: boolean;
+    reason?: string;
+    externalTransactionId?: number;
+  }>;
 };
 
 export type SessionSummary = {
@@ -334,6 +375,7 @@ export type ProxyTargetFormState = {
   enabled: boolean;
   mode: ProxyTarget["mode"];
   outagePolicy: ProxyTarget["outagePolicy"];
+  allowRecoverySubmissions: boolean;
   basicAuthPassword: string;
   hasUsername: boolean;
   hasBasicAuthPassword: boolean;
