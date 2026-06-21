@@ -1654,7 +1654,7 @@ a {
 
 .charger-wizard-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -1683,6 +1683,7 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: start;
   width: 30px;
   height: 30px;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
@@ -1691,6 +1692,7 @@ a {
   color: var(--accent);
   font-size: 12px;
   font-weight: 800;
+  margin-top: -2px;
 }
 
 .copy-row {
