@@ -121,6 +121,10 @@ const emptyVisibilityResponses = (url: string, method: string) => {
     return new Response(JSON.stringify({ items: [] }), { status: 200 });
   }
 
+  if (path.endsWith("/meter-gaps/scan") && method === "POST") {
+    return new Response(JSON.stringify({ chargerId: "SMART-EVSE-1", thresholdWh: 1000, created: 0, existing: 0, ignored: 0 }), { status: 200 });
+  }
+
   if ((path === "/api/live-updates" || path === "/api/events") && method === "GET") {
     return new Response("", {
       status: 404
@@ -591,6 +595,11 @@ describe("App", () => {
     expect(screen.getByText("1.00 kWh")).toBeInTheDocument();
     expect(screen.getByText("Charging", { selector: ".charging-session-status" })).toBeInTheDocument();
     expect(screen.getByText(/Charging, waiting for first MeterValues\./)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/chargers/SMART-EVSE-1/meter-gaps/scan" && init?.method === "POST")).toBe(true);
+    });
   });
 
   it("drills from proxy health into the filtered communication journal", async () => {

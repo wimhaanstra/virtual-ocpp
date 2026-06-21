@@ -10,6 +10,7 @@ import {
   chargingSessions,
   communicationJournal,
   logs,
+  meterGapEvents,
   meterSamples,
   proxySessionMappings,
   proxyTagMappings,
@@ -1349,6 +1350,75 @@ describe('app', () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({ error: 'charger_not_connected' });
     expect(tempDb.db.select().from(logs).all().some((row) => row.message === 'remote stop transaction failed')).toBe(true);
+
+    await app.close();
+  });
+
+  it('manually scans existing sessions for meter gaps without creating duplicates', async () => {
+    const config = testConfig({ meterGapThresholdWh: 500 });
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    const now = new Date('2026-06-19T09:00:00.000Z');
+    tempDb.db.insert(chargers).values({
+      id: 'CHARGER-GAP-SCAN',
+      label: 'Gap scan',
+      enabled: true,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(chargingSessions).values([
+      {
+        id: 'gap-scan-previous',
+        chargerId: 'CHARGER-GAP-SCAN',
+        connectorId: 1,
+        transactionId: 1,
+        idTag: 'TAG',
+        startedAt: new Date('2026-06-19T09:00:00.000Z'),
+        stoppedAt: new Date('2026-06-19T09:30:00.000Z'),
+        startMeterWh: 500,
+        stopMeterWh: 1000,
+        stopReason: 'Local',
+        status: 'stopped'
+      },
+      {
+        id: 'gap-scan-next',
+        chargerId: 'CHARGER-GAP-SCAN',
+        connectorId: 1,
+        transactionId: 2,
+        idTag: 'TAG',
+        startedAt: new Date('2026-06-19T10:00:00.000Z'),
+        stoppedAt: new Date('2026-06-19T10:30:00.000Z'),
+        startMeterWh: 2500,
+        stopMeterWh: 2800,
+        stopReason: 'Local',
+        status: 'stopped'
+      }
+    ]).run();
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/chargers/CHARGER-GAP-SCAN/meter-gaps/scan',
+      headers: { cookie },
+      payload: {}
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({ chargerId: 'CHARGER-GAP-SCAN', thresholdWh: 500, created: 1, existing: 0 });
+    expect(tempDb.db.select().from(meterGapEvents).all()).toHaveLength(1);
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/chargers/CHARGER-GAP-SCAN/meter-gaps/scan',
+      headers: { cookie },
+      payload: {}
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ created: 0, existing: 1 });
+    expect(tempDb.db.select().from(meterGapEvents).all()).toHaveLength(1);
 
     await app.close();
   });

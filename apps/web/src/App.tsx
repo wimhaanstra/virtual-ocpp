@@ -684,6 +684,33 @@ export default function App() {
     setChargingStatsStatus("ready");
   }
 
+  async function scanMeterGaps(chargerId = selectedChargerId) {
+    if (!chargerId) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/chargers/${encodeURIComponent(chargerId)}/meter-gaps/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({})
+      });
+      if (!response.ok) {
+        setMessage("Could not scan meter gaps.");
+        return;
+      }
+
+      const result = (await response.json()) as { created: number; existing: number; ignored: number };
+      setMessage(
+        result.created > 0
+          ? `Detected ${result.created} meter gap${result.created === 1 ? "" : "s"}.`
+          : "No new meter gaps detected."
+      );
+      await Promise.all([loadMeterGapEvents(chargerId), loadChargingSessions(chargerId), loadSessionSummary(chargerId)]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function previewForceCloseChargingSession(session: ChargingSession) {
     setBusy(true);
     setForceCloseLoading(true);
@@ -1313,6 +1340,7 @@ export default function App() {
             onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
             onNavigate={navigateToView}
             onRefresh={() => void loadScopedData(selectedChargerId)}
+            onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
           />
         ) : activeView === "Chargers" ? (
           <ChargersView

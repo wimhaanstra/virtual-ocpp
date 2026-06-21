@@ -249,48 +249,63 @@ export class OcppRepository {
 
     if (!previousSession || typeof previousSession.stopMeterWh !== 'number') return null;
 
-    const deltaWh = input.meterStart - previousSession.stopMeterWh;
-    if (deltaWh < input.thresholdWh) return null;
-
-    const now = new Date();
-    const id = randomUUID();
-    this.db.insert(meterGapEvents).values({
-      id,
+    const result = this.createMeterGapEventIfNeeded({
       chargerId: input.chargerId,
       connectorId: input.connectorId,
-      previousSessionId: previousSession.id,
+      previousSession,
       newSessionId: input.newSessionId,
-      previousStoppedAt: previousSession.stoppedAt,
       newStartedAt: input.startedAt,
-      previousMeterWh: previousSession.stopMeterWh,
       newMeterStartWh: input.meterStart,
-      deltaWh,
-      thresholdWh: input.thresholdWh,
-      status: 'pending',
-      createdAt: now,
-      updatedAt: now
-    }).run();
-
-    this.recordLog({
-      level: 'warn',
-      category: 'session',
-      message: 'meter gap detected',
-      chargerId: input.chargerId,
-      transactionId: this.db.select().from(chargingSessions).where(eq(chargingSessions.id, input.newSessionId)).limit(1).get()?.transactionId,
-      metadata: {
-        meterGapEventId: id,
-        connectorId: input.connectorId,
-        previousSessionId: previousSession.id,
-        newSessionId: input.newSessionId,
-        previousMeterWh: previousSession.stopMeterWh,
-        newMeterStartWh: input.meterStart,
-        deltaWh,
-        thresholdWh: input.thresholdWh
-      }
+      thresholdWh: input.thresholdWh
     });
+    return result.created ? result.id : null;
+  }
+
+  scanMeterGaps(input: { chargerId: string; thresholdWh: number }) {
+    if (input.thresholdWh <= 0) {
+      return { created: 0, existing: 0, ignored: 0 };
+    }
+
+    const rows = this.db
+      .select()
+      .from(chargingSessions)
+      .where(eq(chargingSessions.chargerId, input.chargerId))
+      .orderBy(chargingSessions.connectorId, chargingSessions.startedAt)
+      .all();
+    const byConnector = new Map<number, typeof rows>();
+    for (const session of rows) {
+      const sessions = byConnector.get(session.connectorId) ?? [];
+      sessions.push(session);
+      byConnector.set(session.connectorId, sessions);
+    }
+
+    const totals = { created: 0, existing: 0, ignored: 0 };
+    for (const [connectorId, sessions] of byConnector.entries()) {
+      let previousStoppedSession: typeof sessions[number] | null = null;
+      for (const session of sessions) {
+        if (typeof session.startMeterWh === 'number' && previousStoppedSession?.stopMeterWh !== null && previousStoppedSession?.stopMeterWh !== undefined) {
+          const result = this.createMeterGapEventIfNeeded({
+            chargerId: input.chargerId,
+            connectorId,
+            previousSession: previousStoppedSession,
+            newSessionId: session.id,
+            newStartedAt: session.startedAt,
+            newMeterStartWh: session.startMeterWh,
+            thresholdWh: input.thresholdWh
+          });
+          totals[result.created ? 'created' : result.existing ? 'existing' : 'ignored'] += 1;
+        } else if (previousStoppedSession) {
+          totals.ignored += 1;
+        }
+
+        if (session.status === 'stopped' && typeof session.stopMeterWh === 'number') {
+          previousStoppedSession = session;
+        }
+      }
+    }
 
     this.liveUpdates?.publish('sessions', input.chargerId);
-    return id;
+    return totals;
   }
 
   getActiveSessionsForConnector(chargerId: string, connectorId: number) {
@@ -535,6 +550,75 @@ export class OcppRepository {
       updatedAt: new Date().toISOString(),
       reason: 'state_changed'
     });
+  }
+
+  private createMeterGapEventIfNeeded(input: {
+    chargerId: string;
+    connectorId: number;
+    previousSession: typeof chargingSessions.$inferSelect;
+    newSessionId: string;
+    newStartedAt: Date;
+    newMeterStartWh: number;
+    thresholdWh: number;
+  }) {
+    if (typeof input.previousSession.stopMeterWh !== 'number') return { created: false, existing: false, ignored: true, id: null };
+
+    const deltaWh = input.newMeterStartWh - input.previousSession.stopMeterWh;
+    if (deltaWh < input.thresholdWh) return { created: false, existing: false, ignored: true, id: null };
+
+    const existing = this.db
+      .select()
+      .from(meterGapEvents)
+      .where(
+        and(
+          eq(meterGapEvents.chargerId, input.chargerId),
+          eq(meterGapEvents.connectorId, input.connectorId),
+          eq(meterGapEvents.previousSessionId, input.previousSession.id),
+          eq(meterGapEvents.newSessionId, input.newSessionId)
+        )
+      )
+      .limit(1)
+      .get();
+    if (existing) return { created: false, existing: true, ignored: false, id: existing.id };
+
+    const now = new Date();
+    const id = randomUUID();
+    this.db.insert(meterGapEvents).values({
+      id,
+      chargerId: input.chargerId,
+      connectorId: input.connectorId,
+      previousSessionId: input.previousSession.id,
+      newSessionId: input.newSessionId,
+      previousStoppedAt: input.previousSession.stoppedAt,
+      newStartedAt: input.newStartedAt,
+      previousMeterWh: input.previousSession.stopMeterWh,
+      newMeterStartWh: input.newMeterStartWh,
+      deltaWh,
+      thresholdWh: input.thresholdWh,
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now
+    }).run();
+
+    this.recordLog({
+      level: 'warn',
+      category: 'session',
+      message: 'meter gap detected',
+      chargerId: input.chargerId,
+      transactionId: this.db.select().from(chargingSessions).where(eq(chargingSessions.id, input.newSessionId)).limit(1).get()?.transactionId,
+      metadata: {
+        meterGapEventId: id,
+        connectorId: input.connectorId,
+        previousSessionId: input.previousSession.id,
+        newSessionId: input.newSessionId,
+        previousMeterWh: input.previousSession.stopMeterWh,
+        newMeterStartWh: input.newMeterStartWh,
+        deltaWh,
+        thresholdWh: input.thresholdWh
+      }
+    });
+
+    return { created: true, existing: false, ignored: false, id };
   }
 }
 

@@ -36,6 +36,7 @@ type DashboardViewProps = {
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
   onOpenSessions: () => void;
   onRefresh: () => void;
+  onScanMeterGaps: () => void;
 };
 
 export function DashboardView({
@@ -54,7 +55,8 @@ export function DashboardView({
   onNavigate,
   onOpenCommunication,
   onOpenSessions,
-  onRefresh
+  onRefresh,
+  onScanMeterGaps
 }: DashboardViewProps) {
   const primaryActiveSession = chargingStats[0] ?? null;
   const primarySessionAwaitingMeterValues = primaryActiveSession?.latestSampleAt === null;
@@ -259,15 +261,19 @@ export function DashboardView({
         </section>
       </section>
 
-      {meterGapEvents.length > 0 ? (
-        <section className="panel table-panel">
-          <div className="topbar-actions page-section-header">
-            <div>
-              <p className="eyebrow">Recovery</p>
-              <h2>Meter gaps</h2>
-              <p className="status-copy">Possible missed charging between a previous stop meter and a later session start meter.</p>
-            </div>
+      <section className="panel table-panel">
+        <div className="topbar-actions page-section-header">
+          <div>
+            <p className="eyebrow">Recovery</p>
+            <h2>Meter gaps</h2>
+            <p className="status-copy">Possible missed charging between a previous stop meter and a later session start meter.</p>
           </div>
+          <Button type="button" className="button-secondary" onClick={onScanMeterGaps} disabled={busy || !selectedChargerId}>
+            Scan
+            <RefreshCcw aria-hidden="true" />
+          </Button>
+        </div>
+        {meterGapEvents.length > 0 ? (
           <div className="meter-gap-list">
             {meterGapEvents.slice(0, 3).map((event) => (
               <article key={event.id}>
@@ -281,8 +287,10 @@ export function DashboardView({
               </article>
             ))}
           </div>
-        </section>
-      ) : null}
+        ) : (
+          <p>No pending meter gaps.</p>
+        )}
+      </section>
 
       <section className="panel table-panel">
         <div className="topbar-actions page-section-header">

@@ -21,6 +21,7 @@ import type { LiveUpdateBus } from './live-updates.js';
 import { recordLogEntry } from './log-writer.js';
 import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import type { ChargerCommandService } from './ocpp/charger-command-service.js';
+import { OcppRepository } from './ocpp/repository.js';
 
 const ListChargersQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
@@ -34,6 +35,9 @@ const UpdateChargerSchema = z.object({
 const DeleteChargerSchema = z.object({
   adminPassword: z.string().min(1),
   chargerIdConfirmation: z.string().trim().min(1)
+});
+const ScanMeterGapsSchema = z.object({
+  thresholdWh: z.coerce.number().int().positive().optional()
 });
 
 type ChargerConnectionState = 'connected' | 'recently_seen' | 'silent' | 'disabled';
@@ -154,6 +158,45 @@ export function registerChargerRoutes(
       firmwareVersion: existing.firmwareVersion,
       createdAt: existing.createdAt.toISOString(),
       updatedAt: update.updatedAt.toISOString()
+    };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/chargers/:id/meter-gaps/scan', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const body = ScanMeterGapsSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_meter_gap_scan', details: body.error.flatten() });
+    }
+
+    const charger = db.select().from(chargers).where(eq(chargers.id, request.params.id)).limit(1).get();
+    if (!charger) {
+      return reply.code(404).send({ error: 'charger_not_found' });
+    }
+
+    const thresholdWh = body.data.thresholdWh ?? config.meterGapThresholdWh;
+    const repository = new OcppRepository(db, undefined, liveUpdates);
+    const result = repository.scanMeterGaps({
+      chargerId: request.params.id,
+      thresholdWh
+    });
+
+    recordLogEntry(db, liveUpdates, {
+      level: result.created > 0 ? 'warn' : 'info',
+      category: 'session',
+      message: 'manual meter gap scan completed',
+      chargerId: request.params.id,
+      metadata: {
+        thresholdWh,
+        ...result
+      }
+    });
+    liveUpdates?.publish('charging-stats', request.params.id);
+
+    return {
+      chargerId: request.params.id,
+      thresholdWh,
+      ...result
     };
   });
 

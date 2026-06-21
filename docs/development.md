@@ -178,6 +178,8 @@ The charger list adds a warning when a charger has gone silent and no recent OCP
 
 Accepted `StartTransaction` calls are also checked for meter gaps. When the start meter is higher than the last stopped session meter by at least `METER_GAP_THRESHOLD_WH`, Virtual OCPP stores a pending `meter_gap_events` review row and exposes it through `GET /api/meter-gap-events`, scoped by optional `chargerId` and `status`.
 
+Operators can also run the same detection manually from the charger dashboard meter-gap panel. The UI calls `POST /api/chargers/:id/meter-gaps/scan`, which walks stored sessions per connector, creates missing pending gap events, and returns `created`, `existing`, and `ignored` counts. Re-running a scan is duplicate-safe for the same previous/new session pair.
+
 Proxy target forms treat `url` as the upstream base websocket URL and append `stationId`, or the local charger id when `stationId` is blank, as the upstream OCPP identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 
 ## Communication Journal Workflow
