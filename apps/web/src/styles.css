@@ -1552,6 +1552,23 @@ a {
   gap: 16px;
 }
 
+.modal-panel > .topbar-actions.page-section-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: start;
+  width: 100%;
+}
+
+.modal-panel > .topbar-actions.page-section-header .button-ghost {
+  justify-self: end;
+  justify-content: center;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
 .modal-section-form {
   display: grid;
   gap: 14px;
