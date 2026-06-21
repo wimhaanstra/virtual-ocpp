@@ -940,6 +940,18 @@ a {
   font-weight: 760;
 }
 
+.session-date-row td {
+  padding-top: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel-subtle) 76%, var(--background));
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .connection-url {
   word-break: break-word;
 }
@@ -1153,6 +1165,23 @@ a {
 
 .session-audit-row {
   background: var(--panel-subtle);
+}
+
+.session-detail-row {
+  background: color-mix(in srgb, var(--panel-subtle) 72%, var(--background));
+}
+
+.session-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.session-detail-grid strong {
+  color: var(--foreground);
+  font-weight: 680;
 }
 
 .session-audit-inline {
@@ -2051,6 +2080,7 @@ td {
   .communication-filter-primary,
   .charger-wizard-grid,
   .modal-form-grid,
+  .session-detail-grid,
   .communication-expanded__grid {
     grid-template-columns: 1fr;
   }

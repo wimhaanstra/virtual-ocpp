@@ -1,5 +1,5 @@
-import { Fragment } from "react";
-import { Power, PowerOff, RefreshCcw } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Info, Power, PowerOff, RefreshCcw } from "lucide-react";
 import type { ActiveSessionAuditResponse, ChargingSession, ChargingStats } from "../types";
 import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -25,6 +25,9 @@ export function SessionsView({
   onRefresh,
   onRemoteStop
 }: SessionsViewProps) {
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const groupedSessions = groupSessionsByDate(chargingSessions);
+
   return (
     <section className="panel table-panel">
       <div className="topbar-actions">
@@ -46,100 +49,122 @@ export function SessionsView({
               <tr>
                 <th>Charger</th>
                 <th>Connector</th>
-                <th>Transaction</th>
-                <th>Tag</th>
                 <th>Status</th>
                 <th>Live</th>
                 <th>Started</th>
-                <th>Stopped</th>
-                <th>Meter Wh</th>
+                <th>Ended</th>
                 <th>Energy used</th>
-                <th>Reason</th>
+                <th>Details</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {chargingSessions.map((session) => {
-                const audit = findAuditForSession(activeSessionAudit, session);
-                const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
-                const energyUsedWh = getSessionEnergyUsedWh(session, liveStats);
-                return (
-                  <Fragment key={session.id}>
-                    <tr>
-                      <td className="mono">{session.chargerId}</td>
-                      <td>{session.connectorId}</td>
-                      <td>{session.transactionId}</td>
-                      <td className="mono">{session.idTag || "None"}</td>
-                      <td>
-                        <div className="status-stack">
-                          <span className={`pill ${session.active ? "pill-good" : "pill-neutral"}`}>
-                            {session.status}
-                          </span>
-                          {audit && audit.warnings.length > 0 ? <span className="pill pill-warning">Missing stop?</span> : null}
-                        </div>
-                      </td>
-                      <td>
-                        {session.active && liveStats ? (
-                          <span className="session-live-value">
-                            {formatPowerW(liveStats.latestPowerW)} · {formatEnergyWh(liveStats.energyUsedWh)}
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td>{formatDateTime(session.startedAt)}</td>
-                      <td>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</td>
-                      <td>
-                        {session.startMeterWh ?? "-"}
-                        {" / "}
-                        {session.stopMeterWh ?? "-"}
-                      </td>
-                      <td>{formatEnergyWh(energyUsedWh)}</td>
-                      <td>{session.stopReason || "-"}</td>
-                      <td>
-                        {session.active ? (
-                          <div className="action-row compact-action-row">
+              {groupedSessions.map((group) => (
+                <Fragment key={group.dateKey}>
+                  <tr className="session-date-row">
+                    <td colSpan={9}>{group.label}</td>
+                  </tr>
+                  {group.sessions.map((session) => {
+                    const audit = findAuditForSession(activeSessionAudit, session);
+                    const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
+                    const energyUsedWh = getSessionEnergyUsedWh(session, liveStats);
+                    const expanded = expandedSessionId === session.id;
+                    return (
+                      <Fragment key={session.id}>
+                        <tr>
+                          <td className="mono">{session.chargerId}</td>
+                          <td>{session.connectorId}</td>
+                          <td>
+                            <div className="status-stack">
+                              <span className={`pill ${session.active ? "pill-good" : "pill-neutral"}`}>
+                                {session.status}
+                              </span>
+                              {audit && audit.warnings.length > 0 ? <span className="pill pill-warning">Missing stop?</span> : null}
+                            </div>
+                          </td>
+                          <td>
+                            {session.active && liveStats ? (
+                              <span className="session-live-value">
+                                {formatPowerW(liveStats.latestPowerW)} · {formatEnergyWh(liveStats.energyUsedWh)}
+                              </span>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td>{formatSessionTime(session.startedAt)}</td>
+                          <td>{session.stoppedAt ? formatSessionTime(session.stoppedAt) : "Active"}</td>
+                          <td>{formatEnergyWh(energyUsedWh)}</td>
+                          <td>
                             <Button
                               type="button"
                               className="button-secondary icon-button"
-                              onClick={() => onRemoteStop(session)}
-                              disabled={busy}
-                              title="Remote stop transaction"
-                              aria-label={`Remote stop session ${session.transactionId}`}
+                              onClick={() => setExpandedSessionId(expanded ? null : session.id)}
+                              title={expanded ? "Hide session details" : "Show session details"}
+                              aria-label={`${expanded ? "Hide" : "Show"} details for session ${session.transactionId}`}
                             >
-                              <Power aria-hidden="true" />
+                              <Info aria-hidden="true" />
                             </Button>
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button"
-                              onClick={() => onForceClose(session)}
-                              disabled={busy}
-                              title="Force close with preview"
-                              aria-label={`Force close session ${session.transactionId}`}
-                            >
-                              <PowerOff aria-hidden="true" />
-                            </Button>
-                          </div>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    </tr>
-                    {audit ? (
-                      <tr>
-                        <td className="session-audit-row" colSpan={12}>
-                          <div className="session-audit-inline">
-                            <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
-                            <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>
-                            <span>Status: {audit.latestStatus ?? "-"}</span>
-                            <span>Proxy mappings: {audit.proxyMappings.length}</span>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
+                          </td>
+                          <td>
+                            {session.active ? (
+                              <div className="action-row compact-action-row">
+                                <Button
+                                  type="button"
+                                  className="button-secondary icon-button"
+                                  onClick={() => onRemoteStop(session)}
+                                  disabled={busy}
+                                  title="Remote stop transaction"
+                                  aria-label={`Remote stop session ${session.transactionId}`}
+                                >
+                                  <Power aria-hidden="true" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  className="button-secondary icon-button"
+                                  onClick={() => onForceClose(session)}
+                                  disabled={busy}
+                                  title="Force close with preview"
+                                  aria-label={`Force close session ${session.transactionId}`}
+                                >
+                                  <PowerOff aria-hidden="true" />
+                                </Button>
+                              </div>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                        </tr>
+                        {expanded ? (
+                          <tr>
+                            <td className="session-detail-row" colSpan={9}>
+                              <div className="session-detail-grid">
+                                <span>Transaction: <strong>{session.transactionId}</strong></span>
+                                <span>Tag: <strong className="mono">{session.idTag || "None"}</strong></span>
+                                <span>Reason: <strong>{session.stopReason || "-"}</strong></span>
+                                <span>Meter: <strong>{session.startMeterWh ?? "-"} / {session.stopMeterWh ?? "-"}</strong></span>
+                                <span>Started: <strong>{formatDateTime(session.startedAt)}</strong></span>
+                                <span>Ended: <strong>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</strong></span>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                        {audit ? (
+                          <tr>
+                            <td className="session-audit-row" colSpan={9}>
+                              <div className="session-audit-inline">
+                                <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
+                                <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>
+                                <span>Status: {audit.latestStatus ?? "-"}</span>
+                                <span>Proxy mappings: {audit.proxyMappings.length}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>
@@ -147,6 +172,40 @@ export function SessionsView({
     </section>
 
   );
+}
+
+function groupSessionsByDate(sessions: ChargingSession[]) {
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+  const groups = new Map<string, { dateKey: string; label: string; sessions: ChargingSession[] }>();
+
+  for (const session of sessions) {
+    const date = new Date(session.startedAt);
+    const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    const existing = groups.get(dateKey);
+    if (existing) {
+      existing.sessions.push(session);
+    } else {
+      groups.set(dateKey, {
+        dateKey,
+        label: formatter.format(date),
+        sessions: [session]
+      });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+function formatSessionTime(value: string) {
+  return new Date(value).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 function getSessionEnergyUsedWh(session: ChargingSession, liveStats: ChargingStats | null) {

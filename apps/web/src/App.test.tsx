@@ -2629,12 +2629,13 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Sessions" }));
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     expect((await screen.findAllByText("SMART-EVSE-1")).length).toBeGreaterThan(0);
-    expect(await screen.findByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("Missing stop?")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Live" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Energy used" })).toBeInTheDocument();
     expect(screen.getAllByText("1.65 kWh").length).toBeGreaterThan(0);
     expect(screen.getByText(/7\.2 kW/, { selector: ".session-live-value" })).toHaveTextContent("1.65 kWh");
+    fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
+    expect(await screen.findByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
     expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();
     expect(screen.getByText("Status: Available")).toBeInTheDocument();
@@ -2871,8 +2872,9 @@ describe("App", () => {
 
     fireEvent.click(sidebar.getByRole("button", { name: "Sessions" }));
     expect(await screen.findByRole("heading", { name: "Sessions" })).toBeInTheDocument();
-    expect(screen.getByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("SMART-EVSE-1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
+    expect(screen.getByText("TAG-1")).toBeInTheDocument();
 
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
     expect(await screen.findByRole("heading", { name: "Communication" })).toBeInTheDocument();
