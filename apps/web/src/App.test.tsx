@@ -2632,6 +2632,8 @@ describe("App", () => {
     expect(await screen.findByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("Missing stop?")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Live" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Energy used" })).toBeInTheDocument();
+    expect(screen.getAllByText("1.65 kWh").length).toBeGreaterThan(0);
     expect(screen.getByText(/7\.2 kW/, { selector: ".session-live-value" })).toHaveTextContent("1.65 kWh");
     expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
     expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();

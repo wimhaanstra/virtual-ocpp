@@ -53,6 +53,7 @@ export function SessionsView({
                 <th>Started</th>
                 <th>Stopped</th>
                 <th>Meter Wh</th>
+                <th>Energy used</th>
                 <th>Reason</th>
                 <th>Actions</th>
               </tr>
@@ -61,6 +62,7 @@ export function SessionsView({
               {chargingSessions.map((session) => {
                 const audit = findAuditForSession(activeSessionAudit, session);
                 const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
+                const energyUsedWh = getSessionEnergyUsedWh(session, liveStats);
                 return (
                   <Fragment key={session.id}>
                     <tr>
@@ -92,6 +94,7 @@ export function SessionsView({
                         {" / "}
                         {session.stopMeterWh ?? "-"}
                       </td>
+                      <td>{formatEnergyWh(energyUsedWh)}</td>
                       <td>{session.stopReason || "-"}</td>
                       <td>
                         {session.active ? (
@@ -124,7 +127,7 @@ export function SessionsView({
                     </tr>
                     {audit ? (
                       <tr>
-                        <td className="session-audit-row" colSpan={11}>
+                        <td className="session-audit-row" colSpan={12}>
                           <div className="session-audit-inline">
                             <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
                             <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>
@@ -144,4 +147,19 @@ export function SessionsView({
     </section>
 
   );
+}
+
+function getSessionEnergyUsedWh(session: ChargingSession, liveStats: ChargingStats | null) {
+  if (typeof liveStats?.energyUsedWh === "number") return liveStats.energyUsedWh;
+  if (typeof session.startMeterWh !== "number") return null;
+
+  if (typeof session.stopMeterWh === "number") {
+    return Math.max(0, session.stopMeterWh - session.startMeterWh);
+  }
+
+  if (typeof liveStats?.latestMeterWh === "number") {
+    return Math.max(0, liveStats.latestMeterWh - session.startMeterWh);
+  }
+
+  return null;
 }
