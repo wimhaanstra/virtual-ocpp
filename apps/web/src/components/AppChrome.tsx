@@ -16,12 +16,15 @@ import type { ActiveView, ChargerRegistryRow, LiveStatus, ThemeMode } from "../t
 import { getChargerContextId, getChargerDisplayLabel, sortChargers } from "../app-helpers";
 import { Button } from "./ui/button";
 
-const navItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
   { view: "Home", label: "Dashboard", icon: LayoutDashboard },
-  { view: "Communication", label: "Communication", icon: MessagesSquare },
   { view: "Sessions", label: "Sessions", icon: ListChecks },
   { view: "Proxy targets", label: "Proxy targets", icon: PlugZap },
   { view: "Tags", label: "Tags", icon: TagsIcon }
+];
+
+const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Communication", label: "Communication", icon: MessagesSquare }
 ];
 
 type AppChromeProps = {
@@ -31,6 +34,7 @@ type AppChromeProps = {
   children: ReactNode;
   message: string;
   selectedChargerId: string;
+  selectedChargerLabel: string;
   sidebarCollapsed: boolean;
   theme: ThemeMode;
   liveStatus: LiveStatus;
@@ -49,6 +53,7 @@ export function AppChrome({
   children,
   message,
   selectedChargerId,
+  selectedChargerLabel,
   sidebarCollapsed,
   theme,
   liveStatus,
@@ -62,39 +67,116 @@ export function AppChrome({
   return (
     <main className={`app-shell ${sidebarCollapsed ? "app-shell-collapsed" : ""}`}>
       <aside className="sidebar" aria-label="Main navigation">
-        <div className="brand">
-          <PlugZap aria-hidden="true" />
-          <span className="sidebar-label">Virtual OCPP</span>
+        <div className="sidebar-top">
+          <div className="brand">
+            <PlugZap aria-hidden="true" />
+            <span className="sidebar-label">Virtual OCPP</span>
+          </div>
+
+          <label className="sidebar-context" htmlFor="charger-context-select">
+            <span className="sidebar-label">Charger context</span>
+            <select
+              id="charger-context-select"
+              value={selectedChargerId}
+              onChange={(event) => onSelectedChargerChange(event.target.value)}
+              aria-label="Charger context"
+              title={selectedChargerLabel}
+            >
+              <option value="">All chargers</option>
+              {sortChargers(chargers).map((charger) => (
+                <option key={charger.id} value={getChargerContextId(charger)}>
+                  {getChargerDisplayLabel(charger)}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <nav>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                type="button"
-                className={item.view === activeView ? "active" : undefined}
-                aria-current={item.view === activeView ? "page" : undefined}
-                aria-label={sidebarCollapsed ? item.label : undefined}
-                title={sidebarCollapsed ? item.label : undefined}
-                onClick={() => onNavigate(item.view)}
-                key={item.view}
-              >
-                <Icon aria-hidden="true" />
-                <span className="sidebar-label">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <button
-          type="button"
-          className="sidebar-collapse-button"
-          onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
-          <span className="sidebar-label">{sidebarCollapsed ? "Expand" : "Collapse"}</span>
-        </button>
+        <div className="sidebar-nav-shell">
+          <nav className="sidebar-nav" aria-label="Charger-scoped pages">
+            <p className="sidebar-section-label sidebar-label">Charger-scoped</p>
+            {chargerScopedNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.view === activeView;
+
+              return (
+                <button
+                  type="button"
+                  className={isActive ? "active" : undefined}
+                  aria-current={isActive ? "page" : undefined}
+                  aria-label={sidebarCollapsed ? item.label : undefined}
+                  title={item.label}
+                  onClick={() => onNavigate(item.view)}
+                  key={item.view}
+                >
+                  <span className="sidebar-nav-indicator" aria-hidden="true" />
+                  <Icon aria-hidden="true" />
+                  <span className="sidebar-label">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <nav className="sidebar-nav sidebar-nav-global" aria-label="Global and admin pages">
+            <p className="sidebar-section-label sidebar-label">Global / admin</p>
+            {globalNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.view === activeView;
+
+              return (
+                <button
+                  type="button"
+                  className={isActive ? "active" : undefined}
+                  aria-current={isActive ? "page" : undefined}
+                  aria-label={sidebarCollapsed ? item.label : undefined}
+                  title={item.label}
+                  onClick={() => onNavigate(item.view)}
+                  key={item.view}
+                >
+                  <span className="sidebar-nav-indicator" aria-hidden="true" />
+                  <Icon aria-hidden="true" />
+                  <span className="sidebar-label">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <footer className="sidebar-footer">
+          <div className="sidebar-footer-actions">
+            <Button
+              type="button"
+              className="button-secondary icon-button sidebar-footer-button"
+              onClick={onThemeToggle}
+              disabled={busy}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            >
+              <SunMoon aria-hidden="true" />
+              <span className="sidebar-label">Theme</span>
+            </Button>
+            <Button
+              type="button"
+              className="button-secondary icon-button sidebar-footer-button"
+              onClick={onLogout}
+              disabled={busy}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut aria-hidden="true" />
+              <span className="sidebar-label">Sign out</span>
+            </Button>
+          </div>
+          <Button
+            type="button"
+            className="sidebar-collapse-button"
+            onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+            <span className="sidebar-label">{sidebarCollapsed ? "Expand" : "Collapse"}</span>
+          </Button>
+        </footer>
       </aside>
 
       <section className="content">
@@ -103,38 +185,13 @@ export function AppChrome({
             <p className="eyebrow">Self-hosted CSMS</p>
             <h1>{activeView === "Home" ? "Home dashboard" : activeView}</h1>
           </div>
-          <div className="topbar-actions topbar-controls">
+          <div className="topbar-actions">
             <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
               <span aria-hidden="true" />
               {liveStatus === "live" ? "Live" : liveStatus === "stale" ? "Stale" : "Connecting"}
             </span>
-            <label className="field topbar-field">
-              <span>Charger context</span>
-              <select value={selectedChargerId} onChange={(event) => onSelectedChargerChange(event.target.value)}>
-                <option value="">All chargers</option>
-                {sortChargers(chargers).map((charger) => (
-                  <option key={charger.id} value={getChargerContextId(charger)}>
-                    {getChargerDisplayLabel(charger)}
-                  </option>
-                ))}
-              </select>
-            </label>
             <Button type="button" className="button-secondary icon-button" onClick={onOpenChargerWizard} disabled={busy} title="Add charger" aria-label="Add charger">
               <Plus aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              className="button-secondary icon-button"
-              onClick={onThemeToggle}
-              disabled={busy}
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              <SunMoon aria-hidden="true" />
-            </Button>
-            <Button type="button" className="button-secondary" onClick={onLogout} disabled={busy}>
-              <LogOut aria-hidden="true" />
-              <span className="button-label">Sign out</span>
             </Button>
           </div>
         </header>

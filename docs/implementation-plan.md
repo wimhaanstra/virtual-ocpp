@@ -24,10 +24,45 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Frontend component split: shared frontend types/helpers plus extracted app chrome, auth, dashboard, sessions, communication, and force-close modal components while preserving existing operator behavior.
 - Live operator updates: authenticated SSE stream with replayed typed events, frontend live/stale indicator, and targeted REST refreshes for changed dashboard/session/log/protocol slices.
 - Charger onboarding wizard: modal flow that shows the OCPP connection template/auth guidance, waits for a newly registered charger, lets the operator label it, and switches context to the detected charger.
+- Sidebar and scope navigation: charger context, add-charger action, theme toggle, and sign out moved into the sidebar with grouped charger-scoped and global/admin navigation.
 
 ## Next Candidate Slices
 
-### Slice 5.8: Operator UI Density Cleanup
+### Slice 5.9: Split Global Tags From Charger Tag Access
+
+Goal: separate global tag identity management from charger-specific authorization grants.
+
+Scope:
+
+- Keep global tag creation, editing, deletion, and enable/disable state on a global Tags page.
+- Add a charger-scoped Tag access page for granting/revoking existing global tags for the selected charger.
+- Show a clear empty state when no charger is selected on the Tag access page.
+- Preserve the existing tag access API behavior while moving the UI responsibilities into separate pages.
+
+Acceptance criteria:
+
+- Operators can manage tag identities without choosing a charger context.
+- Operators can grant/revoke tag access only inside a selected charger context.
+- Navigation clearly distinguishes global Tags from charger-scoped Tag access.
+
+### Slice 5.10: Charger Management With Destructive Delete
+
+Goal: add a global Chargers page for renaming and deleting registered chargers.
+
+Scope:
+
+- List registered chargers globally with connection state and useful timestamps.
+- Allow editing the charger display label.
+- Add destructive charger delete that removes all charger-owned data and closes runtime connections.
+- Require admin password and exact charger id confirmation before deletion.
+
+Acceptance criteria:
+
+- Operators can rename a charger from the global Chargers page.
+- Charger deletion rejects incorrect password or charger id confirmation.
+- Successful charger deletion removes charger-owned proxy targets, tag grants, sessions, meter samples, logs, communication journal rows, mappings, and runtime connections.
+
+### Slice 5.11: Operator UI Density Cleanup
 
 Goal: reduce remaining bulk in admin tables, modals, and repeated controls now that the main workflows exist.
 

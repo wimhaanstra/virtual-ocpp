@@ -342,6 +342,12 @@ describe("App", () => {
     expect(screen.getByText(/Basic Auth is required\. Use the charger id as the username\./)).toBeInTheDocument();
     expect(screen.getByText(/Secrets are never shown in this dashboard\./)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Charger connection" })).toBeInTheDocument();
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" })).toBeInTheDocument();
+    expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
+    expect(sidebar.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
+    expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
+    expect(sidebar.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Sessions" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Proxy targets" })).toBeInTheDocument();
@@ -871,15 +877,17 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Switch to light mode" }));
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Switch to light mode" }));
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(window.localStorage.getItem("virtual-ocpp-theme")).toBe("light");
 
-    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Collapse sidebar" }));
     expect(window.localStorage.getItem("virtual-ocpp-sidebar-collapsed")).toBe("true");
     expect(sidebar.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Dashboard" })).toHaveAttribute("title", "Dashboard");
+    expect(sidebar.getByRole("button", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
+    expect(sidebar.getByRole("button", { name: "Sign out" })).toHaveAttribute("title", "Sign out");
   });
 
   it("shows communication journal rows after authentication", async () => {

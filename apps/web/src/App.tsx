@@ -1082,6 +1082,7 @@ export default function App() {
       chargers={chargers}
       message={message}
       selectedChargerId={selectedChargerId}
+      selectedChargerLabel={selectedChargerLabel}
       sidebarCollapsed={sidebarCollapsed}
       theme={theme}
       liveStatus={liveStatus}
