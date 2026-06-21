@@ -1395,7 +1395,7 @@ describe("App", () => {
     expect(await screen.findByText("Onboarding skipped.")).toBeInTheDocument();
   });
 
-  it("persists completion when first-run onboarding finishes", async () => {
+  it("creates a tag, grants access, creates a proxy target, and completes first-run onboarding", async () => {
     let includeNewCharger = false;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -1412,6 +1412,45 @@ describe("App", () => {
 
       if (path === "/api/settings/onboarding" && method === "PATCH") {
         return new Response(JSON.stringify({ completed: true, completedAt: "2026-06-19T08:35:00.000Z", skippedAt: null }), { status: 200 });
+      }
+
+      if (path === "/api/tags" && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            id: "tag-created",
+            uuid: "4227105",
+            label: "Main tag",
+            enabled: true,
+            createdAt: "2026-06-19T10:05:00.000Z",
+            allowedChargerIds: []
+          }),
+          { status: 201 }
+        );
+      }
+
+      if (path === "/api/tags/tag-created/chargers/SMART-EVSE-FIRST-RUN" && method === "PUT") {
+        return new Response(JSON.stringify({ tagId: "tag-created", chargerId: "SMART-EVSE-FIRST-RUN", enabled: true }), { status: 201 });
+      }
+
+      if (path === "/api/proxy-targets" && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            id: "proxy-created",
+            name: "Tap Electric",
+            url: "wss://proxy.example/ocpp",
+            chargerId: "SMART-EVSE-FIRST-RUN",
+            stationId: "8881",
+            enabled: true,
+            mode: "deny-capable",
+            outagePolicy: "fail-open",
+            allowRecoverySubmissions: false,
+            hasUsername: true,
+            hasBasicAuthPassword: true,
+            createdAt: "2026-06-19T10:05:00.000Z",
+            updatedAt: "2026-06-19T10:05:00.000Z"
+          }),
+          { status: 201 }
+        );
       }
 
       if (path === "/api/chargers" && method === "GET") {
@@ -1456,7 +1495,17 @@ describe("App", () => {
     fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
 
     expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
-    fireEvent.click(within(wizard).getByRole("button", { name: "Save and switch" }));
+    fireEvent.click(within(wizard).getByRole("button", { name: "Create" }));
+    fireEvent.change(within(wizard).getByLabelText("Tag ID"), { target: { value: "4227105" } });
+    fireEvent.change(within(wizard).getByLabelText("Label"), { target: { value: "Main tag" } });
+    fireEvent.click(within(wizard).getByLabelText("Create a proxy target during onboarding"));
+    fireEvent.change(within(wizard).getByLabelText("Name"), { target: { value: "Tap Electric" } });
+    fireEvent.change(within(wizard).getByLabelText("URL"), { target: { value: "wss://proxy.example/ocpp" } });
+    fireEvent.change(within(wizard).getByLabelText("Username"), { target: { value: "tap-user" } });
+    fireEvent.change(within(wizard).getByLabelText("Password"), { target: { value: "tap-secret" } });
+    fireEvent.change(within(wizard).getByLabelText("Station ID"), { target: { value: "8881" } });
+    fireEvent.change(within(wizard).getByLabelText("Mode"), { target: { value: "deny-capable" } });
+    fireEvent.click(within(wizard).getByRole("button", { name: "Complete setup" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -1467,6 +1516,39 @@ describe("App", () => {
         })
       );
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/tags",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ uuid: "4227105", enabled: true, label: "Main tag" })
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/tags/tag-created/chargers/SMART-EVSE-FIRST-RUN",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ enabled: true })
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/proxy-targets",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          chargerId: "SMART-EVSE-FIRST-RUN",
+          name: "Tap Electric",
+          url: "wss://proxy.example/ocpp",
+          enabled: true,
+          mode: "deny-capable",
+          outagePolicy: "fail-open",
+          allowRecoverySubmissions: false,
+          tagMappings: [],
+          username: "tap-user",
+          basicAuthPassword: "tap-secret",
+          stationId: "8881"
+        })
+      })
+    );
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
   });
 

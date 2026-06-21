@@ -1,8 +1,21 @@
 import { useEffect } from "react";
 import { CheckCircle2, Copy, Loader2, PlugZap, X } from "lucide-react";
-import type { ChargerRegistryRow, DashboardConfig } from "../types";
+import type { ChargerRegistryRow, DashboardConfig, ProxyTarget, Tag } from "../types";
 import { getChargerContextId, getChargerDisplayLabel } from "../app-helpers";
 import { Button } from "./ui/button";
+
+type OnboardingTagMode = "skip" | "existing" | "create";
+
+type OnboardingProxyDraft = {
+  enabled: boolean;
+  name: string;
+  url: string;
+  username: string;
+  basicAuthPassword: string;
+  stationId: string;
+  mode: ProxyTarget["mode"];
+  outagePolicy: ProxyTarget["outagePolicy"];
+};
 
 type ChargerOnboardingModalProps = {
   busy: boolean;
@@ -10,12 +23,22 @@ type ChargerOnboardingModalProps = {
   detectedCharger: ChargerRegistryRow | null;
   knownChargerCount: number;
   label: string;
+  proxyDraft: OnboardingProxyDraft;
+  showSetupSteps?: boolean;
   startedAt: string;
+  tagLabel: string;
+  tagMode: OnboardingTagMode;
+  tagUuid: string;
+  tags: Tag[];
+  selectedTagId: string;
   onClose: () => void;
   onCopyUrl: (url: string) => void;
   onFinish: () => void;
   onLabelChange: (label: string) => void;
+  onProxyDraftChange: (patch: Partial<OnboardingProxyDraft>) => void;
   onRefresh: () => void;
+  onSelectedTagChange: (tagId: string) => void;
+  onTagDraftChange: (patch: { mode?: OnboardingTagMode; uuid?: string; label?: string }) => void;
 };
 
 export function ChargerOnboardingModal({
@@ -24,12 +47,22 @@ export function ChargerOnboardingModal({
   detectedCharger,
   knownChargerCount,
   label,
+  proxyDraft,
+  showSetupSteps = false,
   startedAt,
+  tagLabel,
+  tagMode,
+  tagUuid,
+  tags,
+  selectedTagId,
   onClose,
   onCopyUrl,
   onFinish,
   onLabelChange,
-  onRefresh
+  onProxyDraftChange,
+  onRefresh,
+  onSelectedTagChange,
+  onTagDraftChange
 }: ChargerOnboardingModalProps) {
   const activeChargerId = detectedCharger ? getChargerContextId(detectedCharger) : "";
   const connectionUrl = dashboardConfig?.ocppWebSocketUrl ?? "Loading connection URL...";
@@ -133,6 +166,108 @@ export function ChargerOnboardingModal({
             <span>Display label</span>
             <input value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder={detectedCharger ? activeChargerId : "Garage charger"} disabled={!detectedCharger || busy} />
           </label>
+
+          {showSetupSteps ? (
+            <>
+              <section className="wizard-step wizard-step-full">
+                <div className="wizard-step__marker">4</div>
+                <div className="onboarding-section-stack">
+                  <div>
+                    <h3>Charging tag</h3>
+                    <p className="status-copy">Create or select the tag that should be allowed to charge on this charger.</p>
+                  </div>
+                  <div className="segmented-row" role="group" aria-label="Tag setup mode">
+                    <Button type="button" className={tagMode === "skip" ? undefined : "button-secondary"} onClick={() => onTagDraftChange({ mode: "skip" })} disabled={busy}>
+                      Skip
+                    </Button>
+                    <Button type="button" className={tagMode === "existing" ? undefined : "button-secondary"} onClick={() => onTagDraftChange({ mode: "existing" })} disabled={busy || tags.length === 0}>
+                      Existing
+                    </Button>
+                    <Button type="button" className={tagMode === "create" ? undefined : "button-secondary"} onClick={() => onTagDraftChange({ mode: "create" })} disabled={busy}>
+                      Create
+                    </Button>
+                  </div>
+                  {tagMode === "existing" ? (
+                    <label className="field">
+                      <span>Existing tag</span>
+                      <select value={selectedTagId} onChange={(event) => onSelectedTagChange(event.target.value)} disabled={busy || tags.length === 0}>
+                        <option value="">Select tag</option>
+                        {tags.map((tag) => (
+                          <option value={tag.id} key={tag.id}>
+                            {tag.label?.trim() ? `${tag.label} (${tag.uuid})` : tag.uuid}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  {tagMode === "create" ? (
+                    <div className="modal-form-grid">
+                      <label className="field">
+                        <span>Tag ID</span>
+                        <input value={tagUuid} onChange={(event) => onTagDraftChange({ uuid: event.target.value })} placeholder="4227105" disabled={busy} />
+                      </label>
+                      <label className="field">
+                        <span>Label</span>
+                        <input value={tagLabel} onChange={(event) => onTagDraftChange({ label: event.target.value })} placeholder="Primary charging tag" disabled={busy} />
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+
+              <section className="wizard-step wizard-step-full">
+                <div className="wizard-step__marker">5</div>
+                <div className="onboarding-section-stack">
+                  <div>
+                    <h3>Proxy target</h3>
+                    <p className="status-copy">Optionally connect this charger to its first upstream OCPP platform.</p>
+                  </div>
+                  <label className="checkbox-row">
+                    <input type="checkbox" checked={proxyDraft.enabled} onChange={(event) => onProxyDraftChange({ enabled: event.target.checked })} disabled={busy} />
+                    <span>Create a proxy target during onboarding</span>
+                  </label>
+                  {proxyDraft.enabled ? (
+                    <div className="modal-form-grid">
+                      <label className="field">
+                        <span>Name</span>
+                        <input value={proxyDraft.name} onChange={(event) => onProxyDraftChange({ name: event.target.value })} placeholder="Tap Electric" disabled={busy} />
+                      </label>
+                      <label className="field">
+                        <span>URL</span>
+                        <input value={proxyDraft.url} onChange={(event) => onProxyDraftChange({ url: event.target.value })} placeholder="wss://example.com/ocpp" disabled={busy} />
+                      </label>
+                      <label className="field">
+                        <span>Username</span>
+                        <input value={proxyDraft.username} onChange={(event) => onProxyDraftChange({ username: event.target.value })} placeholder="Optional" disabled={busy} />
+                      </label>
+                      <label className="field">
+                        <span>Password</span>
+                        <input type="password" value={proxyDraft.basicAuthPassword} onChange={(event) => onProxyDraftChange({ basicAuthPassword: event.target.value })} placeholder="Optional" disabled={busy} />
+                      </label>
+                      <label className="field">
+                        <span>Station ID</span>
+                        <input value={proxyDraft.stationId} onChange={(event) => onProxyDraftChange({ stationId: event.target.value })} placeholder={activeChargerId || "Use charger id"} disabled={busy} />
+                      </label>
+                      <label className="field">
+                        <span>Mode</span>
+                        <select value={proxyDraft.mode} onChange={(event) => onProxyDraftChange({ mode: event.target.value as ProxyTarget["mode"] })} disabled={busy}>
+                          <option value="monitor-only">Monitor only</option>
+                          <option value="deny-capable">Deny capable</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        <span>Outage policy</span>
+                        <select value={proxyDraft.outagePolicy} onChange={(event) => onProxyDraftChange({ outagePolicy: event.target.value as ProxyTarget["outagePolicy"] })} disabled={busy}>
+                          <option value="fail-open">Fail open</option>
+                          <option value="fail-closed">Fail closed</option>
+                        </select>
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+              </section>
+            </>
+          ) : null}
         </div>
 
         <div className="action-row modal-actions">
@@ -143,7 +278,7 @@ export function ChargerOnboardingModal({
             Cancel
           </Button>
           <Button type="button" onClick={onFinish} disabled={busy || !detectedCharger}>
-            Save and switch
+            {showSetupSteps ? "Complete setup" : "Save and switch"}
           </Button>
         </div>
       </section>

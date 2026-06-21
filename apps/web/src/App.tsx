@@ -75,6 +75,30 @@ import {
   withChargerContext
 } from "./app-helpers";
 
+type ChargerWizardMode = "add-charger" | "manual-onboarding" | "first-run-onboarding";
+type OnboardingTagMode = "skip" | "existing" | "create";
+type OnboardingProxyDraft = {
+  enabled: boolean;
+  name: string;
+  url: string;
+  username: string;
+  basicAuthPassword: string;
+  stationId: string;
+  mode: ProxyTarget["mode"];
+  outagePolicy: ProxyTarget["outagePolicy"];
+};
+
+const emptyOnboardingProxyDraft = (): OnboardingProxyDraft => ({
+  enabled: false,
+  name: "",
+  url: "",
+  username: "",
+  basicAuthPassword: "",
+  stationId: "",
+  mode: "monitor-only",
+  outagePolicy: "fail-open"
+});
+
 export default function App() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
@@ -120,7 +144,12 @@ export default function App() {
   const [chargerWizardKnownIds, setChargerWizardKnownIds] = useState<string[]>([]);
   const [chargerWizardLabel, setChargerWizardLabel] = useState("");
   const [chargerWizardLoading, setChargerWizardLoading] = useState(false);
-  const [chargerWizardMode, setChargerWizardMode] = useState<"add-charger" | "manual-onboarding" | "first-run-onboarding">("add-charger");
+  const [chargerWizardMode, setChargerWizardMode] = useState<ChargerWizardMode>("add-charger");
+  const [onboardingTagMode, setOnboardingTagMode] = useState<OnboardingTagMode>("skip");
+  const [onboardingSelectedTagId, setOnboardingSelectedTagId] = useState("");
+  const [onboardingTagUuid, setOnboardingTagUuid] = useState("");
+  const [onboardingTagLabel, setOnboardingTagLabel] = useState("");
+  const [onboardingProxyDraft, setOnboardingProxyDraft] = useState<OnboardingProxyDraft>(() => emptyOnboardingProxyDraft());
   const [selectedChargerId, setSelectedChargerId] = useState(() => getSearchParam("chargerId"));
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getInitialSidebarCollapsed());
@@ -321,6 +350,8 @@ export default function App() {
     setTagModalOpen(false);
     setProxyTargetModalOpen(false);
     setChargerWizardOpen(false);
+    setChargerWizardMode("add-charger");
+    resetOnboardingSetupState();
     setChargerLabelTarget(null);
     setChargerLabelValue("");
     setChargerDeleteTarget(null);
@@ -355,6 +386,7 @@ export default function App() {
     setChargerWizardStartedAt("");
     setChargerWizardLoading(false);
     setChargerWizardMode("add-charger");
+    resetOnboardingSetupState();
     setCommunicationJournal([]);
     setCommunicationRetentionHours(null);
     setProxyHealth(null);
@@ -615,9 +647,18 @@ export default function App() {
     }
   }
 
-  async function openChargerWizard(mode: "add-charger" | "manual-onboarding" | "first-run-onboarding" = "add-charger") {
+  function resetOnboardingSetupState() {
+    setOnboardingTagMode("skip");
+    setOnboardingSelectedTagId("");
+    setOnboardingTagUuid("");
+    setOnboardingTagLabel("");
+    setOnboardingProxyDraft(emptyOnboardingProxyDraft());
+  }
+
+  async function openChargerWizard(mode: ChargerWizardMode = "add-charger") {
     setChargerWizardLabel("");
     setChargerWizardMode(mode);
+    resetOnboardingSetupState();
     setChargerWizardOpen(true);
     setChargerWizardLoading(true);
     const startedAt = new Date().toISOString();
@@ -632,6 +673,9 @@ export default function App() {
 
     setChargers(chargerData);
     setChargerWizardKnownIds(chargerData.map((charger) => getChargerContextId(charger)));
+    if (mode !== "add-charger") {
+      await loadTags();
+    }
     setChargerWizardLoading(false);
     void loadDashboardConfig();
   }
@@ -644,6 +688,7 @@ export default function App() {
     setChargerWizardStartedAt("");
     setChargerWizardLoading(false);
     setChargerWizardMode("add-charger");
+    resetOnboardingSetupState();
     setMessage("");
 
     if (shouldSkipFirstRun) {
@@ -671,6 +716,22 @@ export default function App() {
     if (!chargerWizardDetectedCharger) return;
     const chargerId = getChargerContextId(chargerWizardDetectedCharger);
     const label = chargerWizardLabel.trim();
+    const runsSetupSteps = chargerWizardMode !== "add-charger";
+
+    if (runsSetupSteps) {
+      if (onboardingTagMode === "existing" && !onboardingSelectedTagId) {
+        setMessage("Select a tag or skip tag setup.");
+        return;
+      }
+      if (onboardingTagMode === "create" && !onboardingTagUuid.trim()) {
+        setMessage("Enter a tag ID or skip tag setup.");
+        return;
+      }
+      if (onboardingProxyDraft.enabled && (!onboardingProxyDraft.name.trim() || !onboardingProxyDraft.url.trim())) {
+        setMessage("Enter a proxy target name and URL or skip proxy setup.");
+        return;
+      }
+    }
 
     setBusy(true);
     try {
@@ -689,6 +750,10 @@ export default function App() {
         }
       }
 
+      if (runsSetupSteps && !(await applyOnboardingSetup(chargerId))) {
+        return;
+      }
+
       await loadChargers();
       const shouldCompleteFirstRun = chargerWizardMode === "first-run-onboarding";
       setChargerWizardOpen(false);
@@ -697,16 +762,106 @@ export default function App() {
       setChargerWizardStartedAt("");
       setChargerWizardLoading(false);
       setChargerWizardMode("add-charger");
+      resetOnboardingSetupState();
       if (shouldCompleteFirstRun) {
         const updated = await updateOnboardingSettings("completed");
         if (!updated) return;
       }
       setSelectedChargerId(chargerId);
       setActiveView("Charger dashboard");
-      setMessage(label ? `Charger ${label} added.` : `Charger ${chargerId} added.`);
+      setMessage(runsSetupSteps ? "Onboarding setup completed." : label ? `Charger ${label} added.` : `Charger ${chargerId} added.`);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function applyOnboardingSetup(chargerId: string) {
+    let grantedTagId = onboardingTagMode === "existing" ? onboardingSelectedTagId : "";
+
+    if (onboardingTagMode === "create") {
+      const tagBody: Record<string, unknown> = {
+        uuid: onboardingTagUuid.trim(),
+        enabled: true
+      };
+      if (onboardingTagLabel.trim()) {
+        tagBody.label = onboardingTagLabel.trim();
+      }
+
+      const tagResponse = await fetch("/api/tags", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(tagBody)
+      });
+
+      if (tagResponse.status === 409) {
+        setMessage("That tag ID already exists.");
+        return false;
+      }
+      if (handleUnauthorized(tagResponse)) return false;
+      if (!tagResponse.ok) {
+        setMessage("Could not create onboarding tag.");
+        return false;
+      }
+
+      const createdTag = (await tagResponse.json()) as Tag;
+      grantedTagId = createdTag.id;
+    }
+
+    if (grantedTagId) {
+      const grantResponse = await fetch(`/api/tags/${grantedTagId}/chargers/${encodeURIComponent(chargerId)}`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true })
+      });
+
+      if (handleUnauthorized(grantResponse)) return false;
+      if (!grantResponse.ok) {
+        setMessage("Could not grant tag access for the charger.");
+        return false;
+      }
+      await loadTags();
+    }
+
+    if (onboardingProxyDraft.enabled) {
+      const proxyBody: Record<string, unknown> = {
+        chargerId,
+        name: onboardingProxyDraft.name.trim(),
+        url: onboardingProxyDraft.url.trim(),
+        enabled: true,
+        mode: onboardingProxyDraft.mode,
+        outagePolicy: onboardingProxyDraft.outagePolicy,
+        allowRecoverySubmissions: false,
+        tagMappings: []
+      };
+
+      if (onboardingProxyDraft.username.trim()) {
+        proxyBody.username = onboardingProxyDraft.username.trim();
+      }
+      if (onboardingProxyDraft.basicAuthPassword.trim()) {
+        proxyBody.basicAuthPassword = onboardingProxyDraft.basicAuthPassword.trim();
+      }
+      if (onboardingProxyDraft.stationId.trim()) {
+        proxyBody.stationId = onboardingProxyDraft.stationId.trim();
+      }
+
+      const proxyResponse = await fetch("/api/proxy-targets", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(proxyBody)
+      });
+
+      if (handleUnauthorized(proxyResponse)) return false;
+      if (!proxyResponse.ok) {
+        setMessage("Could not create onboarding proxy target.");
+        return false;
+      }
+      await loadProxyTargets(chargerId);
+    }
+
+    return true;
   }
 
   async function loadChargingSessions(chargerId = selectedChargerId) {
@@ -2154,12 +2309,26 @@ export default function App() {
           detectedCharger={chargerWizardDetectedCharger}
           knownChargerCount={chargerWizardKnownIds.length}
           label={chargerWizardLabel}
+          proxyDraft={onboardingProxyDraft}
+          selectedTagId={onboardingSelectedTagId}
+          showSetupSteps={chargerWizardMode !== "add-charger"}
           startedAt={chargerWizardStartedAt}
+          tagLabel={onboardingTagLabel}
+          tagMode={onboardingTagMode}
+          tagUuid={onboardingTagUuid}
+          tags={tags}
           onClose={() => void closeChargerWizard()}
           onCopyUrl={(url) => void copyChargerWizardUrl(url)}
           onFinish={() => void finishChargerWizard()}
           onLabelChange={setChargerWizardLabel}
+          onProxyDraftChange={(patch) => setOnboardingProxyDraft((current) => ({ ...current, ...patch }))}
           onRefresh={() => void loadChargers()}
+          onSelectedTagChange={setOnboardingSelectedTagId}
+          onTagDraftChange={(patch) => {
+            if (patch.mode) setOnboardingTagMode(patch.mode);
+            if (patch.uuid !== undefined) setOnboardingTagUuid(patch.uuid);
+            if (patch.label !== undefined) setOnboardingTagLabel(patch.label);
+          }}
         />
       ) : null}
     </AppChrome>

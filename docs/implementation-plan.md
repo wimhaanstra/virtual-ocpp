@@ -32,35 +32,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Proxy target form polish: modal sections align fields without inline description offsets, stored credentials use masked inputs with dirty-state updates, clear checkboxes are removed, and tag mappings live as the final form section.
 - Settings foundation and onboarding state: global Settings page, protected persisted onboarding settings API, SQLite migration, completion/skip/reset actions, and manual onboarding relaunch entry point.
 - First-run onboarding shell: pending onboarding state automatically opens the charger setup wizard after admin login, first-run cancel marks onboarding skipped, first-run completion marks onboarding completed, and manual Settings relaunch leaves stored state unchanged.
+- First-run onboarding setup steps: onboarding modes can create or select a tag, grant it to the detected charger, optionally create a charger-scoped proxy target, and only then mark onboarding completed.
 
 ## Next Candidate Slices
-
-### First-run operator onboarding
-
-Build a guided first-run setup flow for a fresh Virtual OCPP installation. The flow should open automatically when an authenticated admin has not completed onboarding yet, and it should remain available as a manual action later.
-
-Scope:
-
-- Explain the local-primary model in operator terms: charger connects to Virtual OCPP, Virtual OCPP authorizes locally, and selected proxy targets receive mirrored/controlling OCPP traffic.
-- Reuse the existing charger onboarding mechanics to show the OCPP URL, protocol/auth details, wait for a newly registered charger, label it, and switch to that charger context.
-- Let the operator optionally create a global tag during onboarding.
-- Let the operator grant that tag access to the newly detected charger before finishing.
-- Let the operator optionally create the first proxy target for the detected charger, including URL, username, password, station id, enabled state, mode, and outage policy.
-- Show a clear completion state with next actions: test authorization, review proxy health, and inspect communication logs.
-- Persist onboarding completion so the wizard does not reappear after refresh, while still allowing operators to relaunch it from the Settings page for testing or repeat walkthroughs.
-
-Acceptance criteria:
-
-- A first-time authenticated admin sees the onboarding flow automatically when no completed onboarding marker exists.
-- The flow can be skipped or completed, and either choice prevents repeated automatic popups.
-- A new charger can be detected through the same registry polling/live-update pattern as the current charger wizard.
-- A tag can be created or an existing tag can be selected during onboarding.
-- The chosen tag can be granted to the detected charger before finishing.
-- A proxy target can be skipped or created for the detected charger before finishing.
-- The Settings page exposes a manual "Run onboarding" action that opens the same flow even after onboarding was completed or skipped.
-- The final state routes the operator to the charger dashboard for the new charger.
-- Frontend tests cover first-run opening, skip/complete persistence, manual relaunch from Settings, charger detection, tag creation/selection, tag grant submission, and optional proxy target creation.
-- Operator documentation explains when onboarding appears and how to rerun the setup manually.
 
 ### Docs refresh
 
