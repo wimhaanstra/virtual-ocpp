@@ -67,14 +67,18 @@ export function ChargerOnboardingModal({
             <div className="wizard-step__marker">1</div>
             <div>
               <h3>Configure the charger</h3>
-              <p className="status-copy">Use this OCPP endpoint in the charger. Pick any unique charger id and place it where the template shows <span className="mono">:chargerId</span>.</p>
               <div className="copy-row">
                 <p className="mono connection-url">{connectionUrl}</p>
                 <Button type="button" className="button-secondary icon-button" onClick={onCopyUrl} disabled={busy || !dashboardConfig} aria-label="Copy charger URL" title="Copy charger URL">
                   <Copy aria-hidden="true" />
                 </Button>
               </div>
-              <p className="status-copy">Example: <span className="mono">{exampleUrl}</span></p>
+              <dl className="wizard-meta">
+                <div>
+                  <dt>Example</dt>
+                  <dd className="mono">{exampleUrl}</dd>
+                </div>
+              </dl>
             </div>
           </section>
 
@@ -82,13 +86,16 @@ export function ChargerOnboardingModal({
             <div className="wizard-step__marker">2</div>
             <div>
               <h3>Protocol and auth</h3>
-              <p>
-                Use websocket subprotocol <span className="mono">{dashboardConfig?.ocppProtocol ?? "ocpp1.6"}</span>.
-                {" "}
-                {dashboardConfig?.ocppBasicAuthRequired
-                  ? `Basic Auth is required. Use ${dashboardConfig.ocppBasicAuthUsername ?? "the charger id"} as the username.`
-                  : "Basic Auth is not required."}
-              </p>
+              <dl className="wizard-meta">
+                <div>
+                  <dt>Protocol</dt>
+                  <dd className="mono">{dashboardConfig?.ocppProtocol ?? "ocpp1.6"}</dd>
+                </div>
+                <div>
+                  <dt>Basic Auth</dt>
+                  <dd>{dashboardConfig?.ocppBasicAuthRequired ? dashboardConfig.ocppBasicAuthUsername ?? "charger id" : "Not required"}</dd>
+                </div>
+              </dl>
             </div>
           </section>
 
@@ -108,9 +115,16 @@ export function ChargerOnboardingModal({
                   </div>
                 </div>
               ) : (
-                <p className="status-copy">
-                  This wizard started with {knownChargerCount} known charger{knownChargerCount === 1 ? "" : "s"}. It will detect the next charger that appears in the registry.
-                </p>
+                <dl className="wizard-meta">
+                  <div>
+                    <dt>Known at start</dt>
+                    <dd>{knownChargerCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Detection</dt>
+                    <dd>Waiting for the next registry row</dd>
+                  </div>
+                </dl>
               )}
             </div>
           </section>

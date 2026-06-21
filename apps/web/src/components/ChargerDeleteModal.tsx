@@ -45,42 +45,48 @@ export function ChargerDeleteModal({
 
         <div className="destructive-warning">
           <AlertTriangle aria-hidden="true" />
-          <p>
-            Confirm the exact charger id and enter the admin password before deleting. This cannot be undone from the frontend.
-          </p>
+          <div>
+            <strong>Deletes charger-owned data</strong>
+            <p>Confirm the exact charger id and enter the admin password before deleting.</p>
+          </div>
         </div>
 
         <form
-          className="form-grid"
+          className="modal-section-form"
           onSubmit={(event) => {
             event.preventDefault();
             if (!canDelete) return;
             onSubmit();
           }}
         >
-          <label className="field">
-            <span>Admin password</span>
-            <input
-              aria-label="Admin password"
-              value={adminPassword}
-              onChange={(event) => onAdminPasswordChange(event.target.value)}
-              type="password"
-              autoComplete="current-password"
-            />
-          </label>
-          <label className="field">
-            <span>Type exact charger id</span>
-            <input
-              aria-label="Type exact charger id"
-              value={confirmation}
-              onChange={(event) => onConfirmationChange(event.target.value)}
-              placeholder={charger.id}
-              autoComplete="off"
-            />
-            <small>
-              Exact charger id: <span className="mono">{charger.id}</span>
-            </small>
-          </label>
+          <section className="modal-form-section">
+            <div className="destructive-confirm-row">
+              <span>Required charger id</span>
+              <strong className="mono">{charger.id}</strong>
+            </div>
+            <div className="form-grid modal-form-grid">
+              <label className="field">
+                <span>Admin password</span>
+                <input
+                  aria-label="Admin password"
+                  value={adminPassword}
+                  onChange={(event) => onAdminPasswordChange(event.target.value)}
+                  type="password"
+                  autoComplete="current-password"
+                />
+              </label>
+              <label className="field">
+                <span>Type exact charger id</span>
+                <input
+                  aria-label="Type exact charger id"
+                  value={confirmation}
+                  onChange={(event) => onConfirmationChange(event.target.value)}
+                  placeholder={charger.id}
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+          </section>
 
           <div className="action-row modal-actions">
             <Button type="button" className="button-secondary" onClick={onCancel} disabled={busy}>

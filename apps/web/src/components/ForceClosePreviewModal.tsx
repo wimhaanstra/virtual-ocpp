@@ -53,6 +53,7 @@ export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePrev
 
         {forceClosePreview.warnings.length > 0 ? (
           <div className="force-close-warning">
+            <strong>Review warnings</strong>
             {forceClosePreview.warnings.map((warning) => (
               <p key={warning}>{warning}</p>
             ))}
@@ -70,6 +71,7 @@ export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePrev
                 <div>
                   <p className="eyebrow">Proxy target</p>
                   <h3 title={entry.proxyTargetId}>{entry.proxyTargetName}</h3>
+                  <p className="status-copy">External transaction {entry.externalTransactionId}</p>
                 </div>
                 <span className={`pill ${entry.proxyTargetEnabled ? "pill-good" : "pill-warning"}`}>
                   {entry.proxyTargetEnabled ? "Enabled" : "Disabled"}

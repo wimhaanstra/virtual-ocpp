@@ -803,7 +803,10 @@ describe("App", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
 
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
-    expect(await within(wizard).findByText("This wizard started with 2 known chargers. It will detect the next charger that appears in the registry.")).toBeInTheDocument();
+    const knownAtStartRow = (await within(wizard).findByText("Known at start")).closest("div") as HTMLElement;
+    expect(within(knownAtStartRow).getByText("2")).toBeInTheDocument();
+    expect(within(wizard).getByText("Detection")).toBeInTheDocument();
+    expect(within(wizard).getByText("Waiting for the next registry row")).toBeInTheDocument();
     expect(within(wizard).queryByText("Charger detected")).not.toBeInTheDocument();
     expect(within(wizard).queryByText("SMART-EVSE-OLD")).not.toBeInTheDocument();
 
