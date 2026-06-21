@@ -1508,8 +1508,8 @@ describe("App", () => {
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Sessions" }));
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
-    expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
-    expect(screen.getByText("TAG-1")).toBeInTheDocument();
+    expect((await screen.findAllByText("SMART-EVSE-1")).length).toBeGreaterThan(0);
+    expect(await screen.findByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("Missing stop?")).toBeInTheDocument();
     expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
     expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();

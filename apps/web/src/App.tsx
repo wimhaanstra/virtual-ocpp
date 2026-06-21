@@ -1,567 +1,59 @@
-import { Fragment, type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
-  ChevronDown,
-  Eye,
-  EyeOff,
-  Gauge,
-  KeyRound,
-  LayoutDashboard,
-  ListChecks,
-  LogOut,
-  MessagesSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
-  PlugZap,
   Plus,
   Power,
   PowerOff,
-  RefreshCcw,
-  SlidersHorizontal,
-  SunMoon,
-  Tags as TagsIcon,
   Trash2,
-  X,
-  type LucideIcon
+  X
 } from "lucide-react";
 import { Button } from "./components/ui/button";
-
-type Tag = {
-  id: string;
-  uuid: string;
-  label: string | null;
-  enabled: boolean;
-  createdAt: string;
-  chargerAccess?: ChargerAccessState[] | Record<string, boolean> | null;
-  allowedChargerIds?: string[] | null;
-};
-
-type ChargerAccessState = {
-  chargerId: string;
-  enabled: boolean;
-};
-
-type ProxyTarget = {
-  id: string;
-  name: string;
-  url: string;
-  chargerId?: string;
-  stationId: string | null;
-  enabled: boolean;
-  mode: "monitor-only" | "deny-capable";
-  outagePolicy: "fail-open" | "fail-closed";
-  hasUsername: boolean;
-  hasBasicAuthPassword: boolean;
-  tagMappings?: ProxyTagMapping[];
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ProxyTagMapping = {
-  id?: string;
-  localIdTag: string;
-  outboundIdTag: string;
-};
-
-type ChargerRegistryRow = {
-  id: string;
-  chargerId?: string | null;
-  label?: string | null;
-  active?: boolean;
-  connectedAt?: string | null;
-  disconnectedAt?: string | null;
-  lastSeenAt?: string | null;
-  updatedAt?: string | null;
-};
-
-type ChargingSession = {
-  id: string;
-  chargerId: string;
-  connectorId: number;
-  transactionId: number;
-  idTag: string | null;
-  startedAt: string;
-  stoppedAt: string | null;
-  startMeterWh: number | null;
-  stopMeterWh: number | null;
-  stopReason: string | null;
-  status: string;
-  active: boolean;
-};
-
-type ChargingStats = {
-  sessionId: string;
-  chargerId: string;
-  connectorId: number;
-  transactionId: number;
-  idTag: string | null;
-  startedAt: string;
-  elapsedSeconds: number;
-  startMeterWh: number | null;
-  latestMeterWh: number | null;
-  energyUsedWh: number | null;
-  latestPowerW: number | null;
-  latestCurrentA: number | null;
-  latestVoltageV: number | null;
-  latestSampleAt: string | null;
-  latestEnergyContext: string | null;
-  latestPowerContext: string | null;
-};
-
-type ProxyHealthResponse = {
-  chargerId: string | null;
-  summary: {
-    total: number;
-    connected: number;
-    backoff: number;
-    waitingForCharger: number;
-    disabled: number;
-  };
-  targets: ProxyHealthTarget[];
-};
-
-type ProxyHealthTarget = {
-  proxyTargetId: string;
-  name: string;
-  chargerId: string | null;
-  enabled: boolean;
-  mode: string;
-  outagePolicy: string;
-  connected: boolean;
-  state: "disabled" | "waiting_for_charger" | "connected" | "connecting" | "backoff" | "disconnected" | "unknown";
-  detail: string;
-  upstreamIdentity: string | null;
-  hadSuccessfulConnection: boolean;
-  lastConnectedAt: string | null;
-  lastDisconnectedAt: string | null;
-  lastSuccessAt: string | null;
-  lastFailureAt: string | null;
-  nextReconnectAt: string | null;
-  lastErrorCode: string | null;
-};
-
-type ActiveSessionAuditResponse = {
-  summary: {
-    activeSessions: number;
-    flaggedSessions: number;
-  };
-  items: ActiveSessionAuditItem[];
-};
-
-type ActiveSessionAuditItem = {
-  sessionId: string;
-  chargerId: string;
-  connectorId: number;
-  transactionId: number;
-  startedAt: string;
-  chargerConnected: boolean;
-  latestStatus: string | null;
-  latestStatusAt: string | null;
-  latestMeterSampleAt: string | null;
-  latestMeterWh: number | null;
-  forceCloseMeterSource: "latest-meter-sample" | "start-meter" | "unknown";
-  proxyMappings: Array<{
-    proxyTargetId: string;
-    proxyTargetName: string;
-    externalTransactionId: number;
-    stoppedAt: string | null;
-  }>;
-  warnings: Array<{
-    code: string;
-    severity: "warn";
-    message: string;
-    createdAt: string | null;
-  }>;
-  recommendedAction: "remote_stop" | "force_close_preview";
-};
-
-type ForceClosePreview = {
-  session: ChargingSession;
-  localStopTransaction: {
-    transactionId: number;
-    idTag?: string;
-    meterStop?: number;
-    timestamp?: string;
-    reason?: string;
-  };
-  meterSource: "latest-meter-sample" | "start-meter" | "unknown";
-  latestMeterSample: {
-    sampledAt: string;
-    value: string;
-    meterWh: number;
-    measurand: string | null;
-    unit: string | null;
-    transactionId: number | null;
-  } | null;
-  proxyPayloads: Array<{
-    proxyTargetId: string;
-    proxyTargetName: string;
-    proxyTargetEnabled: boolean;
-    externalTransactionId: number;
-    payload: Record<string, unknown>;
-  }>;
-  warnings: string[];
-  proxyResults?: Array<{
-    proxyTargetId: string;
-    proxyTargetName: string;
-    externalTransactionId: number;
-    attempted: boolean;
-    ok: boolean;
-  }>;
-};
-
-type LogEntry = {
-  id: string;
-  level: string;
-  category: string;
-  message: string;
-  chargerId: string | null;
-  transactionId: number | null;
-  createdAt: string;
-  hasMetadata: boolean;
-  context: Record<string, string> | null;
-};
-
-type CommunicationJournalItem = {
-  id: string;
-  createdAt: string;
-  direction: "inbound" | "outbound";
-  sourceType: string;
-  sourceId: string;
-  targetType: string;
-  targetId: string;
-  chargerId: string | null;
-  proxyTargetId: string | null;
-  messageType: string;
-  ocppMethod: string | null;
-  transactionId: number | null;
-  idTag: string | null;
-  payload: unknown;
-  errorCode: string | null;
-  errorDescription: string | null;
-  correlationId: string | null;
-};
-
-type CommunicationJournalResponse = {
-  items: CommunicationJournalItem[];
-  retentionHours: number;
-};
-
-type DashboardConfig = {
-  ocppWebSocketUrl: string;
-  ocppProtocol: string;
-  ocppBasicAuthRequired: boolean;
-  ocppBasicAuthUsername: string | null;
-};
-
-type ActiveView = "Home" | "Proxy targets" | "Tags" | "Sessions" | "Communication";
-type ThemeMode = "dark" | "light";
-
-type CommunicationJournalFilters = {
-  from: string;
-  to: string;
-  sourceType: string;
-  sourceId: string;
-  targetType: string;
-  targetId: string;
-  chargerId: string;
-  proxyTargetId: string;
-  ocppMethod: string;
-  messageType: string;
-};
-
-type TagFormState = {
-  id: string | null;
-  uuid: string;
-  label: string;
-  enabled: boolean;
-};
-
-type ProxyTargetFormState = {
-  id: string | null;
-  name: string;
-  url: string;
-  username: string;
-  stationId: string;
-  enabled: boolean;
-  mode: ProxyTarget["mode"];
-  outagePolicy: ProxyTarget["outagePolicy"];
-  basicAuthPassword: string;
-  clearUsername: boolean;
-  clearBasicAuthPassword: boolean;
-  hasUsername: boolean;
-  hasBasicAuthPassword: boolean;
-  tagMappings: ProxyTagMapping[];
-  tagMappingsDirty: boolean;
-};
-
-const emptyCommunicationJournalFilters = (): CommunicationJournalFilters => ({
-  from: "",
-  to: "",
-  sourceType: "",
-  sourceId: "",
-  targetType: "",
-  targetId: "",
-  chargerId: "",
-  proxyTargetId: "",
-  ocppMethod: "",
-  messageType: ""
-});
-
-const emptyTagForm = (): TagFormState => ({
-  id: null,
-  uuid: "",
-  label: "",
-  enabled: true
-});
-
-const emptyProxyTargetForm = (): ProxyTargetFormState => ({
-  id: null,
-  name: "",
-  url: "",
-  username: "",
-  stationId: "",
-  enabled: true,
-  mode: "monitor-only",
-  outagePolicy: "fail-open",
-  basicAuthPassword: "",
-  clearUsername: false,
-  clearBasicAuthPassword: false,
-  hasUsername: false,
-  hasBasicAuthPassword: false,
-  tagMappings: [],
-  tagMappingsDirty: false
-});
-
-const navItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
-  { view: "Home", label: "Dashboard", icon: LayoutDashboard },
-  { view: "Communication", label: "Communication", icon: MessagesSquare },
-  { view: "Sessions", label: "Sessions", icon: ListChecks },
-  { view: "Proxy targets", label: "Proxy targets", icon: PlugZap },
-  { view: "Tags", label: "Tags", icon: TagsIcon }
-];
-
-const viewPaths: Record<ActiveView, string> = {
-  Home: "/",
-  "Proxy targets": "/proxy-targets",
-  Tags: "/tags",
-  Sessions: "/sessions",
-  Communication: "/communication"
-};
-
-const pathViews = new Map<string, ActiveView>(Object.entries(viewPaths).map(([view, path]) => [path, view as ActiveView]));
-
-function getSearchParam(name: string) {
-  return new URLSearchParams(window.location.search).get(name) ?? "";
-}
-
-function getViewFromPath(pathname = window.location.pathname): ActiveView {
-  return pathViews.get(pathname.replace(/\/+$/, "") || "/") ?? "Home";
-}
-
-function buildViewUrl(view: ActiveView, chargerId: string) {
-  const params = new URLSearchParams();
-  if (chargerId) {
-    params.set("chargerId", chargerId);
-  }
-
-  const query = params.toString();
-  return `${viewPaths[view]}${query ? `?${query}` : ""}`;
-}
-
-function withChargerContext(url: string, chargerId: string) {
-  if (!chargerId) return url;
-
-  const [path, query = ""] = url.split("?");
-  const params = new URLSearchParams(query);
-  params.set("chargerId", chargerId);
-  return `${path}?${params.toString()}`;
-}
-
-function getStoredPreference(key: string) {
-  try {
-    return typeof window.localStorage?.getItem === "function" ? window.localStorage.getItem(key) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setStoredPreference(key: string, value: string) {
-  try {
-    if (typeof window.localStorage?.setItem === "function") {
-      window.localStorage.setItem(key, value);
-    }
-  } catch {
-    // Preference persistence is best-effort; UI state still works without storage.
-  }
-}
-
-function getInitialTheme(): ThemeMode {
-  const storedTheme = getStoredPreference("virtual-ocpp-theme");
-  if (storedTheme === "light" || storedTheme === "dark") {
-    return storedTheme;
-  }
-
-  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
-}
-
-function getInitialSidebarCollapsed() {
-  return getStoredPreference("virtual-ocpp-sidebar-collapsed") === "true";
-}
-
-function getChargerDisplayLabel(charger: ChargerRegistryRow) {
-  return charger.label?.trim() || charger.chargerId?.trim() || charger.id;
-}
-
-function getChargerContextId(charger: ChargerRegistryRow) {
-  return charger.chargerId?.trim() || charger.id;
-}
-
-function getChargerSortTime(charger: ChargerRegistryRow) {
-  const candidates = [charger.lastSeenAt, charger.updatedAt, charger.connectedAt, charger.disconnectedAt].filter(Boolean);
-  const value = candidates[0];
-  return value ? new Date(value).getTime() : 0;
-}
-
-function sortChargers(chargers: ChargerRegistryRow[]) {
-  return [...chargers].sort((left, right) => getChargerSortTime(right) - getChargerSortTime(left));
-}
-
-function getTagAccessForCharger(tag: Tag, chargerId: string) {
-  if (!chargerId) return null;
-
-  if (Array.isArray(tag.chargerAccess)) {
-    const match = tag.chargerAccess.find((access) => access.chargerId === chargerId);
-    return match?.enabled ?? null;
-  }
-
-  if (tag.chargerAccess && !Array.isArray(tag.chargerAccess)) {
-    const value = tag.chargerAccess[chargerId];
-    return typeof value === "boolean" ? value : null;
-  }
-
-  if (Array.isArray(tag.allowedChargerIds)) {
-    return tag.allowedChargerIds.includes(chargerId);
-  }
-
-  return null;
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString();
-}
-
-function formatEnergyWh(value: number | null) {
-  if (value === null) return "-";
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(2)} kWh`;
-  return `${Math.round(value)} Wh`;
-}
-
-function formatPowerW(value: number | null) {
-  if (value === null) return "-";
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)} kW`;
-  return `${Math.round(value)} W`;
-}
-
-function formatDecimalUnit(value: number | null, unit: string) {
-  if (value === null) return "-";
-  const rounded = Math.round(value * 10) / 10;
-  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} ${unit}`;
-}
-
-function formatDuration(seconds: number) {
-  const safeSeconds = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
-
-function formatProxyHealthState(state: ProxyHealthTarget["state"]) {
-  return state.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function proxyHealthTone(state: ProxyHealthTarget["state"]) {
-  if (state === "connected") return "pill-good";
-  if (state === "backoff" || state === "disconnected") return "pill-warning";
-  return "pill-neutral";
-}
-
-function findAuditForSession(audit: ActiveSessionAuditResponse | null, session: ChargingSession) {
-  return audit?.items.find((item) => item.sessionId === session.id || item.transactionId === session.transactionId) ?? null;
-}
-
-function formatTagMappingCount(count: number) {
-  if (count === 0) return "None";
-  return `${count} mapping${count === 1 ? "" : "s"}`;
-}
-
-function stringifyPayload(payload: unknown) {
-  const serialized = JSON.stringify(payload, null, 2);
-  if (serialized !== undefined) return serialized;
-  return String(payload);
-}
-
-function buildCommunicationSummary(item: CommunicationJournalItem) {
-  const parts = [item.messageType];
-
-  if (item.ocppMethod) {
-    parts.push(item.ocppMethod);
-  }
-
-  if (item.transactionId !== null) {
-    parts.push(`tx ${item.transactionId}`);
-  }
-
-  if (item.errorCode) {
-    parts.push(item.errorDescription ? `${item.errorCode}: ${item.errorDescription}` : item.errorCode);
-  }
-
-  if (item.idTag) {
-    parts.push(`tag ${item.idTag}`);
-  }
-
-  return parts.join(" • ");
-}
-
-function buildCommunicationJournalQuery(filters: CommunicationJournalFilters, chargerId: string) {
-  const params = new URLSearchParams();
-
-  params.set("limit", "200");
-
-  if (chargerId) {
-    params.set("chargerId", chargerId);
-  }
-
-  for (const [key, value] of Object.entries(filters)) {
-    const trimmed = value.trim();
-    if (trimmed) {
-      params.set(key, trimmed);
-    }
-  }
-
-  const query = params.toString();
-  return query ? `/api/communication-journal?${query}` : "/api/communication-journal";
-}
-
-function getProxyTargetUpstreamIdentity(target: ProxyTarget, chargerId: string) {
-  return target.stationId?.trim() || chargerId || target.chargerId || "";
-}
-
-function buildProxyTargetConnectionUrl(url: string, stationId: string) {
-  const trimmedUrl = url.trim().replace(/\/+$/, "");
-  const trimmedStationId = stationId.trim().replace(/^\/+/, "");
-  if (!trimmedUrl) return "";
-  return trimmedStationId ? `${trimmedUrl}/${encodeURIComponent(trimmedStationId)}` : trimmedUrl;
-}
-
-function proxyUrlIncludesStationId(url: string, stationId: string) {
-  const trimmedUrl = url.trim().replace(/\/+$/, "");
-  const trimmedStationId = stationId.trim().replace(/^\/+|\/+$/g, "");
-  return Boolean(trimmedUrl && trimmedStationId && trimmedUrl.endsWith(`/${trimmedStationId}`));
-}
+import { AppChrome } from "./components/AppChrome";
+import { AuthPage } from "./components/AuthPage";
+import { CommunicationView } from "./components/CommunicationView";
+import { DashboardView } from "./components/DashboardView";
+import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
+import { SessionsView } from "./components/SessionsView";
+import type {
+  ActiveSessionAuditResponse,
+  ActiveView,
+  ChargerRegistryRow,
+  ChargingSession,
+  ChargingStats,
+  CommunicationJournalFilters,
+  CommunicationJournalItem,
+  CommunicationJournalResponse,
+  DashboardConfig,
+  ForceClosePreview,
+  LogEntry,
+  ProxyHealthResponse,
+  ProxyTagMapping,
+  ProxyTarget,
+  ProxyTargetFormState,
+  Tag,
+  TagFormState,
+  ThemeMode
+} from "./types";
+import {
+  buildCommunicationJournalQuery,
+  buildProxyTargetConnectionUrl,
+  buildViewUrl,
+  emptyCommunicationJournalFilters,
+  emptyProxyTargetForm,
+  emptyTagForm,
+  formatTagMappingCount,
+  getChargerContextId,
+  getChargerDisplayLabel,
+  getInitialSidebarCollapsed,
+  getInitialTheme,
+  getSearchParam,
+  getTagAccessForCharger,
+  getViewFromPath,
+  getProxyTargetUpstreamIdentity,
+  proxyUrlIncludesStationId,
+  setStoredPreference,
+  withChargerContext
+} from "./app-helpers";
 
 export default function App() {
   const [username, setUsername] = useState("admin");
@@ -1430,690 +922,76 @@ export default function App() {
 
   if (!authenticated) {
     return (
-      <main className="auth-page">
-        <section className="auth-layout">
-          <section className="panel hero-panel">
-            <div className="brand">
-              <PlugZap aria-hidden="true" />
-              <span>Virtual OCPP</span>
-            </div>
-            <h1>Admin access</h1>
-            <p className="hero-copy">Manage OCPP proxy targets for the local Smart EVSE bridge.</p>
-          </section>
-
-          <section className="panel auth-card">
-            <div>
-              <p className="eyebrow">Protected</p>
-              <h2>Sign in</h2>
-            </div>
-            <p className="notice" role="status">
-              {message}
-            </p>
-            <form className="form-grid" onSubmit={login}>
-              <label className="field">
-                <span>Username</span>
-                <input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
-              </label>
-              <label className="field">
-                <span>Password</span>
-                <input
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  autoComplete="current-password"
-                />
-              </label>
-              <Button type="submit" disabled={busy || !username || !password}>
-                <KeyRound aria-hidden="true" />
-                Sign in
-              </Button>
-            </form>
-          </section>
-        </section>
-      </main>
+      <AuthPage
+        username={username}
+        password={password}
+        message={message}
+        busy={busy}
+        onUsernameChange={setUsername}
+        onPasswordChange={setPassword}
+        onSubmit={login}
+      />
     );
   }
 
   return (
-    <main className={`app-shell ${sidebarCollapsed ? "app-shell-collapsed" : ""}`}>
-      <aside className="sidebar" aria-label="Main navigation">
-        <div className="brand">
-          <PlugZap aria-hidden="true" />
-          <span className="sidebar-label">Virtual OCPP</span>
-        </div>
-        <nav>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                type="button"
-                className={item.view === activeView ? "active" : undefined}
-                aria-current={item.view === activeView ? "page" : undefined}
-                aria-label={sidebarCollapsed ? item.label : undefined}
-                title={sidebarCollapsed ? item.label : undefined}
-                onClick={() => navigateToView(item.view)}
-                key={item.view}
-              >
-                <Icon aria-hidden="true" />
-                <span className="sidebar-label">{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <button
-          type="button"
-          className="sidebar-collapse-button"
-          onClick={() => setSidebarCollapsed((current) => !current)}
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
-          <span className="sidebar-label">{sidebarCollapsed ? "Expand" : "Collapse"}</span>
-        </button>
-      </aside>
-
-      <section className="content">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Self-hosted CSMS</p>
-            <h1>{activeView === "Home" ? "Home dashboard" : activeView}</h1>
-          </div>
-          <div className="topbar-actions topbar-controls">
-            <label className="field topbar-field">
-              <span>Charger context</span>
-              <select value={selectedChargerId} onChange={(event) => setSelectedChargerId(event.target.value)}>
-                <option value="">All chargers</option>
-                {sortChargers(chargers).map((charger) => (
-                  <option key={charger.id} value={getChargerContextId(charger)}>
-                    {getChargerDisplayLabel(charger)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button
-              type="button"
-              className="button-secondary icon-button"
-              onClick={toggleTheme}
-              disabled={busy}
-              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            >
-              <SunMoon aria-hidden="true" />
-            </Button>
-            <Button type="button" className="button-secondary" onClick={() => void logout()} disabled={busy}>
-              <LogOut aria-hidden="true" />
-              <span className="button-label">Sign out</span>
-            </Button>
-          </div>
-        </header>
-
-        {message ? (
-          <p className="notice" role="status">
-            {message}
-          </p>
-        ) : null}
-
+    <AppChrome
+      activeView={activeView}
+      busy={busy}
+      chargers={chargers}
+      message={message}
+      selectedChargerId={selectedChargerId}
+      sidebarCollapsed={sidebarCollapsed}
+      theme={theme}
+      onLogout={() => void logout()}
+      onNavigate={navigateToView}
+      onSelectedChargerChange={setSelectedChargerId}
+      onSidebarCollapsedChange={setSidebarCollapsed}
+      onThemeToggle={toggleTheme}
+    >
         {activeView === "Home" ? (
-          <section className="home-stack">
-            <section className="dashboard-grid home-dashboard-grid">
-              <section className="panel home-panel">
-                <div className="topbar-actions">
-                  <div>
-                    <p className="eyebrow">Charging ingress</p>
-                    <h2>Charger connection</h2>
-                  </div>
-                  <span className={`pill ${selectedConnectionTone}`}>{selectedConnectionStatus}</span>
-                  <Button type="button" className="button-secondary" onClick={() => void loadAdminData()} disabled={busy}>
-                    <RefreshCcw aria-hidden="true" />
-                    <span className="button-label">Refresh</span>
-                  </Button>
-                </div>
-
-                <div className="note-stack">
-                  <div>
-                    <p className="eyebrow">WebSocket URL</p>
-                    <p className="mono connection-url">{dashboardConfig?.ocppWebSocketUrl ?? "Loading connection URL..."}</p>
-                    <p className="status-copy">Use wss:// when this service is served behind TLS.</p>
-                  </div>
-                  <div>
-                    <p className="eyebrow">Protocol</p>
-                    <p>
-                      Use the OCPP 1.6j websocket endpoint. The websocket subprotocol is{" "}
-                      <span className="mono">{dashboardConfig?.ocppProtocol ?? "ocpp1.6"}</span>.
-                    </p>
-                  </div>
-                  <div>
-                    <p className="eyebrow">Authentication</p>
-                    <p>
-                      {dashboardConfig?.ocppBasicAuthRequired
-                        ? `Basic Auth is required. Use the ${dashboardConfig.ocppBasicAuthUsername ?? "charger id"} as the username.`
-                        : "Charger Basic Auth is not required."}{" "}
-                      Secrets are never shown in this dashboard.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="home-link-row" aria-label="Dashboard quick links">
-                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Communication")}>
-                    Communication
-                    <ArrowRight aria-hidden="true" />
-                  </Button>
-                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Sessions")}>
-                    Sessions
-                    <ArrowRight aria-hidden="true" />
-                  </Button>
-                  <Button type="button" className="button-secondary" onClick={() => navigateToView("Proxy targets")}>
-                    Proxy targets
-                    <ArrowRight aria-hidden="true" />
-                  </Button>
-                </div>
-              </section>
-
-              <section className="panel home-panel">
-                <section className="charging-stats-panel charging-stats-panel-standalone" aria-label="Live charging stats">
-                  <div className="current-state__header">
-                    <div>
-                      <p className="eyebrow">Live charging</p>
-                      <h3>
-                        {chargingStatsStatus === "error"
-                          ? "Stats unavailable"
-                          : chargingStats.length > 1
-                            ? `${chargingStats.length} active sessions`
-                            : chargingStats[0]
-                              ? `Transaction ${chargingStats[0].transactionId}`
-                              : chargingStatsStatus === "loading"
-                                ? "Loading stats"
-                                : "No active session"}
-                      </h3>
-                    </div>
-                    <Gauge aria-hidden="true" />
-                  </div>
-                  {chargingStatsStatus === "error" ? (
-                    <p className="status-copy">Live meter stats could not be loaded. Recent sessions may still show active charging state.</p>
-                  ) : chargingStats.length > 0 ? (
-                    <div className="charging-session-stack">
-                      {chargingStats.map((stats) => (
-                        <article className="charging-session-card" key={stats.sessionId}>
-                          {chargingStats.length > 1 ? (
-                            <p className="mono charging-session-card__title">
-                              {stats.chargerId} / tx {stats.transactionId}
-                            </p>
-                          ) : null}
-                          <div className="charging-stats-grid">
-                            <div>
-                              <span>Energy used</span>
-                              <strong>{formatEnergyWh(stats.energyUsedWh)}</strong>
-                            </div>
-                            <div>
-                              <span>Charging power</span>
-                              <strong>{formatPowerW(stats.latestPowerW)}</strong>
-                            </div>
-                            <div>
-                              <span>Current</span>
-                              <strong>{formatDecimalUnit(stats.latestCurrentA, "A")}</strong>
-                            </div>
-                            <div>
-                              <span>Voltage</span>
-                              <strong>{formatDecimalUnit(stats.latestVoltageV, "V")}</strong>
-                            </div>
-                          </div>
-                          <p className="status-copy">
-                            Started {formatDuration(stats.elapsedSeconds)} ago on connector {stats.connectorId}
-                            {stats.latestSampleAt ? `; last meter sample ${formatDateTime(stats.latestSampleAt)}` : "; no meter sample yet"}.
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="status-copy">Start a charging session to see live meter values from OCPP MeterValues.</p>
-                  )}
-                </section>
-            </section>
-          </section>
-
-            <section className="panel table-panel">
-              <div className="topbar-actions page-section-header">
-                <div>
-                  <p className="eyebrow">Session audit</p>
-                  <h2>Missing stop checks</h2>
-                  <p className="status-copy">Flagged active sessions scoped to {selectedChargerLabel}.</p>
-                </div>
-                <Button type="button" className="button-secondary" onClick={() => navigateToView("Sessions")}>
-                  Sessions
-                  <ArrowRight aria-hidden="true" />
-                </Button>
-              </div>
-              {!activeSessionAudit || activeSessionAudit.items.filter((item) => item.warnings.length > 0).length === 0 ? (
-                <p>No active sessions need attention.</p>
-              ) : (
-                <div className="session-audit-list">
-                  {activeSessionAudit.items.filter((item) => item.warnings.length > 0).map((item) => (
-                    <article className="session-audit-item" key={item.sessionId}>
-                      <div className="proxy-health-item__header">
-                        <div>
-                          <h3>Transaction {item.transactionId}</h3>
-                          <p className="status-copy">
-                            Connector {item.connectorId}
-                            {item.latestMeterWh !== null ? `; latest meter ${formatEnergyWh(item.latestMeterWh)}` : ""}
-                            {item.latestStatus ? `; status ${item.latestStatus}` : ""}
-                          </p>
-                        </div>
-                        <span className="pill pill-warning">Needs review</span>
-                      </div>
-                      <p className="status-copy">{item.warnings[0]?.message}</p>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="panel table-panel">
-              <div className="topbar-actions page-section-header">
-                <div>
-                  <p className="eyebrow">Proxy health</p>
-                  <h2>Upstream targets</h2>
-                  <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-                </div>
-                <Button type="button" className="button-secondary" onClick={() => navigateToView("Proxy targets")}>
-                  Proxy targets
-                  <ArrowRight aria-hidden="true" />
-                </Button>
-              </div>
-              {!selectedChargerId ? (
-                <p>Select a charger context to view upstream proxy health.</p>
-              ) : proxyTargetHealth.length === 0 ? (
-                <p>No proxy targets configured for this charger.</p>
-              ) : (
-                <div className="proxy-health-grid">
-                  {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
-                    <article className="proxy-health-item" key={health.proxyTargetId}>
-                      <div className="proxy-health-item__header">
-                        <div>
-                          <h3>{health.name}</h3>
-                          <p className="mono">{connectionUrl}</p>
-                        </div>
-                        <span className={`pill ${proxyHealthTone(health.state)}`}>
-                          {formatProxyHealthState(health.state)}
-                        </span>
-                      </div>
-                      <p className="status-copy">
-                        {health.detail}
-                        {health.lastSuccessAt ? ` Last success ${formatDateTime(health.lastSuccessAt)}.` : ""}
-                        {health.nextReconnectAt ? ` Next retry ${formatDateTime(health.nextReconnectAt)}.` : ""}
-                        {!target ? " Target configuration is not loaded." : ""}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-          </section>
+          <DashboardView
+            activeSessionAudit={activeSessionAudit}
+            busy={busy}
+            chargingStats={chargingStats}
+            chargingStatsStatus={chargingStatsStatus}
+            dashboardConfig={dashboardConfig}
+            proxyTargetHealth={proxyTargetHealth}
+            selectedChargerId={selectedChargerId}
+            selectedChargerLabel={selectedChargerLabel}
+            selectedConnectionStatus={selectedConnectionStatus}
+            selectedConnectionTone={selectedConnectionTone}
+            onNavigate={navigateToView}
+            onRefresh={() => void loadAdminData()}
+          />
         ) : activeView === "Sessions" ? (
-          <section className="panel table-panel">
-            <div className="topbar-actions">
-              <div>
-                <p className="eyebrow">Charging</p>
-                <h2>Recent sessions</h2>
-                <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-              </div>
-              <Button type="button" className="button-secondary" onClick={() => void Promise.all([loadChargingSessions(selectedChargerId), loadActiveSessionAudit(selectedChargerId)])} disabled={busy}>
-                <RefreshCcw aria-hidden="true" />
-                <span className="button-label">Refresh</span>
-              </Button>
-            </div>
-            {chargingSessions.length === 0 ? (
-              <p>No charging sessions recorded yet.</p>
-            ) : (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Charger</th>
-                      <th>Connector</th>
-                      <th>Transaction</th>
-                      <th>Tag</th>
-                      <th>Status</th>
-                      <th>Started</th>
-                      <th>Stopped</th>
-                      <th>Meter Wh</th>
-                      <th>Reason</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chargingSessions.map((session) => {
-                      const audit = findAuditForSession(activeSessionAudit, session);
-                      return (
-                        <Fragment key={session.id}>
-                          <tr>
-                            <td className="mono">{session.chargerId}</td>
-                            <td>{session.connectorId}</td>
-                            <td>{session.transactionId}</td>
-                            <td className="mono">{session.idTag || "None"}</td>
-                            <td>
-                              <div className="status-stack">
-                                <span className={`pill ${session.active ? "pill-good" : "pill-neutral"}`}>
-                                  {session.status}
-                                </span>
-                                {audit && audit.warnings.length > 0 ? <span className="pill pill-warning">Missing stop?</span> : null}
-                              </div>
-                            </td>
-                            <td>{formatDateTime(session.startedAt)}</td>
-                            <td>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</td>
-                            <td>
-                              {session.startMeterWh ?? "-"}
-                              {" / "}
-                              {session.stopMeterWh ?? "-"}
-                            </td>
-                            <td>{session.stopReason || "-"}</td>
-                            <td>
-                              {session.active ? (
-                                <div className="action-row compact-action-row">
-                                  <Button
-                                    type="button"
-                                    className="button-secondary icon-button"
-                                    onClick={() => void remoteStopChargingSession(session)}
-                                    disabled={busy}
-                                    title="Remote stop transaction"
-                                    aria-label={`Remote stop session ${session.transactionId}`}
-                                  >
-                                    <Power aria-hidden="true" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    className="button-secondary icon-button"
-                                    onClick={() => void previewForceCloseChargingSession(session)}
-                                    disabled={busy}
-                                    title="Force close with preview"
-                                    aria-label={`Force close session ${session.transactionId}`}
-                                  >
-                                    <PowerOff aria-hidden="true" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                          </tr>
-                          {audit ? (
-                            <tr>
-                              <td className="session-audit-row" colSpan={10}>
-                                <div className="session-audit-inline">
-                                  <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
-                                  <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>
-                                  <span>Status: {audit.latestStatus ?? "-"}</span>
-                                  <span>Proxy mappings: {audit.proxyMappings.length}</span>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+          <SessionsView
+            activeSessionAudit={activeSessionAudit}
+            busy={busy}
+            chargingSessions={chargingSessions}
+            selectedChargerLabel={selectedChargerLabel}
+            onForceClose={(session) => void previewForceCloseChargingSession(session)}
+            onRefresh={() => void Promise.all([loadChargingSessions(selectedChargerId), loadActiveSessionAudit(selectedChargerId)])}
+            onRemoteStop={(session) => void remoteStopChargingSession(session)}
+          />
         ) : activeView === "Communication" ? (
-          <section className="communication-layout">
-            <section className="panel communication-filters-panel">
-              <div className="compact-filter-heading">
-                <div>
-                  <p className="eyebrow">Journal</p>
-                  <h2>Filters</h2>
-                  <p className="status-copy">
-                    Showing the last 24 hours by default, newest first, limit 200. Retention is {communicationRetentionHours ?? 24} hours. Scoped to {selectedChargerLabel}.
-                  </p>
-                </div>
-                <SlidersHorizontal aria-hidden="true" />
-              </div>
-              <form className="communication-filter-form" onSubmit={applyCommunicationFilters}>
-                <div className="communication-filter-primary">
-                  <label className="field">
-                    <span>OCPP method</span>
-                    <input
-                      value={communicationFilters.ocppMethod}
-                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, ocppMethod: event.target.value }))}
-                      placeholder="BootNotification"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Message type</span>
-                    <select
-                      value={communicationFilters.messageType}
-                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, messageType: event.target.value }))}
-                    >
-                      <option value="">Any</option>
-                      <option value="call">Call</option>
-                      <option value="callResult">Call result</option>
-                      <option value="callError">Call error</option>
-                      <option value="connection">Connection</option>
-                      <option value="disconnect">Disconnect</option>
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>From</span>
-                    <input
-                      value={communicationFilters.from}
-                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, from: event.target.value }))}
-                      type="datetime-local"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>To</span>
-                    <input
-                      value={communicationFilters.to}
-                      onChange={(event) => setCommunicationFilters((current) => ({ ...current, to: event.target.value }))}
-                      type="datetime-local"
-                    />
-                  </label>
-                  <div className="action-row communication-filter-actions">
-                    <Button type="submit" disabled={busy}>
-                      Apply filters
-                    </Button>
-                    <Button type="button" className="button-secondary" onClick={() => void resetCommunicationFilters()} disabled={busy}>
-                      Reset
-                    </Button>
-                  </div>
-                </div>
-
-                <details className="advanced-filters">
-                  <summary>
-                    <span>Advanced filters</span>
-                    <ChevronDown aria-hidden="true" />
-                  </summary>
-                  <div className="communication-filters">
-                    <label className="field">
-                      <span>Source type</span>
-                      <select
-                        value={communicationFilters.sourceType}
-                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, sourceType: event.target.value }))}
-                      >
-                        <option value="">Any</option>
-                        <option value="charger">Charger</option>
-                        <option value="server">Server</option>
-                        <option value="proxy">Proxy</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Source id</span>
-                      <input
-                        value={communicationFilters.sourceId}
-                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, sourceId: event.target.value }))}
-                        placeholder="SMART-EVSE-1"
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Target type</span>
-                      <select
-                        value={communicationFilters.targetType}
-                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, targetType: event.target.value }))}
-                      >
-                        <option value="">Any</option>
-                        <option value="charger">Charger</option>
-                        <option value="server">Server</option>
-                        <option value="proxy">Proxy</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      <span>Target id</span>
-                      <input
-                        value={communicationFilters.targetId}
-                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, targetId: event.target.value }))}
-                        placeholder="server"
-                      />
-                    </label>
-                    <label className="field">
-                      <span>Charger id</span>
-                      {selectedChargerId ? (
-                        <input value={communicationFilters.chargerId} disabled />
-                      ) : (
-                        <input
-                          value={communicationFilters.chargerId}
-                          onChange={(event) => setCommunicationFilters((current) => ({ ...current, chargerId: event.target.value }))}
-                          placeholder="SMART-EVSE-1"
-                        />
-                      )}
-                    </label>
-                    <label className="field">
-                      <span>Proxy target id</span>
-                      <input
-                        value={communicationFilters.proxyTargetId}
-                        onChange={(event) => setCommunicationFilters((current) => ({ ...current, proxyTargetId: event.target.value }))}
-                        placeholder="proxy-1"
-                      />
-                    </label>
-                  </div>
-                </details>
-              </form>
-            </section>
-
-            <section className="panel table-panel communication-table-panel">
-              <div className="topbar-actions">
-                <div>
-                  <p className="eyebrow">Communication</p>
-                  <h2>Recent journal rows</h2>
-                </div>
-                <div className="action-row">
-                  <Button type="button" className="button-secondary" onClick={() => void loadCommunicationJournal(selectedChargerId, communicationFilters)} disabled={busy}>
-                    <RefreshCcw aria-hidden="true" />
-                    <span className="button-label">Refresh</span>
-                  </Button>
-                  <Button type="button" className="button-ghost button-danger" onClick={() => void purgeCommunicationJournal()} disabled={busy}>
-                    <Trash2 aria-hidden="true" />
-                    <span className="button-label">Purge</span>
-                  </Button>
-                </div>
-              </div>
-              {communicationJournal.length === 0 ? (
-                <p>No communication rows match these filters.</p>
-              ) : (
-                <div className="table-wrap communication-table-wrap">
-                  <table className="communication-table">
-                    <thead>
-                      <tr>
-                        <th>Time</th>
-                        <th>Direction</th>
-                        <th>Source</th>
-                        <th>Target</th>
-                        <th>Method</th>
-                        <th>Message type</th>
-                        <th>Charger</th>
-                        <th>Proxy target</th>
-                        <th>Transaction</th>
-                        <th>Summary</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {communicationJournal.map((item) => {
-                        const isExpanded = expandedCommunicationJournalId === item.id;
-
-                        return (
-                          <Fragment key={item.id}>
-                            <tr key={item.id}>
-                              <td>{formatDateTime(item.createdAt)}</td>
-                              <td>
-                                <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
-                              </td>
-                              <td className="mono">{renderCommunicationEndpoint(item.sourceType, item.sourceId)}</td>
-                              <td className="mono">{renderCommunicationEndpoint(item.targetType, item.targetId)}</td>
-                              <td className="mono">{item.ocppMethod || "-"}</td>
-                              <td>{item.messageType}</td>
-                              <td className="mono">{item.chargerId || "-"}</td>
-                              <td className="mono">
-                                {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
-                              </td>
-                              <td>{item.transactionId ?? "-"}</td>
-                              <td>
-                                <div className="communication-summary">
-                                  <Button
-                                    type="button"
-                                    className="button-secondary icon-button communication-toggle"
-                                    onClick={() =>
-                                      setExpandedCommunicationJournalId(isExpanded ? null : item.id)
-                                    }
-                                    aria-expanded={isExpanded}
-                                    aria-controls={`journal-payload-${item.id}`}
-                                    aria-label={isExpanded ? "Hide payload" : "Show payload"}
-                                    title={isExpanded ? "Hide payload" : "Show payload"}
-                                  >
-                                    {isExpanded ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-                                  </Button>
-                                  <p>{buildCommunicationSummary(item)}</p>
-                                </div>
-                              </td>
-                            </tr>
-                            {isExpanded ? (
-                              <tr key={`${item.id}-payload`}>
-                                <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={10}>
-                                  <div className="communication-expanded__grid">
-                                    <div>
-                                      <p className="eyebrow">Payload</p>
-                                      <pre className="communication-payload">{stringifyPayload(item.payload)}</pre>
-                                    </div>
-                                    <div className="communication-details">
-                                      <p>
-                                        <span className="eyebrow">Direction</span>
-                                        <span>{item.direction}</span>
-                                      </p>
-                                      <p>
-                                        <span className="eyebrow">Source</span>
-                                        <span className="mono">{renderCommunicationEndpoint(item.sourceType, item.sourceId)}</span>
-                                      </p>
-                                      <p>
-                                        <span className="eyebrow">Target</span>
-                                        <span className="mono">{renderCommunicationEndpoint(item.targetType, item.targetId)}</span>
-                                      </p>
-                                      <p>
-                                        <span className="eyebrow">Correlation</span>
-                                        <span className="mono">{item.correlationId || "-"}</span>
-                                      </p>
-                                      <p>
-                                        <span className="eyebrow">Error</span>
-                                        <span className="mono">
-                                          {item.errorCode ? item.errorCode : "-"}
-                                          {item.errorDescription ? ` - ${item.errorDescription}` : ""}
-                                        </span>
-                                      </p>
-                                      <p>
-                                        <span className="eyebrow">Tag</span>
-                                        <span className="mono">{item.idTag || "-"}</span>
-                                      </p>
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            ) : null}
-                          </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          </section>
+          <CommunicationView
+            busy={busy}
+            communicationFilters={communicationFilters}
+            communicationJournal={communicationJournal}
+            communicationRetentionHours={communicationRetentionHours}
+            expandedCommunicationJournalId={expandedCommunicationJournalId}
+            proxyTargets={proxyTargets}
+            selectedChargerId={selectedChargerId}
+            selectedChargerLabel={selectedChargerLabel}
+            onApplyFilters={applyCommunicationFilters}
+            onCommunicationFiltersChange={setCommunicationFilters}
+            onExpandedCommunicationJournalIdChange={setExpandedCommunicationJournalId}
+            onPurge={() => void purgeCommunicationJournal()}
+            onRefresh={() => void loadCommunicationJournal(selectedChargerId, communicationFilters)}
+            onRenderEndpoint={renderCommunicationEndpoint}
+            onResetFilters={() => void resetCommunicationFilters()}
+          />
         ) : activeView === "Tags" ? (
           <>
             <section className="panel table-panel">
@@ -2546,86 +1424,13 @@ export default function App() {
             ) : null}
           </section>
         )}
-      </section>
-
-      {forceClosePreview ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="force-close-modal-title">
-            <div className="topbar-actions page-section-header">
-              <div>
-                <p className="eyebrow">Force close</p>
-                <h2 id="force-close-modal-title">Review StopTransaction</h2>
-                <p className="status-copy">
-                  Session {forceClosePreview.session.transactionId} on charger {forceClosePreview.session.chargerId}.
-                </p>
-              </div>
-              <Button type="button" className="button-ghost" onClick={cancelForceClosePreview} disabled={busy} aria-label="Close force close preview">
-                <X aria-hidden="true" />
-              </Button>
-            </div>
-
-            <div className="force-close-summary">
-              <div>
-                <span>Meter source</span>
-                <strong>{forceClosePreview.meterSource}</strong>
-              </div>
-              <div>
-                <span>Stop meter</span>
-                <strong>{forceClosePreview.localStopTransaction.meterStop ?? "None"}</strong>
-              </div>
-              <div>
-                <span>Timestamp</span>
-                <strong>{forceClosePreview.localStopTransaction.timestamp ? formatDateTime(forceClosePreview.localStopTransaction.timestamp) : "None"}</strong>
-              </div>
-            </div>
-
-            {forceClosePreview.latestMeterSample ? (
-              <p className="status-copy">
-                Latest meter sample: {forceClosePreview.latestMeterSample.meterWh} Wh at {formatDateTime(forceClosePreview.latestMeterSample.sampledAt)}.
-              </p>
-            ) : null}
-
-            {forceClosePreview.warnings.length > 0 ? (
-              <div className="force-close-warning">
-                {forceClosePreview.warnings.map((warning) => (
-                  <p key={warning}>{warning}</p>
-                ))}
-              </div>
-            ) : null}
-
-            <div className="force-close-payloads">
-              <div>
-                <p className="eyebrow">Local record</p>
-                <pre className="communication-payload">{stringifyPayload(forceClosePreview.localStopTransaction)}</pre>
-              </div>
-              {forceClosePreview.proxyPayloads.map((entry) => (
-                <div key={`${entry.proxyTargetId}-${entry.externalTransactionId}`}>
-                  <div className="force-close-payload-header">
-                    <div>
-                      <p className="eyebrow">Proxy target</p>
-                      <h3 title={entry.proxyTargetId}>{entry.proxyTargetName}</h3>
-                    </div>
-                    <span className={`pill ${entry.proxyTargetEnabled ? "pill-good" : "pill-warning"}`}>
-                      {entry.proxyTargetEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </div>
-                  <pre className="communication-payload">{stringifyPayload(entry.payload)}</pre>
-                </div>
-              ))}
-            </div>
-
-            <div className="action-row modal-actions">
-              <Button type="button" className="button-secondary" onClick={cancelForceClosePreview} disabled={busy}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => void executeForceCloseChargingSession()} disabled={busy || forceCloseLoading}>
-                <PowerOff aria-hidden="true" />
-                Force close
-              </Button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-    </main>
+      <ForceClosePreviewModal
+        busy={busy}
+        forceCloseLoading={forceCloseLoading}
+        forceClosePreview={forceClosePreview}
+        onCancel={cancelForceClosePreview}
+        onExecute={() => void executeForceCloseChargingSession()}
+      />
+    </AppChrome>
   );
 }

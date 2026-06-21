@@ -26,6 +26,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Charger-scoped proxy targets so each local charger chooses which upstreams it mirrors to
 - Global tags with explicit per-charger access controls
 - Frontend tag, proxy target, sessions, home dashboard, and communication pages as the active admin pages
+- Frontend component split for shared types/helpers, app chrome, auth, dashboard, sessions, communication, and force-close review modal
 - Production Docker image that serves the compiled backend and frontend from one container with `/data` as the SQLite volume
 
 ## Local Run
@@ -52,6 +53,8 @@ The Vite frontend uses client-side routes for the protected admin pages:
 The selected charger context is stored in `?chargerId=...`, so refresh and browser back/forward preserve the active page and charger. Vite handles local development fallback for these routes, and the production Fastify server provides the same single-page app fallback for deep links.
 
 The production Fastify server serves the compiled Vite app from `apps/web/dist` when `NODE_ENV=production`. Unknown frontend routes fall back to `index.html`; reserved backend paths such as `/api/*`, `/health`, and `/ocpp/:chargerId` do not fall back to the SPA.
+
+Frontend shared data contracts live in `apps/web/src/types.ts`. Formatting, routing, charger context, filter, and form defaults live in `apps/web/src/app-helpers.ts`. Page-level rendering that has already been split out lives under `apps/web/src/components/`; `App.tsx` remains the controller for authenticated state, API loading, and mutations.
 
 ## Testing
 

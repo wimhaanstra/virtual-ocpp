@@ -21,25 +21,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Remote stop support: operator action sends OCPP `RemoteStopTransaction` to connected chargers for active sessions while keeping local stale-record cleanup separate.
 - Session reliability and runtime health: active-session audit warnings for likely missing `StopTransaction`, dashboard/session UI for stale-session context, and protected runtime proxy health based on persistent upstream socket state.
 - Production Docker image: compiled backend and frontend in one container, persistent `/data` SQLite volume, healthcheck, compose example, and deployment documentation.
+- Frontend component split: shared frontend types/helpers plus extracted app chrome, auth, dashboard, sessions, communication, and force-close modal components while preserving existing operator behavior.
 
 ## Next Candidate Slices
-
-### Slice 5.5: Frontend Component Split
-
-Goal: break the current large React app file into focused components and hooks without changing operator behavior.
-
-Scope:
-
-- Extract the app shell, sidebar/topbar, dashboard, sessions, communication, proxy targets, tags, and modal forms into separate files.
-- Extract shared formatting, API loading helpers, charger context helpers, and form state helpers into reusable modules.
-- Keep current routes, visuals, tests, and API behavior stable.
-- Add or adjust frontend tests around the extracted components where behavior risk is highest.
-
-Acceptance criteria:
-
-- `apps/web/src/App.tsx` becomes a thin composition layer instead of the main implementation file.
-- Existing admin workflows still pass tests: dashboard, sessions, communication, tags, proxy targets, auth/logout, theme/sidebar preferences, and charger context routing.
-- No UI redesign is included unless required by the extraction.
 
 ### Slice 5.6: Live Operator Updates
 
