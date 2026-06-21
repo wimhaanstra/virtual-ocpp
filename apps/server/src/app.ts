@@ -14,6 +14,7 @@ import { ChargerCommandService } from './ocpp/charger-command-service.js';
 import { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import { registerOcppServer } from './ocpp/server.js';
 import { registerProxyTargetRoutes } from './proxy-targets.js';
+import { registerSettingsRoutes } from './settings.js';
 import { registerVisibilityRoutes } from './visibility.js';
 import { registerTagRoutes } from './tags.js';
 import { closeStaleChargerConnections } from './startup-maintenance.js';
@@ -53,6 +54,7 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWith
   registerAuthRoutes(app, config, db, liveUpdates);
   registerLiveUpdateRoutes(app, db, liveUpdates);
   registerDashboardConfigRoutes(app, config, db);
+  registerSettingsRoutes(app, db);
   registerChargingStatsRoutes(app, db);
   registerChargerRoutes(app, config, db, liveUpdates, chargerCommands, proxyAuthorization);
   registerTagRoutes(app, db, liveUpdates);

@@ -342,7 +342,17 @@ export type DashboardConfig = {
   ocppBasicAuthUsername: string | null;
 };
 
-export type ActiveView = "Home" | "Charger dashboard" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
+export type OnboardingSettings = {
+  completed: boolean;
+  completedAt: string | null;
+  skippedAt: string | null;
+};
+
+export type OnboardingState = "unknown" | "pending" | "completed" | "skipped";
+
+export type OnboardingSettingsStatus = "idle" | "loading" | "ready" | "unavailable" | "error";
+
+export type ActiveView = "Home" | "Settings" | "Charger dashboard" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
 export type ThemeMode = "dark" | "light";
 
 export type CommunicationJournalFilters = {

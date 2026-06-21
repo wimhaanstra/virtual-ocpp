@@ -16,6 +16,7 @@ import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
 import { GlobalDashboardView } from "./components/GlobalDashboardView";
 import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
+import { SettingsView } from "./components/SettingsView";
 import { TagAccessView } from "./components/TagAccessView";
 import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
 import { ChargerContextSwitcher } from "./components/ChargerContextSwitcher";
@@ -42,6 +43,8 @@ import type {
   MeterGapEventsResponse,
   MeterGapRecoveryPreview,
   MeterGapRecoverySubmitResponse,
+  OnboardingSettings,
+  OnboardingSettingsStatus,
   ProxyHealthResponse,
   ProxyTagMapping,
   ProxyTarget,
@@ -106,6 +109,8 @@ export default function App() {
   const [communicationFilters, setCommunicationFilters] = useState<CommunicationJournalFilters>(() => emptyCommunicationJournalFilters());
   const [expandedCommunicationJournalId, setExpandedCommunicationJournalId] = useState<string | null>(null);
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig | null>(null);
+  const [onboardingSettings, setOnboardingSettings] = useState<OnboardingSettings | null>(null);
+  const [onboardingSettingsStatus, setOnboardingSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
   const [tagForm, setTagForm] = useState<TagFormState>(() => emptyTagForm());
   const [proxyTargetForm, setProxyTargetForm] = useState<ProxyTargetFormState>(() => emptyProxyTargetForm());
   const [tagModalOpen, setTagModalOpen] = useState(false);
@@ -359,6 +364,8 @@ export default function App() {
     setChargerDeleteAdminPassword("");
     setChargerDeleteConfirmation("");
     setRemoteStopTarget(null);
+    setOnboardingSettings(null);
+    setOnboardingSettingsStatus("idle");
     setSelectedChargerId("");
     setActiveView("Home");
     setLiveStatus("connecting");
@@ -392,7 +399,7 @@ export default function App() {
   }
 
   async function loadAdminData(chargerId = selectedChargerId) {
-    await Promise.all([loadDashboardConfig(), loadChargers()]);
+    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings()]);
   }
 
   async function loadScopedData(chargerId = selectedChargerId) {
@@ -419,6 +426,28 @@ export default function App() {
       return;
     }
     setDashboardConfig(data);
+  }
+
+  async function loadOnboardingSettings() {
+    setOnboardingSettingsStatus("loading");
+
+    const response = await fetch("/api/settings/onboarding", { credentials: "include" });
+    if (handleUnauthorized(response)) return;
+    if (response.status === 404) {
+      setOnboardingSettings(null);
+      setOnboardingSettingsStatus("unavailable");
+      return;
+    }
+
+    if (!response.ok) {
+      setOnboardingSettings(null);
+      setOnboardingSettingsStatus("error");
+      return;
+    }
+
+    const data = (await response.json()) as OnboardingSettings;
+    setOnboardingSettings(data);
+    setOnboardingSettingsStatus("ready");
   }
 
   async function loadTags() {
@@ -1457,6 +1486,14 @@ export default function App() {
             onDelete={(charger) => void startChargerDelete(charger)}
             onEditLabel={(charger) => void startChargerLabelEdit(charger)}
             onRefresh={() => void loadChargers()}
+          />
+        ) : activeView === "Settings" ? (
+          <SettingsView
+            busy={busy}
+            onboardingSettings={onboardingSettings}
+            onboardingSettingsStatus={onboardingSettingsStatus}
+            onRefreshOnboarding={() => void loadOnboardingSettings()}
+            onRunOnboarding={() => void openChargerWizard()}
           />
         ) : activeView === "Sessions" ? (
           <>

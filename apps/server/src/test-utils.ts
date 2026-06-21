@@ -39,6 +39,12 @@ export function createTestDatabase() {
       revoked_at integer
     );
 
+    CREATE TABLE onboarding_settings (
+      id text PRIMARY KEY NOT NULL,
+      completed_at integer,
+      skipped_at integer
+    );
+
     CREATE TABLE tags (
       id text PRIMARY KEY NOT NULL,
       uuid text NOT NULL UNIQUE,

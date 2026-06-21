@@ -9,6 +9,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlugZap,
+  Settings2,
   SunMoon,
   Tags as TagsIcon,
   type LucideIcon
@@ -25,6 +26,7 @@ const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: Luci
 
 const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
   { view: "Home", label: "Overview", icon: LayoutDashboard },
+  { view: "Settings", label: "Settings", icon: Settings2 },
   { view: "Chargers", label: "Chargers", icon: BatteryCharging },
   { view: "Tags", label: "Tags", icon: TagsIcon },
   { view: "Communication", label: "Communication", icon: MessagesSquare }

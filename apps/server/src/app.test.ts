@@ -83,6 +83,8 @@ describe('app', () => {
       { method: 'GET', url: '/api/chargers' },
       { method: 'GET', url: '/api/proxy-targets?chargerId=CHARGER-1' },
       { method: 'GET', url: '/api/proxy-health?chargerId=CHARGER-1' },
+      { method: 'GET', url: '/api/settings/onboarding' },
+      { method: 'PATCH', url: '/api/settings/onboarding' },
       { method: 'GET', url: '/api/tags' },
       { method: 'GET', url: '/api/charger-connections' },
       { method: 'GET', url: '/api/sessions' },

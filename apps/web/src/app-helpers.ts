@@ -8,6 +8,8 @@ import type {
   ProxyHealthTarget,
   ProxyTarget,
   ProxyTargetFormState,
+  OnboardingSettings,
+  OnboardingState,
   Tag,
   TagFormState,
   ThemeMode
@@ -55,6 +57,7 @@ export const emptyProxyTargetForm = (): ProxyTargetFormState => ({
 
 export const viewPaths: Record<ActiveView, string> = {
   Home: "/",
+  Settings: "/settings",
   "Charger dashboard": "/charger-dashboard",
   Chargers: "/chargers",
   "Proxy targets": "/proxy-targets",
@@ -91,6 +94,27 @@ export function withChargerContext(url: string, chargerId: string) {
   const params = new URLSearchParams(query);
   params.set("chargerId", chargerId);
   return `${path}?${params.toString()}`;
+}
+
+export function getOnboardingState(settings: OnboardingSettings | null): OnboardingState {
+  if (!settings) return "unknown";
+  if (settings.completedAt) return "completed";
+  if (settings.skippedAt) return "skipped";
+  if (settings.completed) return "completed";
+  return "pending";
+}
+
+export function getOnboardingStateLabel(state: OnboardingState) {
+  if (state === "completed") return "Completed";
+  if (state === "skipped") return "Skipped";
+  if (state === "pending") return "Pending";
+  return "Unavailable";
+}
+
+export function getOnboardingStateTone(state: OnboardingState) {
+  if (state === "completed") return "pill-good";
+  if (state === "skipped") return "pill-warning";
+  return "pill-neutral";
 }
 
 export function getStoredPreference(key: string) {

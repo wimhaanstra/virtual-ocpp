@@ -8,6 +8,12 @@ export const sessions = sqliteTable('sessions', {
   revokedAt: integer('revoked_at', { mode: 'timestamp_ms' })
 });
 
+export const onboardingSettings = sqliteTable('onboarding_settings', {
+  id: text('id').primaryKey(),
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  skippedAt: integer('skipped_at', { mode: 'timestamp_ms' })
+});
+
 export const tags = sqliteTable('tags', {
   id: text('id').primaryKey(),
   uuid: text('uuid').notNull().unique(),

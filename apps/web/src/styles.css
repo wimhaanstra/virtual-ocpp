@@ -993,6 +993,53 @@ a {
   align-items: start;
 }
 
+.settings-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.settings-status-grid div {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+  padding: 12px;
+}
+
+.settings-status-grid dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.settings-status-grid dd {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 680;
+  overflow-wrap: anywhere;
+}
+
+.settings-action-row {
+  justify-content: flex-start;
+}
+
 .global-active-sessions {
   align-content: start;
 }
@@ -2227,6 +2274,7 @@ td {
   .auth-layout,
   .dashboard-grid,
   .global-dashboard-main,
+  .settings-layout,
   .tag-layout,
   .proxy-assignment-grid,
   .proxy-target-layout,
@@ -2353,7 +2401,8 @@ td {
   .charger-wizard-grid,
   .modal-form-grid,
   .session-detail-grid,
-  .communication-expanded__grid {
+  .communication-expanded__grid,
+  .settings-status-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2366,6 +2415,7 @@ td {
   }
 
   .global-dashboard-hero,
+  .settings-layout,
   .charger-dashboard-hero__header,
   .global-session-list article {
     flex-direction: column;

@@ -54,6 +54,7 @@ The Vite frontend uses client-side routes for the protected admin pages:
 - `/tags`: global tag identity management
 - `/sessions`: charging sessions
 - `/communication`: redacted OCPP communication journal
+- `/settings`: global operator settings and setup actions
 
 The selected charger context is stored in `?chargerId=...`, so refresh and browser back/forward preserve the active page and charger. Vite handles local development fallback for these routes, and the production Fastify server provides the same single-page app fallback for deep links.
 
@@ -62,6 +63,15 @@ The production Fastify server serves the compiled Vite app from `apps/web/dist` 
 Frontend shared data contracts live in `apps/web/src/types.ts`. Formatting, routing, charger context, filter, and form defaults live in `apps/web/src/app-helpers.ts`. Page-level rendering that has already been split out lives under `apps/web/src/components/`; `App.tsx` remains the controller for authenticated state, API loading, and mutations.
 
 The protected frontend opens `GET /api/live-updates` with `EventSource` after admin login. The endpoint uses the signed admin session cookie, sends `live-update` SSE events, and replays recent events when the browser reconnects with `Last-Event-ID`. Events are typed by backend change source, but the frontend treats them as invalidation hints and refetches the affected REST slices. Manual refresh buttons remain as fallback controls, and the topbar shows `Live`, `Connecting`, or `Stale`.
+
+## Settings Workflow
+
+The protected Settings page is the global home for operator preferences and setup actions. The first implemented setting is onboarding state:
+
+- `GET /api/settings/onboarding` returns `{ completed, completedAt, skippedAt }`.
+- `PATCH /api/settings/onboarding` accepts exactly one action: `{ "completed": true }`, `{ "skipped": true }`, or `{ "reset": true }`.
+
+Onboarding settings are stored in SQLite as installation-level state, not browser-only state. The Settings page shows the current onboarding state and has a manual "Run onboarding" action that opens the current charger onboarding workflow without changing stored completion or skip timestamps.
 
 ## Testing
 

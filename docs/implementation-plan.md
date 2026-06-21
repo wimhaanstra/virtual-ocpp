@@ -30,6 +30,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Operator UI density cleanup: repeated table and page-level utility actions use compact icon buttons with descriptive titles/accessibility labels, table/action spacing is tighter, the sidebar has a compact title-level collapse button plus bottom-aligned global links and wider footer controls, and `/` is now a clean global dashboard while the charger-specific dashboard lives at `/charger-dashboard`.
 - Charger dashboard simplification: charger-specific dashboard replaces the bulky ingress panel with a compact hero backed by protected stored session totals, and upstream proxy health is shown as a compact target/state list.
 - Proxy target form polish: modal sections align fields without inline description offsets, stored credentials use masked inputs with dirty-state updates, clear checkboxes are removed, and tag mappings live as the final form section.
+- Settings foundation and onboarding state: global Settings page, protected persisted onboarding settings API, SQLite migration, completion/skip/reset actions, and manual onboarding relaunch entry point.
 
 ## Next Candidate Slices
 
@@ -59,3 +60,273 @@ Acceptance criteria:
 - The final state routes the operator to the charger dashboard for the new charger.
 - Frontend tests cover first-run opening, skip/complete persistence, manual relaunch from Settings, charger detection, tag creation/selection, tag grant submission, and optional proxy target creation.
 - Operator documentation explains when onboarding appears and how to rerun the setup manually.
+
+### Docs refresh
+
+Refresh the product and operator documentation so it matches the implemented product and the next onboarding/settings direction. This slice is about removing drift, not expanding into tutorials.
+
+Scope:
+
+- Update project, development, and deployment docs to reflect the current charger onboarding flow, charger context model, communication journal, simulator, live updates, and proxy runtime behavior.
+- Add compact operator-facing guidance for first-run setup, charger-scoped tag access, proxy target setup, and routine troubleshooting entry points.
+- Remove speculative or stale statements that are not backed by executable config, code, or completed slices.
+- Cross-link the implementation plan and design docs where they are the current source of truth for upcoming work.
+
+Acceptance criteria:
+
+- `docs/project-definition.md`, `docs/development.md`, and `docs/deployment.md` describe the current product behavior without contradicting implemented code paths.
+- First-run setup and rerun expectations are documented in operator-facing language.
+- Simulator usage and deployment/runtime expectations are documented only with repo-verified commands and configuration.
+- Documentation avoids leaking secrets, sample credentials, or raw sensitive OCPP payloads.
+
+### Deployment hardening
+
+Harden production deployment so operators get clearer startup failures, steadier runtime behavior, and a smaller gap between local and deployed environments.
+
+Scope:
+
+- Tighten backend startup validation for required runtime configuration, writable data paths, and deployment-specific misconfiguration.
+- Improve readiness/health reporting so operators can distinguish healthy, degraded, and not-ready states without reading raw logs.
+- Document reverse-proxy and websocket deployment requirements for keeping chargers continuously connected.
+- Make log and error output more actionable for deployment failures while keeping secrets redacted.
+
+Acceptance criteria:
+
+- Missing or invalid critical runtime configuration fails fast with actionable startup errors.
+- Health/readiness behavior distinguishes process-up from ready-to-serve state.
+- Deployment docs cover websocket forwarding, persistent data volume requirements, and restart expectations.
+- Backend tests cover configuration validation and health-state transitions for common deployment failures.
+
+### UI density pass
+
+Run a focused density and consistency pass across the operator UI so the major charger, session, tag, proxy, and communication views stay information-dense without becoming harder to scan.
+
+Scope:
+
+- Review page headers, toolbars, tables, cards, and inline actions for spacing, alignment, icon usage, and repeated interaction patterns.
+- Normalize compact action treatment across list pages and dashboards, including better handling of long charger and proxy target labels.
+- Improve responsive behavior for dense layouts on smaller laptop widths before introducing new major UI surfaces.
+- Keep the slice visual and interaction-focused; do not expand product scope or rewrite page architecture.
+
+Acceptance criteria:
+
+- Charger, sessions, tags, proxy targets, and communication journal pages use a consistent density model and action pattern.
+- Important table actions remain discoverable with accessible labels/tooltips after compaction.
+- Common laptop and tablet layouts avoid unnecessary wrapping, clipping, or horizontal overflow in the main operator flows.
+- Frontend coverage is updated for any shared component or interaction changes introduced by the density pass.
+
+### Settings display preferences
+
+Add a narrow set of non-secret operator display preferences so the UI can better fit different operating styles without reintroducing local-only state drift.
+
+Scope:
+
+- Define the first supported display preferences, such as theme behavior, timestamp presentation, and compact-versus-comfortable data density where appropriate.
+- Persist those preferences through the settings backend instead of ad hoc browser-only state.
+- Apply preferences consistently across dashboard, sessions, communication, and settings screens.
+- Keep the slice limited to presentation concerns and do not mix it with authorization or proxy behavior settings.
+
+Acceptance criteria:
+
+- Operators can review and change the supported display preferences from the Settings page.
+- Preferences survive refresh and backend restart.
+- Timestamp and density-related preferences apply consistently across the major operator views they affect.
+- Frontend and backend tests cover preference read/write flows and rendering changes for each supported option.
+
+### Communication export and purge
+
+Extend the communication journal with operator-safe export and manual purge capabilities, while preserving the existing redaction boundaries.
+
+Scope:
+
+- Add filtered export for communication journal records in an operator-usable format, with the export honoring existing redaction rules.
+- Add manual purge controls with explicit scope selection and destructive confirmation, separate from automatic retention.
+- Show enough retention and purge context in the UI for operators to understand what will be removed or exported.
+- Keep journal export and purge limited to protected admin flows; do not expose raw payload archives to the public frontend.
+
+Acceptance criteria:
+
+- Operators can export the currently scoped communication journal data without revealing redacted secrets.
+- Operators can manually purge selected journal history only after an explicit confirmation step.
+- Automatic retention and manual purge behavior remain distinct and understandable in the UI.
+- Tests cover export filtering, payload redaction, purge confirmation, and retention interactions.
+
+### Operational health overview
+
+Build a higher-level operational health surface that summarizes charger, session, proxy, and communication issues without requiring operators to hop across multiple detailed pages first.
+
+Scope:
+
+- Combine charger connectivity, stale-session warnings, proxy runtime health, recent communication failures, and onboarding/setup gaps into one overview.
+- Surface the most important degraded states first, with drill-down links into the charger dashboard, sessions, communication journal, and settings.
+- Reuse existing live-update infrastructure so health changes appear quickly without aggressive polling.
+- Keep the overview installation-focused first; do not attempt full analytics or historical reporting in this slice.
+
+Acceptance criteria:
+
+- Operators can identify disconnected chargers, degraded upstream proxy targets, and likely session issues from one protected view.
+- Each surfaced health item links to the page where the operator can inspect or resolve it.
+- Live updates refresh the overview when charger, session, or proxy state changes.
+- Frontend and backend tests cover the summary API/view model and at least one degraded-state update path per health category.
+
+### Meter gap polish
+
+Polish the operator experience around sessions with incomplete or delayed meter data so energy context remains usable during review and recovery workflows.
+
+Scope:
+
+- Clarify when a session total is exact, inferred from the latest known meter sample, or falling back to the start meter because no later sample exists.
+- Surface that recovery context consistently in session detail, stale-session review, and force-close previews.
+- Handle common SmartEVSE/OCPP recovery cases where stop-time meter data arrives late or not at all.
+- Keep inferred values visibly identified so operators do not confuse recovered estimates with exact charger-reported totals.
+
+Acceptance criteria:
+
+- Sessions with missing stop-time meter data clearly show the fallback source used for operator-visible totals.
+- Force-close and stale-session review flows explain whether totals are exact or inferred before the operator confirms an action.
+- Tests cover sessions with full meter data, latest-sample fallback, and start-meter-only fallback.
+- Documentation or in-product copy makes the recovery behavior understandable without exposing internal implementation details.
+
+### Session lifecycle hardening
+
+Harden the backend session state machine against duplicate, late, partial, or restart-recovery flows that still appear in real charger integrations.
+
+Scope:
+
+- Review and tighten handling for duplicate `StartTransaction`/`StopTransaction`, late status transitions, remote-stop races, and backend restart recovery.
+- Reduce the chance of split, orphaned, or silently stale sessions when charger traffic is noisy or incomplete.
+- Improve operator-visible lifecycle warnings so unusual session sequences are explainable without scanning raw protocol traces first.
+- Keep local authorization and local persistence as the primary source of truth even when upstream proxies misbehave.
+
+Acceptance criteria:
+
+- Duplicate or late lifecycle events do not create duplicate active sessions or corrupt stored session totals.
+- Backend restart recovery preserves or reconciles active session state predictably.
+- Operator-visible session warnings distinguish transport noise from cases that need manual review.
+- Backend tests cover duplicate starts, duplicate stops, missing stops, remote-stop timing races, and restart recovery flows.
+
+### Proxy resilience polish
+
+Polish the persistent proxy runtime so upstream instability is easier to reason about and less disruptive to the local-primary charging flow.
+
+Scope:
+
+- Improve reconnect/backoff visibility, last-failure reporting, and retry timing for persistent upstream websocket connections.
+- Tighten failure handling around charger disconnect/reconnect, target disable/enable transitions, and message routing during upstream churn.
+- Make it easier to tell whether a deny-capable upstream is disconnected, retrying, intentionally disabled, or blocked by configuration.
+- Preserve fail-open/fail-closed behavior and avoid any regression where upstream issues unnecessarily break local charger connectivity.
+
+Acceptance criteria:
+
+- Operators can see current proxy target state, retry timing, and latest failure context without reading backend logs.
+- Repeated upstream disconnects do not leak runtime resources or leave orphaned reconnect loops behind.
+- Charger reconnects and target configuration changes rebind proxy behavior predictably.
+- Backend tests cover reconnect timing, disable/enable transitions, and deny-capable outage policy behavior under failure.
+
+### Diagnostics view
+
+Add a dedicated charger diagnostics view that brings together the most useful charger and protocol state for troubleshooting without forcing operators into raw journal analysis first.
+
+Scope:
+
+- Show per-charger connection status, recent heartbeat/traffic timing, firmware status, current transaction context, proxy target state, and recent warnings in one place.
+- Provide a compact timeline or event list that helps operators correlate charger state changes with proxy/runtime issues.
+- Link out to the communication journal for deep protocol inspection instead of duplicating the full raw trace UI.
+- Keep sensitive payloads redacted and avoid exposing backend-only secrets in diagnostic summaries.
+
+Acceptance criteria:
+
+- Each charger has a protected diagnostics surface with enough context to answer "is it connected, talking, charging, and forwarding?" quickly.
+- Recent warning and state transitions can be correlated without opening multiple other pages first.
+- Diagnostics data updates live or on lightweight refresh in the same way as related existing views.
+- Frontend and backend tests cover the diagnostics data model and at least one charger issue scenario end to end.
+
+### Simulator smoke flow
+
+Turn the simulator into a repeatable smoke-test flow for development, demos, and deployment verification.
+
+Scope:
+
+- Define a documented smoke path that boots the local stack, seeds or selects an allowed tag when needed, runs the simulator through connect-authorize-start-meter-stop, and reports success/failure clearly.
+- Keep the smoke path repo-local and scriptable so it can be reused in CI or post-deploy verification later.
+- Support both a backend-only local environment and a containerized deployment target where feasible.
+- Avoid requiring a real external upstream for the core smoke flow.
+
+Acceptance criteria:
+
+- A single documented repo command or small command sequence can run the simulator smoke flow from start to successful session completion.
+- The flow exits non-zero on connection, authorization, transaction, or stop failures.
+- Smoke output is concise and actionable enough for deployment verification.
+- Tests or smoke fixtures cover the expected happy path without depending on third-party OCPP services.
+
+### Frontend and backend test expansion
+
+Expand automated coverage around the slices that now carry the most product risk: onboarding/settings, session recovery, proxy routing/resilience, diagnostics, and communication controls.
+
+Scope:
+
+- Add backend integration coverage for lifecycle edge cases, settings persistence, proxy health transitions, journal export/purge, and simulator-assisted flows.
+- Add frontend coverage for onboarding, settings, dense table actions, diagnostics, health overview, and communication controls.
+- Prefer focused high-signal tests over large brittle end-to-end suites, while keeping one or two cross-layer smoke paths for critical operator workflows.
+- Tighten test fixtures so secrets and raw sensitive payloads are not copied into snapshots or golden outputs.
+
+Acceptance criteria:
+
+- The repo has explicit automated coverage for each newly added candidate slice before those slices are considered complete.
+- Critical session/proxy/settings regressions can be reproduced by automated tests without requiring manual charger access.
+- Test helpers and fixtures keep redaction boundaries intact.
+- Development documentation points contributors to the relevant frontend and backend test commands.
+
+### OCPP newer-version research and conversion
+
+Research the path beyond OCPP 1.6j and decide whether Virtual OCPP should stop at protocol translation, support dual-stack operation, or introduce a dedicated conversion boundary.
+
+Scope:
+
+- Compare the relevant newer OCPP version targets and identify the parts that matter most for this product: authorization, transactions, metering, status, firmware, and proxy forwarding.
+- Document which local-primary assumptions break when translating between versions and where an adapter layer would need to sit.
+- Identify the highest-risk call/message conversions and the data that cannot be represented cleanly without explicit policy.
+- Keep this slice decision-oriented first; implementation should be limited to a proof of concept only if it materially derisks the recommendation.
+
+Acceptance criteria:
+
+- A design note or ADR recommends a concrete protocol strategy with clear rationale and known tradeoffs.
+- The recommendation covers charger-facing support, upstream proxy implications, data-model impact, and operator-facing behavior changes.
+- High-risk message conversions and unsupported cases are explicitly listed.
+- No production behavior changes are required unless a narrow proof of concept is intentionally included.
+
+### Multi-upstream policy
+
+Define and enforce the product policy for multiple simultaneous upstream proxy targets so authorization, mirroring, and failure behavior stay deterministic as the product grows.
+
+Scope:
+
+- Define the supported cap and policy for multiple proxy targets per charger, including whether the installation can use up to three active upstreams and how those targets are prioritized.
+- Decide which upstreams may influence local authorization decisions, how conflicting responses resolve, and how timeouts affect the final outcome.
+- Make the policy visible in admin UI copy and backend validation instead of leaving it implicit in runtime behavior.
+- Preserve the local-primary model: local tag authorization remains authoritative unless an explicitly configured external-deny policy says otherwise.
+
+Acceptance criteria:
+
+- Operators cannot configure proxy target combinations that violate the defined multi-upstream policy.
+- Authorization and transaction-mirroring outcomes remain deterministic when multiple upstreams are assigned to one charger.
+- The source of a deny decision or mirrored-routing decision is visible in operator diagnostics/logging.
+- Backend tests cover priority, conflict, timeout, and cap-enforcement behavior for multi-upstream setups.
+
+### Backup, restore, and admin maintenance
+
+Add protected maintenance workflows for preserving and repairing a running installation without dropping to ad hoc filesystem or database handling.
+
+Scope:
+
+- Define what belongs in a backup artifact, what stays out, and how sensitive settings or credentials are handled during export and restore.
+- Add admin-only backup creation and restore workflows with explicit confirmation, compatibility checks, and operator warnings about service impact.
+- Add a narrow set of related maintenance actions such as retention cleanup review, database maintenance hooks, or safe restart guidance where it improves supportability.
+- Keep maintenance actions operationally safe and auditable; destructive actions must be deliberate and clearly explained.
+
+Acceptance criteria:
+
+- Operators can create a protected backup artifact with a documented contents policy.
+- Restore requires explicit confirmation and validates compatibility before applying changes.
+- Maintenance actions do not silently expose secrets in downloaded artifacts, logs, or frontend responses.
+- Documentation explains backup cadence, restore caveats, and any service interruption expectations.
