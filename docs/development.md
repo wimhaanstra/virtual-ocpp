@@ -25,7 +25,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Protected charger registry and charger context selector
 - Charger-scoped proxy targets so each local charger chooses which upstreams it mirrors to
 - Global tags with explicit per-charger access controls
-- Frontend tag, proxy target, sessions, home dashboard, and communication pages as the active admin pages
+- Frontend tag, tag access, proxy target, sessions, home dashboard, and communication pages as the active admin pages
 - Frontend component split for shared types/helpers, app chrome, auth, dashboard, sessions, communication, and force-close review modal
 - Charger onboarding wizard that waits for a newly registered charger and then switches the selected charger context
 - Production Docker image that serves the compiled backend and frontend from one container with `/data` as the SQLite volume
@@ -47,7 +47,8 @@ The Vite frontend uses client-side routes for the protected admin pages:
 
 - `/`: home dashboard
 - `/proxy-targets`: charger-scoped proxy targets
-- `/tags`: global tags with selected-charger access controls
+- `/tag-access`: charger-scoped tag grants for the selected charger
+- `/tags`: global tag identity management
 - `/sessions`: charging sessions
 - `/communication`: redacted OCPP communication journal
 
@@ -95,9 +96,9 @@ Tags are stored globally in SQLite, but each charger must be granted explicit ac
 - unknown tag: rejected
 - enabled tag without charger access: rejected
 
-The tag API and frontend tag page are protected by the local admin session cookie. Frontend requests use same-origin `/api/*` paths; Vite proxies those to the backend during local development.
+The tag API, global Tags page, and charger-scoped Tag access page are protected by the local admin session cookie. Frontend requests use same-origin `/api/*` paths; Vite proxies those to the backend during local development.
 
-Newly created tags grant access to no chargers by default. Use the selected charger context in the frontend, or `PUT /api/tags/:id/chargers/:chargerId`, to grant access.
+Newly created tags grant access to no chargers by default. Use the Tag access page with a selected charger context, or `PUT /api/tags/:id/chargers/:chargerId`, to grant access.
 
 ## Proxy Target Workflow
 

@@ -20,10 +20,11 @@ const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: Luci
   { view: "Home", label: "Dashboard", icon: LayoutDashboard },
   { view: "Sessions", label: "Sessions", icon: ListChecks },
   { view: "Proxy targets", label: "Proxy targets", icon: PlugZap },
-  { view: "Tags", label: "Tags", icon: TagsIcon }
+  { view: "Tag access", label: "Tag access", icon: TagsIcon }
 ];
 
 const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Tags", label: "Tags", icon: TagsIcon },
   { view: "Communication", label: "Communication", icon: MessagesSquare }
 ];
 

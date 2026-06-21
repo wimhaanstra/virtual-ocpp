@@ -14,7 +14,9 @@ import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
 import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
+import { TagAccessView } from "./components/TagAccessView";
 import { SessionsView } from "./components/SessionsView";
+import { TagsView } from "./components/TagsView";
 import type {
   ActiveSessionAuditResponse,
   ActiveView,
@@ -338,7 +340,7 @@ export default function App() {
       loadProxyTargets(chargerId),
       loadProxyHealth(chargerId),
       loadActiveSessionAudit(chargerId),
-      loadTags(chargerId),
+      loadTags(),
       loadChargingSessions(chargerId),
       loadChargingStats(chargerId),
       loadLogs(chargerId),
@@ -356,8 +358,8 @@ export default function App() {
     setDashboardConfig(data);
   }
 
-  async function loadTags(chargerId = selectedChargerId) {
-    const data = await fetchAdminJson<Tag[]>(withChargerContext("/api/tags", chargerId));
+  async function loadTags() {
+    const data = await fetchAdminJson<Tag[]>("/api/tags");
     if (data === null) return;
     if (data === undefined) {
       setMessage("Could not load tags.");
@@ -767,7 +769,7 @@ export default function App() {
       }
 
       setMessage(!allowed ? "Tag access granted for the selected charger." : "Tag access revoked for the selected charger.");
-      await loadTags(selectedChargerId);
+      await loadTags();
     } finally {
       setBusy(false);
     }
@@ -813,7 +815,7 @@ export default function App() {
       setTagForm(emptyTagForm());
       setTagModalOpen(false);
       setMessage(isEditingTag ? "Tag updated." : "Tag saved.");
-      await loadTags(selectedChargerId);
+      await loadTags();
     } finally {
       setBusy(false);
     }
@@ -837,7 +839,7 @@ export default function App() {
       }
 
       setMessage(!tag.enabled ? "Tag enabled." : "Tag disabled.");
-      await loadTags(selectedChargerId);
+      await loadTags();
     } finally {
       setBusy(false);
     }
@@ -863,7 +865,7 @@ export default function App() {
       }
 
       setMessage("Tag deleted.");
-      await loadTags(selectedChargerId);
+      await loadTags();
     } finally {
       setBusy(false);
     }
@@ -1139,84 +1141,14 @@ export default function App() {
           />
         ) : activeView === "Tags" ? (
           <>
-            <section className="panel table-panel">
-              <div className="topbar-actions page-section-header">
-                <div>
-                  <p className="eyebrow">Authorization</p>
-                  <h2>Configured tags</h2>
-                  <p className="status-copy">Tags stay global. Access below applies to the selected charger context.</p>
-                </div>
-                <Button type="button" onClick={startTagCreate} disabled={busy}>
-                  <Plus aria-hidden="true" />
-                  Add tag
-                </Button>
-              </div>
-              {tags.length === 0 ? (
-                <p>No tags configured yet.</p>
-              ) : (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Tag UUID</th>
-                        <th>Label</th>
-                        <th>Status</th>
-                        <th>Selected charger access</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tags.map((tag) => (
-                        <tr key={tag.id}>
-                          <td className="mono">{tag.uuid}</td>
-                          <td>{tag.label || "Unlabeled"}</td>
-                          <td>
-                            <span className={`pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>
-                              {tag.enabled ? "Enabled" : "Disabled"}
-                            </span>
-                          </td>
-                          <td>
-                            {selectedChargerId ? (
-                              <span className={`pill ${getTagAccessForCharger(tag, selectedChargerId) ? "pill-good" : "pill-warning"}`}>
-                                {getTagAccessForCharger(tag, selectedChargerId) ? "Allowed" : "Blocked"}
-                              </span>
-                            ) : (
-                              <span className="status-copy">Select a charger</span>
-                            )}
-                          </td>
-                          <td>{new Date(tag.createdAt).toLocaleString()}</td>
-                          <td>
-                            <div className="action-row">
-                              <Button type="button" className="button-secondary" onClick={() => startTagEdit(tag)} disabled={busy}>
-                                <Pencil aria-hidden="true" />
-                                <span className="button-label">Edit</span>
-                              </Button>
-                              <Button type="button" onClick={() => void toggleTag(tag)} disabled={busy}>
-                                {tag.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
-                                <span className="button-label">{tag.enabled ? "Disable" : "Enable"}</span>
-                              </Button>
-                              <Button
-                                type="button"
-                                className="button-secondary"
-                                onClick={() => void toggleTagAccess(tag)}
-                                disabled={busy || !selectedChargerId}
-                              >
-                                {selectedChargerId && getTagAccessForCharger(tag, selectedChargerId) ? "Revoke access" : "Grant access"}
-                              </Button>
-                              <Button type="button" className="button-ghost" onClick={() => void deleteTag(tag)} disabled={busy}>
-                                <Trash2 aria-hidden="true" />
-                                <span className="button-label">Delete</span>
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+            <TagsView
+              busy={busy}
+              tags={tags}
+              onCreateTag={startTagCreate}
+              onDeleteTag={(tag) => void deleteTag(tag)}
+              onEditTag={startTagEdit}
+              onToggleTag={(tag) => void toggleTag(tag)}
+            />
 
             {tagModalOpen ? (
               <div className="modal-backdrop" role="presentation">
@@ -1225,7 +1157,7 @@ export default function App() {
                     <div>
                       <p className="eyebrow">Allowlist</p>
                       <h2 id="tag-modal-title">{isEditingTag ? "Edit tag" : "Add tag"}</h2>
-                      <p className="status-copy">Selected charger context: {selectedChargerLabel}.</p>
+                      <p className="status-copy">This tag can be granted to chargers from the Tag access page.</p>
                     </div>
                     <Button type="button" className="button-ghost" onClick={cancelTagEdit} disabled={busy} aria-label="Close tag modal">
                       <X aria-hidden="true" />
@@ -1274,6 +1206,15 @@ export default function App() {
               </div>
             ) : null}
           </>
+        ) : activeView === "Tag access" ? (
+          <TagAccessView
+            busy={busy}
+            selectedChargerId={selectedChargerId}
+            selectedChargerLabel={selectedChargerLabel}
+            tags={tags}
+            onRefresh={() => void loadTags()}
+            onToggleAccess={(tag) => void toggleTagAccess(tag)}
+          />
         ) : (
           <section className="proxy-target-layout">
             <section className="panel table-panel">

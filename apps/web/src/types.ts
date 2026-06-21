@@ -251,7 +251,7 @@ export type DashboardConfig = {
   ocppBasicAuthUsername: string | null;
 };
 
-export type ActiveView = "Home" | "Proxy targets" | "Tags" | "Sessions" | "Communication";
+export type ActiveView = "Home" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
 export type ThemeMode = "dark" | "light";
 
 export type CommunicationJournalFilters = {

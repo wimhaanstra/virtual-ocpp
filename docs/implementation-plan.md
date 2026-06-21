@@ -25,25 +25,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Live operator updates: authenticated SSE stream with replayed typed events, frontend live/stale indicator, and targeted REST refreshes for changed dashboard/session/log/protocol slices.
 - Charger onboarding wizard: modal flow that shows the OCPP connection template/auth guidance, waits for a newly registered charger, lets the operator label it, and switches context to the detected charger.
 - Sidebar and scope navigation: charger context, add-charger action, theme toggle, and sign out moved into the sidebar with grouped charger-scoped and global/admin navigation.
+- Split tag management and tag access: global Tags page manages tag identities while charger-scoped Tag access grants or revokes existing tags for the selected charger.
 
 ## Next Candidate Slices
-
-### Slice 5.9: Split Global Tags From Charger Tag Access
-
-Goal: separate global tag identity management from charger-specific authorization grants.
-
-Scope:
-
-- Keep global tag creation, editing, deletion, and enable/disable state on a global Tags page.
-- Add a charger-scoped Tag access page for granting/revoking existing global tags for the selected charger.
-- Show a clear empty state when no charger is selected on the Tag access page.
-- Preserve the existing tag access API behavior while moving the UI responsibilities into separate pages.
-
-Acceptance criteria:
-
-- Operators can manage tag identities without choosing a charger context.
-- Operators can grant/revoke tag access only inside a selected charger context.
-- Navigation clearly distinguishes global Tags from charger-scoped Tag access.
 
 ### Slice 5.10: Charger Management With Destructive Delete
 

@@ -55,6 +55,7 @@ export const viewPaths: Record<ActiveView, string> = {
   Home: "/",
   "Proxy targets": "/proxy-targets",
   Tags: "/tags",
+  "Tag access": "/tag-access",
   Sessions: "/sessions",
   Communication: "/communication"
 };

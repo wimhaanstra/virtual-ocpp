@@ -344,6 +344,8 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Charger connection" })).toBeInTheDocument();
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" })).toBeInTheDocument();
+    expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Tag access" })).toBeInTheDocument();
+    expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Tags" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(sidebar.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
     expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
@@ -564,6 +566,7 @@ describe("App", () => {
       const method = init?.method ?? "GET";
       const parsedUrl = new URL(url, "http://localhost");
       const path = parsedUrl.pathname;
+      const chargerId = parsedUrl.searchParams.get("chargerId");
 
       if (path === "/api/auth/session") {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
@@ -678,6 +681,7 @@ describe("App", () => {
       const method = init?.method ?? "GET";
       const parsedUrl = new URL(url, "http://localhost");
       const path = parsedUrl.pathname;
+      const chargerId = parsedUrl.searchParams.get("chargerId");
 
       if (path === "/api/auth/session") {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
@@ -831,17 +835,75 @@ describe("App", () => {
     expect(screen.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Tags" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
 
-    await waitFor(() => expect(window.location.pathname).toBe("/tags"));
+    await waitFor(() => expect(window.location.pathname).toBe("/tag-access"));
     expect(window.location.search).toBe("?chargerId=SMART-EVSE-1");
-    expect(screen.getByRole("heading", { name: "Tags" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
 
     window.history.back();
 
     await waitFor(() => expect(window.location.pathname).toBe("/proxy-targets"));
     expect(window.location.search).toBe("?chargerId=SMART-EVSE-1");
     expect(screen.getByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
+  });
+
+  it("shows an empty state for charger-scoped tag access when no charger is selected", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/chargers" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/dashboard-config" && method === "GET") {
+        return emptyVisibilityResponses(url, method)!;
+      }
+
+      if (path === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/sessions" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/logs" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/communication-journal" && method === "GET") {
+        return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
+
+    expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
+    expect(screen.getByText("Select a charger context in the sidebar to grant or revoke access for its tags.")).toBeInTheDocument();
+    expect(screen.getByText("No charger is selected.")).toBeInTheDocument();
   });
 
   it("persists theme and sidebar shell preferences", async () => {
@@ -1327,7 +1389,7 @@ describe("App", () => {
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
 
     fireEvent.click(sidebar.getByRole("button", { name: "Tags" }));
-    expect(await screen.findByRole("heading", { name: "Tags" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Configured tags" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByRole("heading", { name: "Edit tag" })).toBeInTheDocument();
@@ -1542,7 +1604,6 @@ describe("App", () => {
       const method = init?.method ?? "GET";
       const parsedUrl = new URL(url, "http://localhost");
       const path = parsedUrl.pathname;
-      const chargerId = parsedUrl.searchParams.get("chargerId");
 
       if (path === "/api/auth/session") {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
@@ -1557,7 +1618,7 @@ describe("App", () => {
       }
 
       if (path === "/api/proxy-targets" && method === "GET") {
-        return new Response(JSON.stringify(chargerId === selectedChargerId ? proxyTargets : []), { status: 200 });
+        return new Response(JSON.stringify(parsedUrl.searchParams.get("chargerId") === selectedChargerId ? proxyTargets : []), { status: 200 });
       }
 
       if (path === "/api/sessions" && method === "GET") {
@@ -2005,7 +2066,7 @@ describe("App", () => {
       if (path === "/api/proxy-targets" && method === "GET") {
         return new Response(
           JSON.stringify(
-            chargerId === selectedChargerId
+            selectedChargerId === selectedChargerId
               ? [
                   {
                     id: "proxy-1",
@@ -2030,7 +2091,7 @@ describe("App", () => {
       if (path === "/api/sessions" && method === "GET") {
         return new Response(
           JSON.stringify(
-            chargerId === selectedChargerId
+            selectedChargerId === selectedChargerId
               ? [
                   {
                     id: "session-1",
@@ -2056,7 +2117,7 @@ describe("App", () => {
       if (path === "/api/charger-connections" && method === "GET") {
         return new Response(
           JSON.stringify(
-            chargerId === selectedChargerId
+            selectedChargerId === selectedChargerId
               ? [
                   {
                     id: "connection-1",
@@ -2075,7 +2136,7 @@ describe("App", () => {
       if (path === "/api/logs" && method === "GET") {
         return new Response(
           JSON.stringify(
-            chargerId === selectedChargerId
+            selectedChargerId === selectedChargerId
               ? [
                   {
                     id: "log-1",
@@ -2102,7 +2163,7 @@ describe("App", () => {
       if (path === "/api/communication-journal" && method === "GET") {
         return new Response(
           JSON.stringify(
-            chargerId === selectedChargerId
+            selectedChargerId === selectedChargerId
               ? {
                   items: [
                     {
@@ -2162,8 +2223,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Charger id")).toBeDisabled();
     expect(screen.getByDisplayValue(selectedChargerId)).toBeInTheDocument();
 
-    fireEvent.click(sidebar.getByRole("button", { name: "Tags" }));
-    expect(await screen.findByRole("heading", { name: "Tags" })).toBeInTheDocument();
+    fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
+    expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
     expect(screen.getByText("Allowed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Revoke access" })).toBeInTheDocument();
   });
@@ -2184,7 +2245,6 @@ describe("App", () => {
       const method = init?.method ?? "GET";
       const parsedUrl = new URL(url, "http://localhost");
       const path = parsedUrl.pathname;
-      const chargerId = parsedUrl.searchParams.get("chargerId");
 
       if (path === "/api/auth/session") {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
@@ -2212,7 +2272,7 @@ describe("App", () => {
       }
 
       if (path === "/api/tags" && method === "GET") {
-        return new Response(JSON.stringify(chargerId === selectedChargerId ? [tag] : []), { status: 200 });
+        return new Response(JSON.stringify([tag]), { status: 200 });
       }
 
       if (path === "/api/proxy-targets" && method === "GET") {
@@ -2255,9 +2315,9 @@ describe("App", () => {
 
     fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Tags" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
 
-    expect(await screen.findByRole("heading", { name: "Tags" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
     expect(await screen.findByText("Blocked")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Grant access" }));
 
