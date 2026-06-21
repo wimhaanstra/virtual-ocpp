@@ -1,4 +1,4 @@
-import { Pencil, RefreshCcw, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import type { ChargerRegistryRow } from "../types";
 import { formatDateTime, getChargerConnectionLabel, getChargerConnectionTone } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -6,6 +6,7 @@ import { Button } from "./ui/button";
 type ChargersViewProps = {
   busy: boolean;
   chargers: ChargerRegistryRow[];
+  onAddCharger: () => void;
   onEditLabel: (charger: ChargerRegistryRow) => void;
   onRefresh: () => void;
   onDelete: (charger: ChargerRegistryRow) => void;
@@ -15,7 +16,7 @@ function getChargerStatus(charger: ChargerRegistryRow) {
   return { label: getChargerConnectionLabel(charger), tone: getChargerConnectionTone(charger) };
 }
 
-export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete }: ChargersViewProps) {
+export function ChargersView({ busy, chargers, onAddCharger, onEditLabel, onRefresh, onDelete }: ChargersViewProps) {
   return (
     <section className="panel table-panel">
       <div className="topbar-actions page-section-header">
@@ -24,9 +25,14 @@ export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete 
           <h2>Chargers</h2>
           <p className="status-copy">Global charger registry with rename and destructive delete actions.</p>
         </div>
-        <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
-          <RefreshCcw aria-hidden="true" />
-        </Button>
+        <div className="action-row compact-action-row">
+          <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
+            <RefreshCcw aria-hidden="true" />
+          </Button>
+          <Button type="button" className="icon-button" onClick={onAddCharger} disabled={busy} title="Add charger" aria-label="Add charger">
+            <Plus aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       {chargers.length === 0 ? (
         <p>No chargers registered yet.</p>

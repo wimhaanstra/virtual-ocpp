@@ -1105,7 +1105,9 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Main navigation" })).getByRole("button", { name: "Chargers" }));
+    expect(await screen.findByRole("heading", { name: "Chargers", level: 2 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add charger" }));
 
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
     expect(wizard).toBeInTheDocument();
@@ -1207,7 +1209,9 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Main navigation" })).getByRole("button", { name: "Chargers" }));
+    expect(await screen.findByRole("heading", { name: "Chargers", level: 2 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add charger" }));
 
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
     const knownAtStartRow = (await within(wizard).findByText("Known at start")).closest("div") as HTMLElement;

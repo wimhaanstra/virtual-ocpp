@@ -9,7 +9,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlugZap,
-  Plus,
   SunMoon,
   Tags as TagsIcon,
   type LucideIcon
@@ -51,7 +50,6 @@ type AppChromeProps = {
   theme: ThemeMode;
   liveStatus: LiveStatus;
   onLogout: () => void;
-  onOpenChargerWizard: () => void;
   onNavigate: (view: ActiveView) => void;
   onSidebarCollapsedChange: (collapsed: boolean) => void;
   onThemeToggle: () => void;
@@ -66,7 +64,6 @@ export function AppChrome({
   theme,
   liveStatus,
   onLogout,
-  onOpenChargerWizard,
   onNavigate,
   onSidebarCollapsedChange,
   onThemeToggle
@@ -189,9 +186,6 @@ export function AppChrome({
             <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
               {liveStatus === "live" ? "Live" : liveStatus === "stale" ? "Stale" : "Connecting"}
             </span>
-            <Button type="button" className="button-secondary icon-button" onClick={onOpenChargerWizard} disabled={busy} title="Add charger" aria-label="Add charger">
-              <Plus aria-hidden="true" />
-            </Button>
           </div>
         </header>
 

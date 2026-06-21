@@ -1400,7 +1400,6 @@ export default function App() {
       theme={theme}
       liveStatus={liveStatus}
       onLogout={() => void logout()}
-      onOpenChargerWizard={() => void openChargerWizard()}
       onNavigate={navigateToView}
       onSidebarCollapsedChange={setSidebarCollapsed}
       onThemeToggle={toggleTheme}
@@ -1454,6 +1453,7 @@ export default function App() {
           <ChargersView
             busy={busy}
             chargers={chargers}
+            onAddCharger={() => void openChargerWizard()}
             onDelete={(charger) => void startChargerDelete(charger)}
             onEditLabel={(charger) => void startChargerLabelEdit(charger)}
             onRefresh={() => void loadChargers()}
