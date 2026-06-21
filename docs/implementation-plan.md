@@ -32,3 +32,27 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Proxy target form polish: modal sections align fields without inline description offsets, stored credentials use masked inputs with dirty-state updates, clear checkboxes are removed, and tag mappings live as the final form section.
 
 ## Next Candidate Slices
+
+### First-run operator onboarding
+
+Build a guided first-run setup flow for a fresh Virtual OCPP installation. The flow should open automatically when an authenticated admin has not completed onboarding yet, and it should remain available as a manual action later.
+
+Scope:
+
+- Explain the local-primary model in operator terms: charger connects to Virtual OCPP, Virtual OCPP authorizes locally, and selected proxy targets receive mirrored/controlling OCPP traffic.
+- Reuse the existing charger onboarding mechanics to show the OCPP URL, protocol/auth details, wait for a newly registered charger, label it, and switch to that charger context.
+- Let the operator optionally create a global tag during onboarding.
+- Let the operator grant that tag access to the newly detected charger before finishing.
+- Show a clear completion state with next actions: add proxy targets, test authorization, and review communication logs.
+- Persist onboarding completion so the wizard does not reappear after refresh, while still allowing operators to relaunch it from an admin/settings or chargers entry point.
+
+Acceptance criteria:
+
+- A first-time authenticated admin sees the onboarding flow automatically when no completed onboarding marker exists.
+- The flow can be skipped or completed, and either choice prevents repeated automatic popups.
+- A new charger can be detected through the same registry polling/live-update pattern as the current charger wizard.
+- A tag can be created or an existing tag can be selected during onboarding.
+- The chosen tag can be granted to the detected charger before finishing.
+- The final state routes the operator to the charger dashboard for the new charger.
+- Frontend tests cover first-run opening, skip/complete persistence, charger detection, tag creation/selection, and tag grant submission.
+- Operator documentation explains when onboarding appears and how to rerun the setup manually.
