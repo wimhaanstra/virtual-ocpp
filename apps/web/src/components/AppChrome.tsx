@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   BatteryCharging,
   LayoutDashboard,
   ListChecks,
   LogOut,
   MessagesSquare,
+  MoreHorizontal,
   PanelLeftClose,
   PanelLeftOpen,
   PlugZap,
@@ -29,6 +30,17 @@ const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon 
   { view: "Chargers", label: "Chargers", icon: BatteryCharging },
   { view: "Tags", label: "Tags", icon: TagsIcon },
   { view: "Communication", label: "Communication", icon: MessagesSquare }
+];
+
+const mobilePrimaryNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Charger dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { view: "Sessions", label: "Sessions", icon: ListChecks },
+  { view: "Proxy targets", label: "Targets", icon: PlugZap }
+];
+
+const mobileMoreNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Tag access", label: "Tag access", icon: TagsIcon },
+  ...globalNavItems
 ];
 
 type AppChromeProps = {
@@ -68,6 +80,18 @@ export function AppChrome({
   onSidebarCollapsedChange,
   onThemeToggle
 }: AppChromeProps) {
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const mobileMoreActive = mobileMoreNavItems.some((item) => item.view === activeView);
+
+  useEffect(() => {
+    setMobileMoreOpen(false);
+  }, [activeView]);
+
+  const navigateFromMobile = (view: ActiveView) => {
+    setMobileMoreOpen(false);
+    onNavigate(view);
+  };
+
   return (
     <main className={`app-shell ${sidebarCollapsed ? "app-shell-collapsed" : ""}`}>
       <aside className="sidebar" aria-label="Main navigation">
@@ -206,6 +230,95 @@ export function AppChrome({
 
         {children}
       </section>
+
+      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
+        {mobilePrimaryNavItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = item.view === activeView;
+
+          return (
+            <button
+              type="button"
+              className={`mobile-bottom-nav__item ${isActive ? "active" : ""}`}
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => navigateFromMobile(item.view)}
+              key={item.view}
+            >
+              <Icon aria-hidden="true" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className={`mobile-bottom-nav__item ${mobileMoreActive || mobileMoreOpen ? "active" : ""}`}
+          aria-current={mobileMoreActive ? "page" : undefined}
+          aria-expanded={mobileMoreOpen}
+          aria-controls="mobile-more-menu"
+          onClick={() => setMobileMoreOpen((open) => !open)}
+        >
+          <MoreHorizontal aria-hidden="true" />
+          <span>More</span>
+        </button>
+      </nav>
+
+      {mobileMoreOpen ? (
+        <div className="mobile-more-layer">
+          <button
+            type="button"
+            className="mobile-more-backdrop"
+            onClick={() => setMobileMoreOpen(false)}
+            aria-label="Close more navigation"
+          />
+          <section className="mobile-more-menu" id="mobile-more-menu" aria-label="More navigation">
+            <div className="mobile-more-menu__grid">
+              {mobileMoreNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.view === activeView;
+
+                return (
+                  <button
+                    type="button"
+                    className={`mobile-more-menu__item ${isActive ? "active" : ""}`}
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => navigateFromMobile(item.view)}
+                    key={item.view}
+                  >
+                    <Icon aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mobile-more-menu__actions">
+              <Button
+                type="button"
+                className="button-secondary mobile-more-action"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  onThemeToggle();
+                }}
+                disabled={busy}
+              >
+                <SunMoon aria-hidden="true" />
+                Theme
+              </Button>
+              <Button
+                type="button"
+                className="button-secondary mobile-more-action"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  onLogout();
+                }}
+                disabled={busy}
+              >
+                <LogOut aria-hidden="true" />
+                Sign out
+              </Button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
