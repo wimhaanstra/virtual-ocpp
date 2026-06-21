@@ -64,6 +64,7 @@ export type ChargerRegistryRow = {
   chargerId?: string | null;
   label?: string | null;
   active?: boolean;
+  firstSeenAt?: string | null;
   connectedAt?: string | null;
   disconnectedAt?: string | null;
   lastSeenAt?: string | null;

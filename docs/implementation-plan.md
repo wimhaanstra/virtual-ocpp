@@ -23,25 +23,23 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Production Docker image: compiled backend and frontend in one container, persistent `/data` SQLite volume, healthcheck, compose example, and deployment documentation.
 - Frontend component split: shared frontend types/helpers plus extracted app chrome, auth, dashboard, sessions, communication, and force-close modal components while preserving existing operator behavior.
 - Live operator updates: authenticated SSE stream with replayed typed events, frontend live/stale indicator, and targeted REST refreshes for changed dashboard/session/log/protocol slices.
+- Charger onboarding wizard: modal flow that shows the OCPP connection template/auth guidance, waits for a newly registered charger, lets the operator label it, and switches context to the detected charger.
 
 ## Next Candidate Slices
 
-### Slice 5.7: Charger Onboarding Wizard
+### Slice 5.8: Operator UI Density Cleanup
 
-Goal: add a guided modal workflow for adding a charger by waiting for a new charger connection and then helping the operator configure it.
+Goal: reduce remaining bulk in admin tables, modals, and repeated controls now that the main workflows exist.
 
 Scope:
 
-- Add a top-level "Add charger" action that opens a modal wizard.
-- Show the exact OCPP websocket URL, protocol, and optional Basic Auth guidance.
-- Wait for an unassigned/new charger to connect and display candidate charger ids as they appear.
-- Let the operator confirm the detected charger, optionally set a label, then continue to initial tag/proxy-target setup.
-- Use live updates when Slice 5.6 is available; otherwise use a temporary polling fallback.
-- Avoid creating placeholder chargers that never connected unless a later explicit manual-registration option is designed.
+- Tighten remaining table rows and action columns.
+- Convert obvious text buttons to icon buttons with titles/labels.
+- Revisit modal form section spacing after the charger wizard, proxy targets, and tags flows are all present.
+- Keep the Charge Amber restrained visual direction and avoid adding new nested panels.
 
 Acceptance criteria:
 
-- An operator can open the wizard, point a charger at Virtual OCPP, see the charger appear, confirm it, and end with that charger selected as context.
-- The wizard clearly distinguishes newly detected chargers from already known chargers.
-- The flow works when there are no chargers yet.
-- The wizard can be cancelled without leaving partial configuration behind.
+- Communication, sessions, tags, proxy targets, and dashboard controls fit comfortably on laptop-width screens.
+- Table actions stay understandable with icon labels/tooltips.
+- Forms align consistently across modals.

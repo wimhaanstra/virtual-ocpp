@@ -1,4 +1,4 @@
-import { ArrowRight, Gauge, RefreshCcw } from "lucide-react";
+import { ArrowRight, Gauge, Plus, RefreshCcw } from "lucide-react";
 import { Button } from "./ui/button";
 import type { ActiveSessionAuditResponse, ActiveView, ChargingStats, DashboardConfig, ProxyHealthTarget, ProxyTarget } from "../types";
 import { formatDateTime, formatDecimalUnit, formatDuration, formatEnergyWh, formatPowerW, formatProxyHealthState, proxyHealthTone } from "../app-helpers";
@@ -21,6 +21,7 @@ type DashboardViewProps = {
   selectedConnectionStatus: string;
   selectedConnectionTone: string;
   onNavigate: (view: ActiveView) => void;
+  onOpenChargerWizard: () => void;
   onRefresh: () => void;
 };
 
@@ -36,6 +37,7 @@ export function DashboardView({
   selectedConnectionStatus,
   selectedConnectionTone,
   onNavigate,
+  onOpenChargerWizard,
   onRefresh
 }: DashboardViewProps) {
   return (
@@ -48,6 +50,10 @@ export function DashboardView({
               <h2>Charger connection</h2>
             </div>
             <span className={`pill ${selectedConnectionTone}`}>{selectedConnectionStatus}</span>
+            <Button type="button" className="button-secondary" onClick={onOpenChargerWizard} disabled={busy}>
+              <Plus aria-hidden="true" />
+              <span className="button-label">Add charger</span>
+            </Button>
             <Button type="button" className="button-secondary" onClick={onRefresh} disabled={busy}>
               <RefreshCcw aria-hidden="true" />
               <span className="button-label">Refresh</span>

@@ -10,6 +10,7 @@ import {
 import { Button } from "./components/ui/button";
 import { AppChrome } from "./components/AppChrome";
 import { AuthPage } from "./components/AuthPage";
+import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
 import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
@@ -83,6 +84,11 @@ export default function App() {
   const [proxyTargetForm, setProxyTargetForm] = useState<ProxyTargetFormState>(() => emptyProxyTargetForm());
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [proxyTargetModalOpen, setProxyTargetModalOpen] = useState(false);
+  const [chargerWizardOpen, setChargerWizardOpen] = useState(false);
+  const [chargerWizardStartedAt, setChargerWizardStartedAt] = useState("");
+  const [chargerWizardKnownIds, setChargerWizardKnownIds] = useState<string[]>([]);
+  const [chargerWizardLabel, setChargerWizardLabel] = useState("");
+  const [chargerWizardLoading, setChargerWizardLoading] = useState(false);
   const [selectedChargerId, setSelectedChargerId] = useState(() => getSearchParam("chargerId"));
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getInitialSidebarCollapsed());
@@ -95,6 +101,12 @@ export default function App() {
     () => chargers.find((charger) => charger.id === selectedChargerId || charger.chargerId === selectedChargerId) ?? null,
     [chargers, selectedChargerId]
   );
+  const chargerWizardDetectedCharger = useMemo(() => {
+    if (!chargerWizardOpen || chargerWizardLoading) return null;
+    const knownIds = new Set(chargerWizardKnownIds);
+
+    return chargers.find((charger) => !knownIds.has(getChargerContextId(charger))) ?? null;
+  }, [chargerWizardKnownIds, chargerWizardLoading, chargerWizardOpen, chargers]);
   const selectedChargerLabel = selectedCharger ? getChargerDisplayLabel(selectedCharger) : "All chargers";
   const proxyTargetHealth = useMemo(
     () =>
@@ -183,6 +195,7 @@ export default function App() {
       setSelectedChargerId(getSearchParam("chargerId"));
       setTagModalOpen(false);
       setProxyTargetModalOpen(false);
+      setChargerWizardOpen(false);
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -249,6 +262,7 @@ export default function App() {
     setActiveView(view);
     setTagModalOpen(false);
     setProxyTargetModalOpen(false);
+    setChargerWizardOpen(false);
     window.history.pushState({}, "", buildViewUrl(view, selectedChargerId));
   }
 
@@ -271,6 +285,11 @@ export default function App() {
     setProxyTargetForm(emptyProxyTargetForm());
     setTagModalOpen(false);
     setProxyTargetModalOpen(false);
+    setChargerWizardOpen(false);
+    setChargerWizardKnownIds([]);
+    setChargerWizardLabel("");
+    setChargerWizardStartedAt("");
+    setChargerWizardLoading(false);
     setCommunicationJournal([]);
     setCommunicationRetentionHours(null);
     setProxyHealth(null);
@@ -370,6 +389,80 @@ export default function App() {
       return;
     }
     setChargers(data);
+  }
+
+  async function openChargerWizard() {
+    setChargerWizardLabel("");
+    setChargerWizardOpen(true);
+    setChargerWizardLoading(true);
+    setMessage("Waiting for a new charger connection.");
+    const startedAt = new Date().toISOString();
+    setChargerWizardStartedAt(startedAt);
+    const chargerData = await fetchAdminJson<ChargerRegistryRow[]>("/api/chargers");
+    if (chargerData === null) return;
+    if (chargerData === undefined) {
+      setMessage("Could not load charger registry.");
+      setChargerWizardLoading(false);
+      return;
+    }
+
+    setChargers(chargerData);
+    setChargerWizardKnownIds(chargerData.map((charger) => getChargerContextId(charger)));
+    setChargerWizardLoading(false);
+    void loadDashboardConfig();
+  }
+
+  function closeChargerWizard() {
+    setChargerWizardOpen(false);
+    setChargerWizardLabel("");
+    setChargerWizardKnownIds([]);
+    setChargerWizardStartedAt("");
+    setChargerWizardLoading(false);
+    setMessage("");
+  }
+
+  async function copyChargerWizardUrl() {
+    if (!dashboardConfig?.ocppWebSocketUrl) return;
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard not available");
+      }
+      await navigator.clipboard.writeText(dashboardConfig.ocppWebSocketUrl);
+      setMessage("Copied charger URL.");
+    } catch {
+      setMessage("Could not copy charger URL.");
+    }
+  }
+
+  async function finishChargerWizard() {
+    if (!chargerWizardDetectedCharger) return;
+    const chargerId = getChargerContextId(chargerWizardDetectedCharger);
+    const label = chargerWizardLabel.trim();
+
+    setBusy(true);
+    try {
+      if (label) {
+        const response = await fetch(`/api/chargers/${encodeURIComponent(chargerId)}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label })
+        });
+
+        if (handleUnauthorized(response)) return;
+        if (!response.ok) {
+          setMessage("Could not save charger label.");
+          return;
+        }
+      }
+
+      await loadChargers();
+      closeChargerWizard();
+      setSelectedChargerId(chargerId);
+      setMessage(label ? `Charger ${label} added.` : `Charger ${chargerId} added.`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loadChargingSessions(chargerId = selectedChargerId) {
@@ -983,7 +1076,7 @@ export default function App() {
   }
 
   return (
-    <AppChrome
+      <AppChrome
       activeView={activeView}
       busy={busy}
       chargers={chargers}
@@ -993,6 +1086,7 @@ export default function App() {
       theme={theme}
       liveStatus={liveStatus}
       onLogout={() => void logout()}
+      onOpenChargerWizard={() => void openChargerWizard()}
       onNavigate={navigateToView}
       onSelectedChargerChange={setSelectedChargerId}
       onSidebarCollapsedChange={setSidebarCollapsed}
@@ -1011,6 +1105,7 @@ export default function App() {
             selectedConnectionStatus={selectedConnectionStatus}
             selectedConnectionTone={selectedConnectionTone}
             onNavigate={navigateToView}
+            onOpenChargerWizard={() => void openChargerWizard()}
             onRefresh={() => void loadScopedData(selectedChargerId)}
           />
         ) : activeView === "Sessions" ? (
@@ -1480,6 +1575,21 @@ export default function App() {
         onCancel={cancelForceClosePreview}
         onExecute={() => void executeForceCloseChargingSession()}
       />
+      {chargerWizardOpen ? (
+        <ChargerOnboardingModal
+          busy={busy}
+          dashboardConfig={dashboardConfig}
+          detectedCharger={chargerWizardDetectedCharger}
+          knownChargerCount={chargerWizardKnownIds.length}
+          label={chargerWizardLabel}
+          startedAt={chargerWizardStartedAt}
+          onClose={closeChargerWizard}
+          onCopyUrl={() => void copyChargerWizardUrl()}
+          onFinish={() => void finishChargerWizard()}
+          onLabelChange={setChargerWizardLabel}
+          onRefresh={() => void loadChargers()}
+        />
+      ) : null}
     </AppChrome>
   );
 }

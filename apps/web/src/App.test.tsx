@@ -549,6 +549,216 @@ describe("App", () => {
     ).toBeGreaterThan(1);
   });
 
+  it("detects and labels a newly connected charger from the onboarding wizard", async () => {
+    let includeNewCharger = false;
+    const patchCalls: Array<{ url: string; body: unknown }> = [];
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/dashboard-config" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppProtocol: "ocpp1.6",
+            ocppBasicAuthRequired: false,
+            ocppBasicAuthUsername: null
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/chargers" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "SMART-EVSE-1",
+              label: null,
+              lastSeenAt: "2026-06-19T09:00:00.000Z",
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              active: true
+            },
+            ...(includeNewCharger
+              ? [
+                  {
+                    id: "SMART-EVSE-NEW",
+                    label: null,
+                    lastSeenAt: "2026-06-19T10:00:00.000Z",
+                    connectedAt: "2026-06-19T10:00:00.000Z",
+                    disconnectedAt: null,
+                    active: true
+                  }
+                ]
+              : [])
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/chargers/SMART-EVSE-NEW" && method === "PATCH") {
+        patchCalls.push({ url, body: JSON.parse(String(init?.body)) });
+        return new Response(
+          JSON.stringify({
+            id: "SMART-EVSE-NEW",
+            label: "Garage",
+            enabled: true,
+            firstSeenAt: "2026-06-19T10:00:00.000Z",
+            lastSeenAt: "2026-06-19T10:00:00.000Z",
+            lastBootAt: null,
+            chargePointVendor: null,
+            chargePointModel: null,
+            firmwareVersion: null,
+            createdAt: "2026-06-19T10:00:00.000Z",
+            updatedAt: "2026-06-19T10:01:00.000Z"
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
+
+    const wizard = await screen.findByRole("dialog", { name: "Add charger" });
+    expect(wizard).toBeInTheDocument();
+    expect(within(wizard).getByText("Waiting for a new charger")).toBeInTheDocument();
+    expect(screen.getAllByText("ws://localhost:3000/ocpp/:chargerId").length).toBeGreaterThan(0);
+
+    includeNewCharger = true;
+    fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
+
+    expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
+    expect(within(wizard).getByText("SMART-EVSE-NEW")).toBeInTheDocument();
+
+    fireEvent.change(within(wizard).getByLabelText("Display label"), { target: { value: "Garage" } });
+    fireEvent.click(within(wizard).getByRole("button", { name: "Save and switch" }));
+
+    await waitFor(() => expect(patchCalls).toEqual([{ url: "/api/chargers/SMART-EVSE-NEW", body: { label: "Garage" } }]));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-NEW");
+    await waitFor(() => expect(window.location.search).toContain("chargerId=SMART-EVSE-NEW"));
+  });
+
+  it("seeds charger onboarding from a fresh registry and clears the wait notice on cancel", async () => {
+    let chargerRequestCount = 0;
+    let includeNewCharger = false;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/dashboard-config" && method === "GET") {
+        return emptyVisibilityResponses(url, method)!;
+      }
+
+      if (path === "/api/chargers" && method === "GET") {
+        chargerRequestCount += 1;
+        return new Response(
+          JSON.stringify([
+            {
+              id: "SMART-EVSE-1",
+              label: null,
+              lastSeenAt: "2026-06-19T09:00:00.000Z",
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              active: true
+            },
+            ...(chargerRequestCount >= 2
+              ? [
+                  {
+                    id: "SMART-EVSE-OLD",
+                    label: null,
+                    lastSeenAt: "2026-06-19T09:30:00.000Z",
+                    connectedAt: "2026-06-19T09:30:00.000Z",
+                    disconnectedAt: null,
+                    active: true
+                  }
+                ]
+              : []),
+            ...(includeNewCharger
+              ? [
+                  {
+                    id: "SMART-EVSE-NEW",
+                    label: null,
+                    lastSeenAt: "2026-06-19T10:00:00.000Z",
+                    connectedAt: "2026-06-19T10:00:00.000Z",
+                    disconnectedAt: null,
+                    active: true
+                  }
+                ]
+              : [])
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
+
+    const wizard = await screen.findByRole("dialog", { name: "Add charger" });
+    expect(await within(wizard).findByText("This wizard started with 2 known chargers. It will detect the next charger that appears in the registry.")).toBeInTheDocument();
+    expect(within(wizard).queryByText("Charger detected")).not.toBeInTheDocument();
+    expect(within(wizard).queryByText("SMART-EVSE-OLD")).not.toBeInTheDocument();
+
+    includeNewCharger = true;
+    fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
+
+    expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
+    expect(within(wizard).getByText("SMART-EVSE-NEW")).toBeInTheDocument();
+
+    fireEvent.click(within(wizard).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
+    expect(screen.queryByText("Waiting for a new charger connection.")).not.toBeInTheDocument();
+  });
+
   it("keeps the current page in the URL and restores it on browser back", async () => {
     window.history.replaceState({}, "", "/proxy-targets?chargerId=SMART-EVSE-1");
 

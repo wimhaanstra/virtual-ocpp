@@ -27,6 +27,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Global tags with explicit per-charger access controls
 - Frontend tag, proxy target, sessions, home dashboard, and communication pages as the active admin pages
 - Frontend component split for shared types/helpers, app chrome, auth, dashboard, sessions, communication, and force-close review modal
+- Charger onboarding wizard that waits for a newly registered charger and then switches the selected charger context
 - Production Docker image that serves the compiled backend and frontend from one container with `/data` as the SQLite volume
 
 ## Local Run
@@ -147,6 +148,8 @@ The protected default admin view is the home dashboard. It is read-only and give
 - quick links to sessions, communication, tags, and proxy targets
 
 The dashboard reads this setup information from `GET /api/dashboard-config`. That protected endpoint returns the charger URL template, the OCPP websocket subprotocol, and whether charger Basic Auth is required. It never returns the Basic Auth password. By default the displayed URL uses the backend `PORT`; set `OCPP_PUBLIC_URL` when the charger should connect through a reverse proxy or TLS hostname.
+
+Operators can start the charger wizard from the topbar charger controls or the dashboard. The wizard snapshots the currently known charger ids, shows the same OCPP URL template/protocol/auth guidance, then waits for the next charger that appears in `GET /api/chargers`. Live updates usually refresh the registry automatically; the wizard also has a manual refresh fallback. Finishing the wizard optionally saves a charger label with `PATCH /api/chargers/:id` and switches the UI context to the detected charger.
 
 Live charging stats are read from `GET /api/charging-stats`, scoped with the same optional `chargerId` query parameter as the other visibility endpoints. The endpoint derives active-session values from `charging_sessions` and `meter_samples`: energy import register samples are normalized to Wh, power import samples to W, and aggregate/no-phase current/voltage are returned when present. Phase-scoped current/voltage samples are stored for later detail views but are not displayed as total charger current or voltage. If a charger does not send periodic `MeterValues`, the dashboard still shows the active transaction but leaves live meter fields blank until data arrives.
 

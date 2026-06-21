@@ -7,6 +7,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   PlugZap,
+  Plus,
   SunMoon,
   Tags as TagsIcon,
   type LucideIcon
@@ -34,6 +35,7 @@ type AppChromeProps = {
   theme: ThemeMode;
   liveStatus: LiveStatus;
   onLogout: () => void;
+  onOpenChargerWizard: () => void;
   onNavigate: (view: ActiveView) => void;
   onSelectedChargerChange: (chargerId: string) => void;
   onSidebarCollapsedChange: (collapsed: boolean) => void;
@@ -51,6 +53,7 @@ export function AppChrome({
   theme,
   liveStatus,
   onLogout,
+  onOpenChargerWizard,
   onNavigate,
   onSelectedChargerChange,
   onSidebarCollapsedChange,
@@ -116,6 +119,9 @@ export function AppChrome({
                 ))}
               </select>
             </label>
+            <Button type="button" className="button-secondary icon-button" onClick={onOpenChargerWizard} disabled={busy} title="Add charger" aria-label="Add charger">
+              <Plus aria-hidden="true" />
+            </Button>
             <Button
               type="button"
               className="button-secondary icon-button"
