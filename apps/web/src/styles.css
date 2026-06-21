@@ -1673,6 +1673,7 @@ a {
 .wizard-step h3 {
   margin-bottom: 6px;
   font-size: 1rem;
+  line-height: 30px;
 }
 
 .wizard-step-full {
@@ -1692,7 +1693,11 @@ a {
   color: var(--accent);
   font-size: 12px;
   font-weight: 800;
-  margin-top: -2px;
+  margin-top: 0;
+}
+
+.wizard-template-url {
+  margin: 8px 0;
 }
 
 .copy-row {

@@ -12,7 +12,7 @@ type ChargerOnboardingModalProps = {
   label: string;
   startedAt: string;
   onClose: () => void;
-  onCopyUrl: () => void;
+  onCopyUrl: (url: string) => void;
   onFinish: () => void;
   onLabelChange: (label: string) => void;
   onRefresh: () => void;
@@ -67,16 +67,16 @@ export function ChargerOnboardingModal({
             <div className="wizard-step__marker">1</div>
             <div>
               <h3>Configure the charger</h3>
-              <div className="copy-row">
-                <p className="mono connection-url">{connectionUrl}</p>
-                <Button type="button" className="button-secondary icon-button" onClick={onCopyUrl} disabled={busy || !dashboardConfig} aria-label="Copy charger URL" title="Copy charger URL">
-                  <Copy aria-hidden="true" />
-                </Button>
-              </div>
+              <p className="mono connection-url wizard-template-url">{connectionUrl}</p>
               <dl className="wizard-meta">
                 <div>
                   <dt>Example</dt>
-                  <dd className="mono">{exampleUrl}</dd>
+                  <dd className="copy-row">
+                    <span className="mono">{exampleUrl}</span>
+                    <Button type="button" className="button-secondary icon-button" onClick={() => onCopyUrl(exampleUrl)} disabled={busy || !dashboardConfig} aria-label="Copy example charger URL" title="Copy example charger URL">
+                      <Copy aria-hidden="true" />
+                    </Button>
+                  </dd>
                 </div>
               </dl>
             </div>

@@ -582,16 +582,16 @@ export default function App() {
     setMessage("");
   }
 
-  async function copyChargerWizardUrl() {
-    if (!dashboardConfig?.ocppWebSocketUrl) return;
+  async function copyChargerWizardUrl(url: string) {
+    if (!url) return;
     try {
       if (!navigator.clipboard?.writeText) {
         throw new Error("Clipboard not available");
       }
-      await navigator.clipboard.writeText(dashboardConfig.ocppWebSocketUrl);
-      setMessage("Copied charger URL.");
+      await navigator.clipboard.writeText(url);
+      setMessage("Copied example charger URL.");
     } catch {
-      setMessage("Could not copy charger URL.");
+      setMessage("Could not copy example charger URL.");
     }
   }
 
@@ -2066,7 +2066,7 @@ export default function App() {
           label={chargerWizardLabel}
           startedAt={chargerWizardStartedAt}
           onClose={closeChargerWizard}
-          onCopyUrl={() => void copyChargerWizardUrl()}
+          onCopyUrl={(url) => void copyChargerWizardUrl(url)}
           onFinish={() => void finishChargerWizard()}
           onLabelChange={setChargerWizardLabel}
           onRefresh={() => void loadChargers()}
