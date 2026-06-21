@@ -33,26 +33,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Settings foundation and onboarding state: global Settings page, protected persisted onboarding settings API, SQLite migration, completion/skip/reset actions, and manual onboarding relaunch entry point.
 - First-run onboarding shell: pending onboarding state automatically opens the charger setup wizard after admin login, first-run cancel marks onboarding skipped, first-run completion marks onboarding completed, and manual Settings relaunch leaves stored state unchanged.
 - First-run onboarding setup steps: onboarding modes can create or select a tag, grant it to the detected charger, optionally create a charger-scoped proxy target, and only then mark onboarding completed.
+- Documentation refresh: project, development, and deployment docs now describe current onboarding, charger context, tag access, proxy target, communication journal, simulator, live-update, Docker, and destructive charger delete behavior.
 
 ## Next Candidate Slices
-
-### Docs refresh
-
-Refresh the product and operator documentation so it matches the implemented product and the next onboarding/settings direction. This slice is about removing drift, not expanding into tutorials.
-
-Scope:
-
-- Update project, development, and deployment docs to reflect the current charger onboarding flow, charger context model, communication journal, simulator, live updates, and proxy runtime behavior.
-- Add compact operator-facing guidance for first-run setup, charger-scoped tag access, proxy target setup, and routine troubleshooting entry points.
-- Remove speculative or stale statements that are not backed by executable config, code, or completed slices.
-- Cross-link the implementation plan and design docs where they are the current source of truth for upcoming work.
-
-Acceptance criteria:
-
-- `docs/project-definition.md`, `docs/development.md`, and `docs/deployment.md` describe the current product behavior without contradicting implemented code paths.
-- First-run setup and rerun expectations are documented in operator-facing language.
-- Simulator usage and deployment/runtime expectations are documented only with repo-verified commands and configuration.
-- Documentation avoids leaking secrets, sample credentials, or raw sensitive OCPP payloads.
 
 ### Deployment hardening
 

@@ -25,13 +25,13 @@ The container serves the API, OCPP websocket endpoint, and built frontend from o
 
 ## Docker Compose
 
-Copy `docker-compose.example.yml` to your deployment host and replace the secrets before starting it:
+The checked-in `docker-compose.example.yml` uses the same container image and mounts `/data` as a named volume:
 
 ```sh
 docker compose -f docker-compose.example.yml up -d --build
 ```
 
-The compose file mounts `/data` as a named volume. The default database path inside the image is `/data/virtual-ocpp.sqlite`.
+Inside the image, the SQLite database defaults to `/data/virtual-ocpp.sqlite`.
 
 ## Required Environment
 
@@ -41,18 +41,20 @@ The compose file mounts `/data` as a named volume. The default database path ins
 Common optional values:
 
 - `ADMIN_USERNAME`: defaults to `admin`.
-- `OCPP_PUBLIC_URL`: URL template shown to operators and chargers, for example `wss://ocpp.example.com/ocpp/:chargerId`.
-- `OCPP_BASIC_AUTH_PASSWORD`: requires chargers to use OCPP websocket Basic Auth where the username is the charger id.
+- `OCPP_PUBLIC_URL`: charger-facing websocket URL, for example `wss://ocpp.example.com/ocpp/:chargerId`.
+- `OCPP_BASIC_AUTH_PASSWORD`: requires chargers to use OCPP websocket Basic Auth with the charger id as username.
 - `COMMUNICATION_LOG_RETENTION_HOURS`: defaults to `24`.
+- `CHARGER_SILENT_AFTER_SECONDS`: defaults to `300`.
+- `METER_GAP_THRESHOLD_WH`: defaults to `1000`.
 
 ## Reverse Proxy
 
-Terminate TLS at your reverse proxy and forward websocket upgrades to the container. The proxy must preserve websocket upgrade headers for both:
+Terminate TLS at your reverse proxy and forward websocket upgrades to the container. Preserve upgrade headers for:
 
-- `/ocpp/:chargerId` for chargers.
-- normal frontend/API traffic on `/`, `/api/*`, and `/health`.
+- `/ocpp/:chargerId` for chargers
+- `/`, `/api/*`, and `/health` for the web UI and API
 
-When using TLS, set `OCPP_PUBLIC_URL` to a `wss://` URL so the dashboard shows the charger-facing address.
+If the public charger URL uses TLS, set `OCPP_PUBLIC_URL` to a `wss://` value so the dashboard shows the correct charger-facing address.
 
 ## Smoke Test
 
