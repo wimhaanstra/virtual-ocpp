@@ -74,5 +74,7 @@ Open `http://localhost:3000` and sign in with `ADMIN_USERNAME` and `ADMIN_PASSWO
 For an end-to-end local OCPP smoke test from the repository checkout, run:
 
 ```sh
-npm run simulator -- --url ws://localhost:3000/ocpp --charger-id SIM-001 --tag-id SIM-TAG-001 --ensure-tag
+ADMIN_PASSWORD="$ADMIN_PASSWORD" npm run smoke:simulator -- --url ws://localhost:3000/ocpp
 ```
+
+The smoke command connects charger `SMOKE-001`, creates and grants tag `SMOKE-TAG-001`, starts a short charging session, sends meter values, and exits after `StopTransaction`.

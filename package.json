@@ -12,6 +12,7 @@
     "dev:web": "npm run dev --workspace=@virtual-ocpp/web",
     "dev:stop": "node scripts/stop-dev-processes.mjs",
     "simulator": "npm run simulator --workspace=@virtual-ocpp/server --",
+    "smoke:simulator": "npm run simulator -- --smoke",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",

@@ -123,6 +123,14 @@ The simulator uses `ocpp-rpc` as a charger client and sends a full session flow 
 
 Use `--run-time=15m --power-kw=11` for a timed 11 kW session. `--keep-open` leaves the simulator connected after the demo session. Run `npm run simulator -- --help` for the full CLI.
 
+For a fast local smoke flow against a running server:
+
+```sh
+ADMIN_PASSWORD=correct-password npm run smoke:simulator
+```
+
+The smoke flow uses `SMOKE-001` and `SMOKE-TAG-001`, ensures tag access, sends a short accepted transaction, emits two meter samples, and exits after `StopTransaction`.
+
 ## Testing
 
 ```sh

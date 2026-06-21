@@ -22,6 +22,7 @@ type SimulatorOptions = {
   adminUsername: string;
   adminPassword: string;
   keepOpen: boolean;
+  smoke: boolean;
   help: boolean;
 };
 
@@ -77,27 +78,29 @@ export function parseSimulatorArgs(argv: string[], env: NodeJS.ProcessEnv = proc
   const adminUrl = values.get('admin-url') ?? env.SIMULATOR_ADMIN_URL ?? inferAdminUrl(url);
   const runTimeRaw = values.get('run-time') ?? env.SIMULATOR_RUN_TIME;
   const hasSampleInterval = values.has('sample-interval-ms') || env.SIMULATOR_SAMPLE_INTERVAL_MS !== undefined;
-  const sampleIntervalDefault = runTimeRaw && !hasSampleInterval ? '60000' : '1000';
+  const smoke = flags.has('smoke') || env.SIMULATOR_SMOKE === 'true';
+  const sampleIntervalDefault = smoke ? '100' : runTimeRaw && !hasSampleInterval ? '60000' : '1000';
 
   return {
     url,
-    chargerId: values.get('charger-id') ?? env.SIMULATOR_CHARGER_ID ?? DEFAULT_CHARGER_ID,
-    tagId: values.get('tag-id') ?? env.SIMULATOR_TAG_ID ?? DEFAULT_TAG_ID,
+    chargerId: values.get('charger-id') ?? env.SIMULATOR_CHARGER_ID ?? (smoke ? 'SMOKE-001' : DEFAULT_CHARGER_ID),
+    tagId: values.get('tag-id') ?? env.SIMULATOR_TAG_ID ?? (smoke ? 'SMOKE-TAG-001' : DEFAULT_TAG_ID),
     connectorId: parsePositiveInteger(values.get('connector-id') ?? env.SIMULATOR_CONNECTOR_ID ?? '1', 'connector-id'),
     meterStartWh: parseNonNegativeInteger(values.get('meter-start-wh') ?? env.SIMULATOR_METER_START_WH ?? '1000', 'meter-start-wh'),
-    meterStepWh: parseNonNegativeInteger(values.get('meter-step-wh') ?? env.SIMULATOR_METER_STEP_WH ?? '500', 'meter-step-wh'),
-    meterSamples: parseNonNegativeInteger(values.get('meter-samples') ?? env.SIMULATOR_METER_SAMPLES ?? '3', 'meter-samples'),
+    meterStepWh: parseNonNegativeInteger(values.get('meter-step-wh') ?? env.SIMULATOR_METER_STEP_WH ?? (smoke ? '250' : '500'), 'meter-step-wh'),
+    meterSamples: parseNonNegativeInteger(values.get('meter-samples') ?? env.SIMULATOR_METER_SAMPLES ?? (smoke ? '2' : '3'), 'meter-samples'),
     sampleIntervalMs: parsePositiveInteger(values.get('sample-interval-ms') ?? env.SIMULATOR_SAMPLE_INTERVAL_MS ?? sampleIntervalDefault, 'sample-interval-ms'),
     runTimeMs: runTimeRaw ? parseDurationMs(runTimeRaw, 'run-time') : null,
     powerKw: parseOptionalPositiveNumber(values.get('power-kw') ?? env.SIMULATOR_POWER_KW, 'power-kw'),
     heartbeatCount: parseNonNegativeInteger(values.get('heartbeat-count') ?? env.SIMULATOR_HEARTBEAT_COUNT ?? '1', 'heartbeat-count'),
     heartbeatIntervalMs: parseNonNegativeInteger(values.get('heartbeat-interval-ms') ?? env.SIMULATOR_HEARTBEAT_INTERVAL_MS ?? '60000', 'heartbeat-interval-ms'),
     basicAuthPassword: values.get('basic-auth-password') ?? env.SIMULATOR_BASIC_AUTH_PASSWORD ?? env.OCPP_BASIC_AUTH_PASSWORD,
-    ensureTag: flags.has('ensure-tag') || env.SIMULATOR_ENSURE_TAG === 'true',
+    ensureTag: smoke || flags.has('ensure-tag') || env.SIMULATOR_ENSURE_TAG === 'true',
     adminUrl,
     adminUsername: values.get('admin-username') ?? env.SIMULATOR_ADMIN_USERNAME ?? env.ADMIN_USERNAME ?? 'admin',
     adminPassword: values.get('admin-password') ?? env.SIMULATOR_ADMIN_PASSWORD ?? env.ADMIN_PASSWORD ?? '',
     keepOpen: flags.has('keep-open') || env.SIMULATOR_KEEP_OPEN === 'true',
+    smoke,
     help: flags.has('help')
   };
 }
@@ -133,6 +136,7 @@ Options:
   --heartbeat-interval-ms <num>   Delay used by --keep-open heartbeats. Default: 60000
   --basic-auth-password <value>   OCPP Basic Auth password when the server requires it.
   --ensure-tag                    Login to admin API, create/enable tag, and grant charger access.
+  --smoke                         Fast smoke defaults: SMOKE-001, SMOKE-TAG-001, ensure tag, 2 meter samples.
   --admin-url <http-url>          Admin API base URL. Default: inferred from --url
   --admin-username <value>        Admin username. Default: ADMIN_USERNAME or admin
   --admin-password <value>        Admin password. Default: ADMIN_PASSWORD
@@ -222,6 +226,9 @@ async function runSimulator(options: SimulatorOptions) {
 
     state.meterWh = await emitMeterValues(client, options, state);
     await stopActiveTransaction(client, options, state, 'Local');
+    if (options.smoke) {
+      console.log(`SMOKE OK: ${options.chargerId} completed transaction ${state.transactionId}`);
+    }
 
     if (options.keepOpen) {
       console.log(`Keeping ${options.chargerId} online. Press Ctrl+C to stop.`);
@@ -525,7 +532,7 @@ function formatDuration(ms: number) {
 }
 
 function isBooleanFlag(key: string) {
-  return ['ensure-tag', 'keep-open', 'help'].includes(key);
+  return ['ensure-tag', 'keep-open', 'smoke', 'help'].includes(key);
 }
 
 function requestStop(state: SimulatorRuntimeState) {

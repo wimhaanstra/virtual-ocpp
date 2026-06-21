@@ -13,6 +13,7 @@ describe('simulator cli', () => {
     expect(options.runTimeMs).toBeNull();
     expect(options.powerKw).toBeNull();
     expect(options.ensureTag).toBe(false);
+    expect(options.smoke).toBe(false);
   });
 
   it('parses flags, inline values, and environment defaults', () => {
@@ -55,6 +56,21 @@ describe('simulator cli', () => {
     expect(() => parseSimulatorArgs(['--meter-samples', '-1'], {})).toThrow('--meter-samples must be a non-negative integer');
     expect(() => parseSimulatorArgs(['--power-kw', '0'], {})).toThrow('--power-kw must be a positive number');
     expect(() => parseSimulatorArgs(['--run-time', 'forever'], {})).toThrow('--run-time must be a duration');
+  });
+
+  it('parses smoke mode with fast deterministic defaults', () => {
+    const options = parseSimulatorArgs(['--smoke'], {
+      ADMIN_PASSWORD: 'password-env'
+    });
+
+    expect(options.chargerId).toBe('SMOKE-001');
+    expect(options.tagId).toBe('SMOKE-TAG-001');
+    expect(options.meterSamples).toBe(2);
+    expect(options.meterStepWh).toBe(250);
+    expect(options.sampleIntervalMs).toBe(100);
+    expect(options.ensureTag).toBe(true);
+    expect(options.smoke).toBe(true);
+    expect(options.adminPassword).toBe('password-env');
   });
 
   it('infers admin URLs from websocket endpoints', () => {

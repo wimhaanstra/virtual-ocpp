@@ -35,6 +35,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - First-run onboarding setup steps: onboarding modes can create or select a tag, grant it to the detected charger, optionally create a charger-scoped proxy target, and only then mark onboarding completed.
 - Documentation refresh: project, development, and deployment docs now describe current onboarding, charger context, tag access, proxy target, communication journal, simulator, live-update, Docker, and destructive charger delete behavior.
 - Deployment hardening: production placeholder secrets are rejected, SQLite startup failures include the resolved database path, `/ready` verifies database access, the Docker healthcheck uses readiness, and deployment docs explain health versus readiness.
+- Simulator smoke flow: `--smoke` simulator mode and `npm run smoke:simulator` provide a fast repeatable charger session that ensures tag access, sends meter samples, stops the transaction, and prints a success marker.
 
 ## Next Candidate Slices
 
@@ -181,24 +182,6 @@ Acceptance criteria:
 - Recent warning and state transitions can be correlated without opening multiple other pages first.
 - Diagnostics data updates live or on lightweight refresh in the same way as related existing views.
 - Frontend and backend tests cover the diagnostics data model and at least one charger issue scenario end to end.
-
-### Simulator smoke flow
-
-Turn the simulator into a repeatable smoke-test flow for development, demos, and deployment verification.
-
-Scope:
-
-- Define a documented smoke path that boots the local stack, seeds or selects an allowed tag when needed, runs the simulator through connect-authorize-start-meter-stop, and reports success/failure clearly.
-- Keep the smoke path repo-local and scriptable so it can be reused in CI or post-deploy verification later.
-- Support both a backend-only local environment and a containerized deployment target where feasible.
-- Avoid requiring a real external upstream for the core smoke flow.
-
-Acceptance criteria:
-
-- A single documented repo command or small command sequence can run the simulator smoke flow from start to successful session completion.
-- The flow exits non-zero on connection, authorization, transaction, or stop failures.
-- Smoke output is concise and actionable enough for deployment verification.
-- Tests or smoke fixtures cover the expected happy path without depending on third-party OCPP services.
 
 ### Frontend and backend test expansion
 
