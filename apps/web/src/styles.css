@@ -783,8 +783,7 @@ a {
   font-size: 24px;
 }
 
-.charger-dashboard-metrics,
-.charger-dashboard-details {
+.charger-dashboard-metrics {
   display: grid;
   gap: 8px;
 }
@@ -793,8 +792,7 @@ a {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.charger-dashboard-metrics article,
-.charger-dashboard-details > div {
+.charger-dashboard-metrics article {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -817,14 +815,6 @@ a {
 
 .charger-dashboard-metrics strong {
   font-size: 20px;
-}
-
-.charger-dashboard-details {
-  grid-template-columns: minmax(0, 1.45fr) minmax(120px, 0.45fr) minmax(150px, 0.55fr);
-}
-
-.charger-dashboard-details p {
-  margin: 3px 0 0;
 }
 
 .global-dashboard {
@@ -981,6 +971,24 @@ a {
 
 .connection-url {
   word-break: break-word;
+}
+
+.charger-connection-details {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.charger-connection-details > div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+  padding: 10px;
+}
+
+.charger-connection-details p {
+  margin: 3px 0 0;
 }
 
 .tag-mapping-editor {
@@ -2104,7 +2112,6 @@ td {
   }
 
   .charger-dashboard-metrics,
-  .charger-dashboard-details,
   .charging-session-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2136,8 +2143,7 @@ td {
     flex-direction: column;
   }
 
-  .charger-dashboard-metrics,
-  .charger-dashboard-details {
+  .charger-dashboard-metrics {
     grid-template-columns: 1fr;
   }
 

@@ -410,9 +410,14 @@ describe("App", () => {
     expect(screen.getByText("Last session")).toBeInTheDocument();
     expect(screen.getByText("Session active")).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
-    expect(screen.getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
-    expect(screen.getByText("ocpp1.6")).toBeInTheDocument();
-    expect(screen.getByText("Basic Auth: charger id")).toBeInTheDocument();
+    expect(screen.queryByText("ws://localhost:3000/ocpp/:chargerId")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show OCPP connection info" }));
+    const connectionDialog = await screen.findByRole("dialog", { name: "OCPP connection" });
+    expect(within(connectionDialog).getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
+    expect(within(connectionDialog).getByText("ocpp1.6")).toBeInTheDocument();
+    expect(within(connectionDialog).getByText("Basic Auth: charger id")).toBeInTheDocument();
+    fireEvent.click(within(connectionDialog).getByRole("button", { name: "Close OCPP connection info" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "OCPP connection" })).not.toBeInTheDocument());
     expect(screen.queryByText("Charging ingress")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Charger connection" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Dashboard quick links")).not.toBeInTheDocument();
