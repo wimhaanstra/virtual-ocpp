@@ -14,6 +14,9 @@ type ForceClosePreviewModalProps = {
 export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePreview, onCancel, onExecute }: ForceClosePreviewModalProps) {
   if (!forceClosePreview) return null;
 
+  const enabledProxyPayloads = forceClosePreview.proxyPayloads.filter((entry) => entry.proxyTargetEnabled);
+  const disabledProxyPayloads = forceClosePreview.proxyPayloads.length - enabledProxyPayloads.length;
+
   return (
     <div className="modal-backdrop" role="presentation">
       <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="force-close-modal-title">
@@ -51,6 +54,15 @@ export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePrev
           </p>
         ) : null}
 
+        <div className="force-close-warning">
+          <strong>What will be sent</strong>
+          <p>The local session will be closed with the StopTransaction payload shown below.</p>
+          <p>
+            {enabledProxyPayloads.length} enabled proxy target{enabledProxyPayloads.length === 1 ? "" : "s"} will receive the mapped StopTransaction payload.
+            {disabledProxyPayloads > 0 ? ` ${disabledProxyPayloads} disabled target${disabledProxyPayloads === 1 ? "" : "s"} will be skipped.` : ""}
+          </p>
+        </div>
+
         {forceClosePreview.warnings.length > 0 ? (
           <div className="force-close-warning">
             <strong>Review warnings</strong>
@@ -86,7 +98,7 @@ export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePrev
           <Button type="button" className="button-secondary" onClick={onCancel} disabled={busy}>
             Cancel
           </Button>
-          <Button type="button" onClick={onExecute} disabled={busy || forceCloseLoading}>
+          <Button type="button" className="button-danger" onClick={onExecute} disabled={busy || forceCloseLoading}>
             <PowerOff aria-hidden="true" />
             Force close
           </Button>

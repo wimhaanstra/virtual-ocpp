@@ -15,6 +15,7 @@ import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
 import { GlobalDashboardView } from "./components/GlobalDashboardView";
+import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
 import { TagAccessView } from "./components/TagAccessView";
 import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
 import { ChargerLabelModal } from "./components/ChargerLabelModal";
@@ -82,6 +83,7 @@ export default function App() {
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [forceClosePreview, setForceClosePreview] = useState<ForceClosePreview | null>(null);
   const [forceCloseLoading, setForceCloseLoading] = useState(false);
+  const [remoteStopTarget, setRemoteStopTarget] = useState<ChargingSession | null>(null);
   const [chargerLabelTarget, setChargerLabelTarget] = useState<ChargerRegistryRow | null>(null);
   const [chargerLabelValue, setChargerLabelValue] = useState("");
   const [chargerDeleteTarget, setChargerDeleteTarget] = useState<ChargerRegistryRow | null>(null);
@@ -214,6 +216,7 @@ export default function App() {
       setChargerDeleteTarget(null);
       setChargerDeleteAdminPassword("");
       setChargerDeleteConfirmation("");
+      setRemoteStopTarget(null);
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -332,6 +335,7 @@ export default function App() {
     setChargerDeleteTarget(null);
     setChargerDeleteAdminPassword("");
     setChargerDeleteConfirmation("");
+    setRemoteStopTarget(null);
     setSelectedChargerId("");
     setActiveView("Home");
     setLiveStatus("connecting");
@@ -726,11 +730,21 @@ export default function App() {
     setForceCloseLoading(false);
   }
 
-  async function remoteStopChargingSession(session: ChargingSession) {
+  function startRemoteStopChargingSession(session: ChargingSession) {
+    setRemoteStopTarget(session);
+  }
+
+  function cancelRemoteStopChargingSession() {
+    setRemoteStopTarget(null);
+  }
+
+  async function remoteStopChargingSession() {
+    if (!remoteStopTarget) return;
+
     setBusy(true);
-    setMessage(`Requesting remote stop for session ${session.transactionId}...`);
+    setMessage(`Requesting remote stop for session ${remoteStopTarget.transactionId}...`);
     try {
-      const response = await fetch(`/api/sessions/${session.id}/remote-stop`, {
+      const response = await fetch(`/api/sessions/${remoteStopTarget.id}/remote-stop`, {
         method: "POST",
         credentials: "include"
       });
@@ -744,8 +758,9 @@ export default function App() {
       }
 
       const result = (await response.json().catch(() => null)) as { status?: string } | null;
-      setMessage(result?.status === "Accepted" ? `Remote stop accepted for session ${session.transactionId}.` : `Remote stop returned ${result?.status ?? "Unknown"}.`);
-      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadActiveSessionAudit(selectedChargerId), loadLogs(selectedChargerId)]);
+      setMessage(result?.status === "Accepted" ? `Remote stop accepted for session ${remoteStopTarget.transactionId}.` : `Remote stop returned ${result?.status ?? "Unknown"}.`);
+      setRemoteStopTarget(null);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadChargingStats(selectedChargerId), loadActiveSessionAudit(selectedChargerId), loadLogs(selectedChargerId), loadCommunicationJournal(selectedChargerId)]);
     } finally {
       setBusy(false);
     }
@@ -1300,7 +1315,7 @@ export default function App() {
             selectedChargerLabel={selectedChargerLabel}
             onForceClose={(session) => void previewForceCloseChargingSession(session)}
             onRefresh={() => void loadScopedData(selectedChargerId)}
-            onRemoteStop={(session) => void remoteStopChargingSession(session)}
+            onRemoteStop={startRemoteStopChargingSession}
           />
         ) : activeView === "Communication" ? (
           <CommunicationView
@@ -1711,6 +1726,12 @@ export default function App() {
         forceClosePreview={forceClosePreview}
         onCancel={cancelForceClosePreview}
         onExecute={() => void executeForceCloseChargingSession()}
+      />
+      <RemoteStopConfirmModal
+        busy={busy}
+        session={remoteStopTarget}
+        onCancel={cancelRemoteStopChargingSession}
+        onConfirm={() => void remoteStopChargingSession()}
       />
       <ChargerLabelModal
         busy={busy}

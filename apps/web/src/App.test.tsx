@@ -1314,6 +1314,11 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("Proxy target id"), { target: { value: "proxy-1" } });
     fireEvent.change(screen.getByLabelText("OCPP method"), { target: { value: "BootNotification" } });
     fireEvent.change(screen.getByLabelText("Message type"), { target: { value: "call" } });
+
+    expect(screen.getByText("Method: BootNotification")).toBeInTheDocument();
+    expect(screen.getByText("Message type: call")).toBeInTheDocument();
+    expect(screen.getByText("Source type: charger")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
     await waitFor(() => {
@@ -2381,11 +2386,16 @@ describe("App", () => {
     expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();
     expect(screen.getByText("Status: Available")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Remote stop session 42" }));
+    expect(screen.getByRole("heading", { name: "Confirm RemoteStopTransaction" })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/remote-stop" && init?.method === "POST")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Send remote stop" }));
     await screen.findByText("Remote stop accepted for session 42.");
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/remote-stop" && init?.method === "POST")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Force close session 42" }));
     expect(await screen.findByRole("heading", { name: "Review StopTransaction" })).toBeInTheDocument();
     expect(screen.getByText("TapElectric")).toBeInTheDocument();
+    expect(screen.getByText("What will be sent")).toBeInTheDocument();
+    expect(screen.getByText(/enabled proxy target/)).toBeInTheDocument();
     expect(screen.getAllByText(/1550/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Force close" }));
     await screen.findByText("Force closed session 42.");
