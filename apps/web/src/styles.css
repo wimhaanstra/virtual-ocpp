@@ -1204,8 +1204,9 @@ a {
 
 .communication-filters-panel {
   position: sticky;
-  top: 0;
+  top: 8px;
   z-index: 5;
+  gap: 9px;
   backdrop-filter: blur(14px);
 }
 
@@ -1217,9 +1218,61 @@ a {
 }
 
 .compact-filter-heading > svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   color: var(--accent);
+}
+
+.communication-filter-summary {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+}
+
+.communication-filter-summary__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.communication-filter-summary__count {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.filter-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 24px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel-subtle));
+  color: var(--foreground);
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 680;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-chip-muted {
+  border-color: var(--line);
+  background: var(--panel-subtle);
+  color: var(--muted);
 }
 
 .modal-backdrop {
@@ -1527,7 +1580,7 @@ table {
 }
 
 .communication-table {
-  min-width: 1180px;
+  min-width: 1120px;
 }
 
 .charger-table {
@@ -1573,39 +1626,46 @@ td {
 
 .communication-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
   align-items: end;
 }
 
 .communication-filter-form {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .communication-filter-primary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(160px, 1fr) minmax(130px, 0.6fr) minmax(120px, 0.55fr) auto;
+  gap: 8px;
   align-items: end;
 }
 
 .communication-filter-actions {
   align-self: end;
+  flex-wrap: nowrap;
+}
+
+.compact-text-button {
+  min-height: 34px;
+  padding-inline: 10px;
 }
 
 .advanced-filters {
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .advanced-filters summary {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--foreground);
   cursor: pointer;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 720;
   list-style: none;
 }
 
@@ -1619,20 +1679,43 @@ td {
 }
 
 .advanced-filters[open] summary {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .communication-table-wrap {
   max-width: 100%;
 }
 
+.communication-table th,
+.communication-table td {
+  padding: 5px 8px;
+  vertical-align: top;
+}
+
+.communication-table th {
+  font-size: 9px;
+}
+
 .communication-summary {
   display: grid;
-  gap: 8px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
 }
 
 .communication-summary p {
   margin: 0;
+  min-width: 0;
+}
+
+.communication-summary__text {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .communication-toggle {
@@ -1640,20 +1723,20 @@ td {
 }
 
 .communication-expanded {
-  padding: 16px 12px 18px;
+  padding: 10px 8px 12px;
   background: rgba(255, 255, 255, 0.03);
 }
 
 .communication-expanded__grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(260px, 0.9fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.9fr) minmax(240px, 0.9fr);
+  gap: 10px;
   align-items: start;
 }
 
 .communication-payload {
-  margin: 10px 0 0;
-  padding: 10px;
+  margin: 6px 0 0;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--background);
@@ -1665,8 +1748,8 @@ td {
 
 .communication-details {
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap: 7px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel-subtle);
@@ -1674,7 +1757,7 @@ td {
 
 .communication-details p {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .communication-details .eyebrow {

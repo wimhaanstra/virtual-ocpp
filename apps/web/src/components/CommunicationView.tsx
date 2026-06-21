@@ -39,6 +39,19 @@ export function CommunicationView({
   onRenderEndpoint,
   onResetFilters
 }: CommunicationViewProps) {
+  const scopeChip = selectedChargerLabel ? `Scope: ${selectedChargerLabel}` : null;
+  const activeFilterChips = buildActiveFilterChips(communicationFilters);
+  const hasAdvancedFilters = Boolean(
+    communicationFilters.from ||
+      communicationFilters.to ||
+      communicationFilters.sourceType ||
+      communicationFilters.sourceId ||
+      communicationFilters.targetType ||
+      communicationFilters.targetId ||
+      communicationFilters.chargerId ||
+      communicationFilters.proxyTargetId
+  );
+
   function updateFilters(patch: Partial<CommunicationJournalFilters>) {
     onCommunicationFiltersChange({ ...communicationFilters, ...patch });
   }
@@ -55,10 +68,32 @@ export function CommunicationView({
             <p className="eyebrow">Journal</p>
             <h2>Filters</h2>
             <p className="status-copy">
-              Showing the last 24 hours by default, newest first, limit 200. Retention is {communicationRetentionHours ?? 24} hours. Scoped to {selectedChargerLabel}.
+              Showing the last 24 hours by default, newest first, limit 200. Retention is {communicationRetentionHours ?? 24} hours.
             </p>
           </div>
           <SlidersHorizontal aria-hidden="true" />
+        </div>
+        <div className="communication-filter-summary">
+          <div className="communication-filter-summary__header">
+            <span className="eyebrow">Scope and filters</span>
+            <span className="communication-filter-summary__count">{activeFilterChips.length} selected</span>
+          </div>
+          {scopeChip ? (
+            <div className="filter-chip-row">
+              <span className="filter-chip filter-chip-muted">{scopeChip}</span>
+            </div>
+          ) : null}
+          <div className="filter-chip-row" aria-label="Active communication filters">
+            {activeFilterChips.length > 0 ? (
+              activeFilterChips.map((chip) => (
+                <span className="filter-chip" key={chip}>
+                  {chip}
+                </span>
+              ))
+            ) : (
+              <span className="filter-chip filter-chip-muted">No extra filters</span>
+            )}
+          </div>
         </div>
         <form className="communication-filter-form" onSubmit={onApplyFilters}>
           <div className="communication-filter-primary">
@@ -85,37 +120,46 @@ export function CommunicationView({
               </select>
             </label>
             <label className="field">
-              <span>From</span>
+              <span>Transaction</span>
               <input
-                value={communicationFilters.from}
-                onChange={(event) => updateFilters({ from: event.target.value })}
-                type="datetime-local"
-              />
-            </label>
-            <label className="field">
-              <span>To</span>
-              <input
-                value={communicationFilters.to}
-                onChange={(event) => updateFilters({ to: event.target.value })}
-                type="datetime-local"
+                value={communicationFilters.transactionId}
+                onChange={(event) => updateFilters({ transactionId: event.target.value })}
+                inputMode="numeric"
+                placeholder="1781932670376"
               />
             </label>
             <div className="action-row communication-filter-actions">
-              <Button type="submit" disabled={busy}>
-                Apply filters
+              <Button type="submit" className="compact-text-button" disabled={busy} aria-label="Apply filters">
+                Apply
               </Button>
-              <Button type="button" className="button-secondary" onClick={onResetFilters} disabled={busy}>
+              <Button type="button" className="button-secondary compact-text-button" onClick={onResetFilters} disabled={busy}>
                 Reset
               </Button>
             </div>
           </div>
 
-          <details className="advanced-filters">
+          <details className="advanced-filters" open={hasAdvancedFilters || undefined}>
             <summary>
-              <span>Advanced filters</span>
+              <span>Source, target, time</span>
               <ChevronDown aria-hidden="true" />
             </summary>
             <div className="communication-filters">
+              <label className="field">
+                <span>From</span>
+                <input
+                  value={communicationFilters.from}
+                  onChange={(event) => updateFilters({ from: event.target.value })}
+                  type="datetime-local"
+                />
+              </label>
+              <label className="field">
+                <span>To</span>
+                <input
+                  value={communicationFilters.to}
+                  onChange={(event) => updateFilters({ to: event.target.value })}
+                  type="datetime-local"
+                />
+              </label>
               <label className="field">
                 <span>Source type</span>
                 <select
@@ -176,15 +220,6 @@ export function CommunicationView({
                   placeholder="proxy-1"
                 />
               </label>
-              <label className="field">
-                <span>Transaction</span>
-                <input
-                  value={communicationFilters.transactionId}
-                  onChange={(event) => updateFilters({ transactionId: event.target.value })}
-                  inputMode="numeric"
-                  placeholder="1781932670376"
-                />
-              </label>
             </div>
           </details>
         </form>
@@ -195,6 +230,7 @@ export function CommunicationView({
           <div>
             <p className="eyebrow">Communication</p>
             <h2>Recent journal rows</h2>
+            <p className="status-copy">{communicationJournal.length} row{communicationJournal.length === 1 ? "" : "s"} loaded.</p>
           </div>
           <div className="action-row compact-action-row">
             <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
@@ -259,7 +295,7 @@ export function CommunicationView({
                             >
                               {isExpanded ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
                             </Button>
-                            <p>{buildCommunicationSummary(item)}</p>
+                            <p className="communication-summary__text">{buildCommunicationSummary(item)}</p>
                           </div>
                         </td>
                       </tr>
@@ -315,4 +351,32 @@ export function CommunicationView({
     </section>
 
   );
+}
+
+function buildActiveFilterChips(filters: CommunicationJournalFilters) {
+  const chips: string[] = [];
+  const labels: Array<[keyof CommunicationJournalFilters, string]> = [
+    ["ocppMethod", "Method"],
+    ["messageType", "Message type"],
+    ["transactionId", "Transaction"],
+    ["sourceType", "Source type"],
+    ["sourceId", "Source"],
+    ["targetType", "Target type"],
+    ["targetId", "Target"],
+    ["proxyTargetId", "Proxy target"],
+    ["from", "From"],
+    ["to", "To"]
+  ];
+
+  for (const [key, label] of labels) {
+    const value = filters[key].trim();
+    if (!value) continue;
+    if (key === "from" || key === "to") {
+      chips.push(`${label}: ${value.replace("T", " ")}`);
+      continue;
+    }
+    chips.push(`${label}: ${value}`);
+  }
+
+  return chips;
 }
