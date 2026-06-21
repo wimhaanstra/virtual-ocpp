@@ -1,6 +1,6 @@
-import { ArrowRight, Gauge, Plus, RefreshCcw } from "lucide-react";
+import { ArrowRight, Gauge, RefreshCcw } from "lucide-react";
 import { Button } from "./ui/button";
-import type { ActiveSessionAuditResponse, ActiveView, ChargingStats, DashboardConfig, ProxyHealthTarget, ProxyTarget } from "../types";
+import type { ActiveSessionAuditResponse, ActiveView, ChargingStats, DashboardConfig, ProxyHealthTarget, ProxyTarget, SessionSummary } from "../types";
 import { formatDateTime, formatDecimalUnit, formatDuration, formatEnergyWh, formatPowerW, formatProxyHealthState, proxyHealthTone } from "../app-helpers";
 
 type ProxyTargetHealthEntry = {
@@ -16,12 +16,12 @@ type DashboardViewProps = {
   chargingStatsStatus: "idle" | "loading" | "ready" | "error";
   dashboardConfig: DashboardConfig | null;
   proxyTargetHealth: ProxyTargetHealthEntry[];
+  sessionSummary: SessionSummary | null;
   selectedChargerId: string;
   selectedChargerLabel: string;
   selectedConnectionStatus: string;
   selectedConnectionTone: string;
   onNavigate: (view: ActiveView) => void;
-  onOpenChargerWizard: () => void;
   onRefresh: () => void;
 };
 
@@ -32,34 +32,28 @@ export function DashboardView({
   chargingStatsStatus,
   dashboardConfig,
   proxyTargetHealth,
+  sessionSummary,
   selectedChargerId,
   selectedChargerLabel,
   selectedConnectionStatus,
   selectedConnectionTone,
   onNavigate,
-  onOpenChargerWizard,
   onRefresh
 }: DashboardViewProps) {
+  const primaryActiveSession = chargingStats[0] ?? null;
+  const activeSessionCount = selectedChargerId ? (sessionSummary?.activeSessions ?? chargingStats.length) : 0;
+
   return (
     <section className="home-stack">
-      <section className="dashboard-grid home-dashboard-grid">
-        <section className="panel home-panel">
+      <section className="charger-dashboard-hero" aria-label="Charger summary">
+        <div className="charger-dashboard-hero__header">
+          <div>
+            <p className="eyebrow">Selected charger</p>
+            <h2>{selectedChargerLabel}</h2>
+            <p className="status-copy mono">{selectedChargerId || "Select a charger context"}</p>
+          </div>
           <div className="topbar-actions">
-            <div>
-              <p className="eyebrow">Charging ingress</p>
-              <h2>Charger connection</h2>
-            </div>
             <span className={`pill ${selectedConnectionTone}`}>{selectedConnectionStatus}</span>
-            <Button
-              type="button"
-              className="button-secondary icon-button"
-              onClick={onOpenChargerWizard}
-              disabled={busy}
-              title="Add charger"
-              aria-label="Add charger"
-            >
-              <Plus aria-hidden="true" />
-            </Button>
             <Button
               type="button"
               className="button-secondary icon-button"
@@ -71,47 +65,44 @@ export function DashboardView({
               <RefreshCcw aria-hidden="true" />
             </Button>
           </div>
+        </div>
 
-          <div className="note-stack">
-            <div>
-              <p className="eyebrow">WebSocket URL</p>
-              <p className="mono connection-url">{dashboardConfig?.ocppWebSocketUrl ?? "Loading connection URL..."}</p>
-              <p className="status-copy">Use wss:// when this service is served behind TLS.</p>
-            </div>
-            <div>
-              <p className="eyebrow">Protocol</p>
-              <p>
-                Use the OCPP 1.6j websocket endpoint. The websocket subprotocol is{" "}
-                <span className="mono">{dashboardConfig?.ocppProtocol ?? "ocpp1.6"}</span>.
-              </p>
-            </div>
-            <div>
-              <p className="eyebrow">Authentication</p>
-              <p>
-                {dashboardConfig?.ocppBasicAuthRequired
-                  ? `Basic Auth is required. Use the ${dashboardConfig.ocppBasicAuthUsername ?? "charger id"} as the username.`
-                  : "Charger Basic Auth is not required."}{" "}
-                Secrets are never shown in this dashboard.
-              </p>
-            </div>
+        <div className="charger-dashboard-metrics">
+          <article>
+            <span>Total sessions</span>
+            <strong>{sessionSummary ? sessionSummary.totalSessions : "-"}</strong>
+          </article>
+          <article>
+            <span>Total energy</span>
+            <strong>{formatEnergyWh(sessionSummary?.totalEnergyWh ?? null)}</strong>
+          </article>
+          <article>
+            <span>Last session</span>
+            <strong>{formatEnergyWh(sessionSummary?.lastSession?.energyWh ?? null)}</strong>
+          </article>
+          <article>
+            <span>Session active</span>
+            <strong>{activeSessionCount > 0 ? "Yes" : "No"}</strong>
+          </article>
+        </div>
+
+        <div className="charger-dashboard-details">
+          <div>
+            <p className="eyebrow">OCPP URL</p>
+            <p className="mono connection-url">{dashboardConfig?.ocppWebSocketUrl ?? "Loading connection URL..."}</p>
           </div>
-
-          <div className="home-link-row" aria-label="Dashboard quick links">
-            <Button type="button" className="button-secondary" onClick={() => onNavigate("Communication")}>
-              Communication
-              <ArrowRight aria-hidden="true" />
-            </Button>
-            <Button type="button" className="button-secondary" onClick={() => onNavigate("Sessions")}>
-              Sessions
-              <ArrowRight aria-hidden="true" />
-            </Button>
-            <Button type="button" className="button-secondary" onClick={() => onNavigate("Proxy targets")}>
-              Proxy targets
-              <ArrowRight aria-hidden="true" />
-            </Button>
+          <div>
+            <p className="eyebrow">Protocol</p>
+            <p className="mono">{dashboardConfig?.ocppProtocol ?? "ocpp1.6"}</p>
           </div>
-        </section>
+          <div>
+            <p className="eyebrow">Authentication</p>
+            <p>{dashboardConfig?.ocppBasicAuthRequired ? `Basic Auth: ${dashboardConfig.ocppBasicAuthUsername ?? "charger id"}` : "No charger Basic Auth"}</p>
+          </div>
+        </div>
+      </section>
 
+      <section className="dashboard-grid home-dashboard-grid">
         <section className="panel home-panel">
           <section className="charging-stats-panel charging-stats-panel-standalone" aria-label="Live charging stats">
             <div className="current-state__header">
@@ -122,8 +113,8 @@ export function DashboardView({
                     ? "Stats unavailable"
                     : chargingStats.length > 1
                       ? `${chargingStats.length} active sessions`
-                      : chargingStats[0]
-                        ? `Transaction ${chargingStats[0].transactionId}`
+                      : primaryActiveSession
+                        ? `Transaction ${primaryActiveSession.transactionId}`
                         : chargingStatsStatus === "loading"
                           ? "Loading stats"
                           : "No active session"}
@@ -171,8 +162,39 @@ export function DashboardView({
               <p className="status-copy">Start a charging session to see live meter values from OCPP MeterValues.</p>
             )}
           </section>
+        </section>
+
+        <section className="panel table-panel">
+          <div className="topbar-actions page-section-header">
+            <div>
+              <p className="eyebrow">Proxy health</p>
+              <h2>Upstream targets</h2>
+            </div>
+            <Button type="button" className="button-secondary icon-button" onClick={() => onNavigate("Proxy targets")} title="Proxy targets" aria-label="Proxy targets">
+              <ArrowRight aria-hidden="true" />
+            </Button>
+          </div>
+          {!selectedChargerId ? (
+            <p>Select a charger context to view upstream proxy health.</p>
+          ) : proxyTargetHealth.length === 0 ? (
+            <p>No proxy targets configured for this charger.</p>
+          ) : (
+            <div className="proxy-health-list">
+              {proxyTargetHealth.map(({ target, health }) => (
+                <article className="proxy-health-list-item" key={health.proxyTargetId}>
+                  <div>
+                    <strong>{health.name}</strong>
+                    <span className="status-copy">{health.lastSuccessAt ? `Last success ${formatDateTime(health.lastSuccessAt)}` : health.detail}</span>
+                  </div>
+                  <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
+                    {formatProxyHealthState(health.state)}
+                  </span>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </section>
-    </section>
 
       <section className="panel table-panel">
         <div className="topbar-actions page-section-header">
@@ -210,46 +232,6 @@ export function DashboardView({
         )}
       </section>
 
-      <section className="panel table-panel">
-        <div className="topbar-actions page-section-header">
-          <div>
-            <p className="eyebrow">Proxy health</p>
-            <h2>Upstream targets</h2>
-            <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-          </div>
-          <Button type="button" className="button-secondary" onClick={() => onNavigate("Proxy targets")}>
-            Proxy targets
-            <ArrowRight aria-hidden="true" />
-          </Button>
-        </div>
-        {!selectedChargerId ? (
-          <p>Select a charger context to view upstream proxy health.</p>
-        ) : proxyTargetHealth.length === 0 ? (
-          <p>No proxy targets configured for this charger.</p>
-        ) : (
-          <div className="proxy-health-grid">
-            {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
-              <article className="proxy-health-item" key={health.proxyTargetId}>
-                <div className="proxy-health-item__header">
-                  <div>
-                    <h3>{health.name}</h3>
-                    <p className="mono">{connectionUrl}</p>
-                  </div>
-                  <span className={`pill ${proxyHealthTone(health.state)}`}>
-                    {formatProxyHealthState(health.state)}
-                  </span>
-                </div>
-                <p className="status-copy">
-                  {health.detail}
-                  {health.lastSuccessAt ? ` Last success ${formatDateTime(health.lastSuccessAt)}.` : ""}
-                  {health.nextReconnectAt ? ` Next retry ${formatDateTime(health.nextReconnectAt)}.` : ""}
-                  {!target ? " Target configuration is not loaded." : ""}
-                </p>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
     </section>
 
   );

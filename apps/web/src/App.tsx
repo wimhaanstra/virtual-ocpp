@@ -40,6 +40,7 @@ import type {
   ProxyTagMapping,
   ProxyTarget,
   ProxyTargetFormState,
+  SessionSummary,
   Tag,
   TagFormState,
   ThemeMode
@@ -75,6 +76,7 @@ export default function App() {
   const [chargers, setChargers] = useState<ChargerRegistryRow[]>([]);
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
   const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
+  const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [proxyHealth, setProxyHealth] = useState<ProxyHealthResponse | null>(null);
   const [activeSessionAudit, setActiveSessionAudit] = useState<ActiveSessionAuditResponse | null>(null);
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -299,6 +301,7 @@ export default function App() {
     setChargers([]);
     setChargingSessions([]);
     setChargingStats([]);
+    setSessionSummary(null);
     setChargingStatsStatus("idle");
     setLogs([]);
     setDashboardConfig(null);
@@ -366,6 +369,7 @@ export default function App() {
       loadActiveSessionAudit(chargerId),
       loadTags(),
       loadChargingSessions(chargerId),
+      loadSessionSummary(chargerId),
       loadChargingStats(chargerId),
       loadLogs(chargerId),
       loadCommunicationJournal(chargerId)
@@ -599,6 +603,21 @@ export default function App() {
       return;
     }
     setChargingSessions(data);
+  }
+
+  async function loadSessionSummary(chargerId = selectedChargerId) {
+    if (!chargerId) {
+      setSessionSummary(null);
+      return;
+    }
+
+    const data = await fetchAdminJson<SessionSummary>(withChargerContext("/api/session-summary", chargerId));
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load session summary.");
+      return;
+    }
+    setSessionSummary(data);
   }
 
   async function loadProxyHealth(chargerId = selectedChargerId) {
@@ -1239,12 +1258,12 @@ export default function App() {
             chargingStatsStatus={chargingStatsStatus}
             dashboardConfig={dashboardConfig}
             proxyTargetHealth={proxyTargetHealth}
+            sessionSummary={sessionSummary}
             selectedChargerId={selectedChargerId}
             selectedChargerLabel={selectedChargerLabel}
             selectedConnectionStatus={selectedConnectionStatus}
             selectedConnectionTone={selectedConnectionTone}
             onNavigate={navigateToView}
-            onOpenChargerWizard={() => void openChargerWizard()}
             onRefresh={() => void loadScopedData(selectedChargerId)}
           />
         ) : activeView === "Chargers" ? (

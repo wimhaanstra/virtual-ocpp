@@ -83,6 +83,7 @@ describe('app', () => {
       { method: 'GET', url: '/api/tags' },
       { method: 'GET', url: '/api/charger-connections' },
       { method: 'GET', url: '/api/sessions' },
+      { method: 'GET', url: '/api/session-summary' },
       { method: 'GET', url: '/api/active-session-audit' },
       { method: 'POST', url: '/api/sessions/session-1/remote-stop' },
       { method: 'GET', url: '/api/charging-stats' },
@@ -650,6 +651,19 @@ describe('app', () => {
 
     tempDb.db.insert(chargingSessions).values([
       {
+        id: 'session-complete',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1001,
+        idTag: 'ACTIVE-TAG',
+        startedAt: new Date('2026-06-19T08:05:00.000Z'),
+        stoppedAt: new Date('2026-06-19T08:45:00.000Z'),
+        startMeterWh: 1000,
+        stopMeterWh: 2500,
+        stopReason: 'Local',
+        status: 'stopped'
+      },
+      {
         id: 'session-active',
         chargerId: 'CHARGER-ACTIVE',
         connectorId: 2,
@@ -877,8 +891,43 @@ describe('app', () => {
         stopReason: null,
         status: 'active',
         active: true
+      },
+      {
+        id: 'session-complete',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1001,
+        idTag: 'ACTIVE-TAG',
+        startedAt: '2026-06-19T08:05:00.000Z',
+        stoppedAt: '2026-06-19T08:45:00.000Z',
+        startMeterWh: 1000,
+        stopMeterWh: 2500,
+        stopReason: 'Local',
+        status: 'stopped',
+        active: false
       }
     ]);
+
+    const sessionSummaryResponse = await app.inject({
+      method: 'GET',
+      url: '/api/session-summary?chargerId=CHARGER-ACTIVE',
+      headers: { cookie }
+    });
+    expect(sessionSummaryResponse.statusCode).toBe(200);
+    expect(sessionSummaryResponse.json()).toEqual({
+      chargerId: 'CHARGER-ACTIVE',
+      totalSessions: 2,
+      activeSessions: 1,
+      totalEnergyWh: 1500,
+      lastSession: {
+        id: 'session-active',
+        transactionId: 1002,
+        startedAt: '2026-06-19T09:05:00.000Z',
+        stoppedAt: null,
+        active: true,
+        energyWh: null
+      }
+    });
 
     const logsResponse = await app.inject({
       method: 'GET',

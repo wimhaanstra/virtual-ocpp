@@ -59,6 +59,41 @@ export function registerVisibilityRoutes(
     return rows.map(toPublicChargingSession);
   });
 
+  app.get('/api/session-summary', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = ChargerScopedQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_session_summary_query', details: parsed.error.flatten() });
+    }
+
+    const query = db.select().from(chargingSessions);
+    const rows = parsed.data.chargerId ? query.where(eq(chargingSessions.chargerId, parsed.data.chargerId)).all() : query.all();
+    const sortedRows = [...rows].sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime());
+    const lastSession = sortedRows[0] ?? null;
+    const getSessionEnergyWh = (session: typeof rows[number]) => {
+      if (session.startMeterWh === null || session.stopMeterWh === null) return null;
+      return Math.max(0, session.stopMeterWh - session.startMeterWh);
+    };
+
+    return {
+      chargerId: parsed.data.chargerId ?? null,
+      totalSessions: rows.length,
+      activeSessions: rows.filter((session) => session.status === 'active').length,
+      totalEnergyWh: rows.reduce((total, session) => total + (getSessionEnergyWh(session) ?? 0), 0),
+      lastSession: lastSession
+        ? {
+            id: lastSession.id,
+            transactionId: lastSession.transactionId,
+            startedAt: lastSession.startedAt.toISOString(),
+            stoppedAt: lastSession.stoppedAt?.toISOString() ?? null,
+            active: lastSession.status === 'active',
+            energyWh: getSessionEnergyWh(lastSession)
+          }
+        : null
+    };
+  });
+
   app.get('/api/active-session-audit', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 

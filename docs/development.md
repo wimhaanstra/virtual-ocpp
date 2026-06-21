@@ -151,16 +151,18 @@ The protected default admin view is the global dashboard. It is read-only and gi
 
 The charger-scoped dashboard is available at `/charger-dashboard` and gives operators selected-charger setup and runtime details:
 
-- local OCPP connection URL
-- expected websocket protocol
-- optional Basic Auth requirement without exposing secrets
-- charger connection status and recent activity summary
+- compact charger hero with selected charger id/label and connection state
+- total stored sessions and total stored session energy
+- last-session energy and whether a session is currently active
+- local OCPP connection URL, expected websocket protocol, and optional Basic Auth requirement without exposing secrets
 - active charging energy, power, current, and voltage from normalized `MeterValues` when the charger supplies them
-- quick links to sessions, communication, tags, and proxy targets
+- compact upstream target list with each target state
 
 The sidebar keeps charger-scoped pages near the charger context selector. Global pages live at the bottom above the theme and sign-out controls, separated from charger-scoped pages without extra section labels. The sidebar can collapse to icon-only navigation; the active page keeps `aria-current="page"` for accessibility.
 
 The dashboard reads this setup information from `GET /api/dashboard-config`. That protected endpoint returns the charger URL template, the OCPP websocket subprotocol, and whether charger Basic Auth is required. It never returns the Basic Auth password. By default the displayed URL uses the backend `PORT`; set `OCPP_PUBLIC_URL` when the charger should connect through a reverse proxy or TLS hostname.
+
+The charger hero reads lifetime stored session aggregates from `GET /api/session-summary`, scoped with optional `chargerId`. The endpoint returns total sessions, active sessions, stored energy summed from sessions with both start and stop meter readings, and the latest session metadata. Live active-session energy still comes from `GET /api/charging-stats` because active sessions may not have a stop meter yet.
 
 Operators can start the charger wizard from the topbar charger controls or the dashboard. The wizard snapshots the currently known charger ids, shows the same OCPP URL template/protocol/auth guidance, then waits for the next charger that appears in `GET /api/chargers`. Live updates usually refresh the registry automatically; the wizard also has a manual refresh fallback. Finishing the wizard optionally saves a charger label with `PATCH /api/chargers/:id` and switches the UI context to the detected charger.
 
@@ -199,6 +201,7 @@ The authenticated frontend exposes read-only operational views for sessions and 
 - `GET /api/active-session-audit` returns active-session warnings and stale-session context for operator review.
 - `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` for an active session through the connected charger websocket.
 - `POST /api/sessions/:id/close` marks an active session as locally closed with reason `OperatorClosed` and closes matching proxy-session mappings. It does not send a remote stop command to the charger.
+- `GET /api/session-summary` returns stored session totals and latest-session metadata for the selected charger.
 - `GET /api/charging-stats` returns active session meter summaries with normalized energy and power values.
 - `GET /api/proxy-health` returns runtime upstream proxy health for the selected charger.
 - `GET /api/chargers` and `GET /api/charger-connections` return recent charger connection records.

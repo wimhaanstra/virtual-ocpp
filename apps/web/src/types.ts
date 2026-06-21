@@ -110,6 +110,21 @@ export type ChargingStats = {
   latestPowerContext: string | null;
 };
 
+export type SessionSummary = {
+  chargerId: string | null;
+  totalSessions: number;
+  activeSessions: number;
+  totalEnergyWh: number;
+  lastSession: {
+    id: string;
+    transactionId: number;
+    startedAt: string;
+    stoppedAt: string | null;
+    active: boolean;
+    energyWh: number | null;
+  } | null;
+};
+
 export type ProxyHealthResponse = {
   chargerId: string | null;
   summary: {

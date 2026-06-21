@@ -83,11 +83,19 @@ const emptyVisibilityResponses = (url: string, method: string) => {
     (path === "/api/chargers" ||
       path === "/api/charger-connections" ||
       path === "/api/sessions" ||
+      path === "/api/session-summary" ||
       path === "/api/charging-stats" ||
       path === "/api/logs") &&
     method === "GET"
   ) {
-    return new Response(JSON.stringify([]), { status: 200 });
+    return new Response(
+      JSON.stringify(
+        path === "/api/session-summary"
+          ? { chargerId: null, totalSessions: 0, activeSessions: 0, totalEnergyWh: 0, lastSession: null }
+          : []
+      ),
+      { status: 200 }
+    );
   }
 
   if (path === "/api/communication-journal" && method === "GET") {
@@ -256,6 +264,26 @@ describe("App", () => {
         );
       }
 
+      if (url.startsWith("/api/session-summary") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            chargerId: "SMART-EVSE-1",
+            totalSessions: 3,
+            activeSessions: 1,
+            totalEnergyWh: 12450,
+            lastSession: {
+              id: "session-1",
+              transactionId: 42,
+              startedAt: "2026-06-19T09:05:00.000Z",
+              stoppedAt: null,
+              active: true,
+              energyWh: null
+            }
+          }),
+          { status: 200 }
+        );
+      }
+
       if (url.startsWith("/api/charging-stats") && method === "GET") {
         return new Response(
           JSON.stringify([
@@ -360,15 +388,20 @@ describe("App", () => {
 
     fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Charger summary")).toBeInTheDocument();
+    expect(screen.getByText("Total sessions")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("Total energy")).toBeInTheDocument();
+    expect(screen.getByText("12.45 kWh")).toBeInTheDocument();
+    expect(screen.getByText("Last session")).toBeInTheDocument();
+    expect(screen.getByText("Session active")).toBeInTheDocument();
+    expect(screen.getByText("Yes")).toBeInTheDocument();
     expect(screen.getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
-    expect(screen.getByText("Use wss:// when this service is served behind TLS.")).toBeInTheDocument();
     expect(screen.getByText("ocpp1.6")).toBeInTheDocument();
-    expect(screen.getByText(/Basic Auth is required\. Use the charger id as the username\./)).toBeInTheDocument();
-    expect(screen.getByText(/Secrets are never shown in this dashboard\./)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Charger connection" })).toBeInTheDocument();
-    expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Communication" })).toBeInTheDocument();
-    expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Sessions" })).toBeInTheDocument();
-    expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Proxy targets" })).toBeInTheDocument();
+    expect(screen.getByText("Basic Auth: charger id")).toBeInTheDocument();
+    expect(screen.queryByText("Charging ingress")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Charger connection" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Dashboard quick links")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Operational snapshot" })).not.toBeInTheDocument();
     expect(screen.queryByText("Chargers connected now")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent registry rows")).not.toBeInTheDocument();
@@ -379,9 +412,8 @@ describe("App", () => {
     expect(screen.getByText("31.3 A")).toBeInTheDocument();
     expect(screen.getByText("230 V")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upstream targets" })).toBeInTheDocument();
-    expect(screen.getByText("wss://tap.example/ocpp/STATION-1")).toBeInTheDocument();
+    expect(screen.getByText("Tap Electric")).toBeInTheDocument();
     expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Persistent upstream socket is open\./)).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
