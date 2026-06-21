@@ -31,8 +31,6 @@ type DashboardViewProps = {
   sessionSummary: SessionSummary | null;
   selectedChargerId: string;
   selectedChargerLabel: string;
-  selectedConnectionStatus: string;
-  selectedConnectionTone: string;
   onNavigate: (view: ActiveView) => void;
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
   onOpenSessions: () => void;
@@ -53,8 +51,6 @@ export function DashboardView({
   sessionSummary,
   selectedChargerId,
   selectedChargerLabel,
-  selectedConnectionStatus,
-  selectedConnectionTone,
   onNavigate,
   onOpenCommunication,
   onOpenSessions,
@@ -79,7 +75,6 @@ export function DashboardView({
             <p className="status-copy mono">{selectedChargerId || "Select a charger context"}</p>
           </div>
           <div className="topbar-actions">
-            <span className={`pill ${selectedConnectionTone}`}>{selectedConnectionStatus}</span>
             <Button
               type="button"
               className="button-secondary icon-button"

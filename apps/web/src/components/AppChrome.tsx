@@ -14,8 +14,7 @@ import {
   Tags as TagsIcon,
   type LucideIcon
 } from "lucide-react";
-import type { ActiveView, ChargerRegistryRow, LiveStatus, ThemeMode } from "../types";
-import { getChargerContextId, getChargerDisplayLabel, sortChargers } from "../app-helpers";
+import type { ActiveView, LiveStatus, ThemeMode } from "../types";
 import { Button } from "./ui/button";
 
 const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
@@ -46,18 +45,14 @@ const mobileMoreNavItems: Array<{ view: ActiveView; label: string; icon: LucideI
 type AppChromeProps = {
   activeView: ActiveView;
   busy: boolean;
-  chargers: ChargerRegistryRow[];
   children: ReactNode;
   message: string;
-  selectedChargerId: string;
-  selectedChargerLabel: string;
   sidebarCollapsed: boolean;
   theme: ThemeMode;
   liveStatus: LiveStatus;
   onLogout: () => void;
   onOpenChargerWizard: () => void;
   onNavigate: (view: ActiveView) => void;
-  onSelectedChargerChange: (chargerId: string) => void;
   onSidebarCollapsedChange: (collapsed: boolean) => void;
   onThemeToggle: () => void;
 };
@@ -65,18 +60,14 @@ type AppChromeProps = {
 export function AppChrome({
   activeView,
   busy,
-  chargers,
   children,
   message,
-  selectedChargerId,
-  selectedChargerLabel,
   sidebarCollapsed,
   theme,
   liveStatus,
   onLogout,
   onOpenChargerWizard,
   onNavigate,
-  onSelectedChargerChange,
   onSidebarCollapsedChange,
   onThemeToggle
 }: AppChromeProps) {
@@ -111,23 +102,6 @@ export function AppChrome({
               {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
             </Button>
           </div>
-
-          <label className="sidebar-context" htmlFor="charger-context-select">
-            <select
-              id="charger-context-select"
-              value={selectedChargerId}
-              onChange={(event) => onSelectedChargerChange(event.target.value)}
-              aria-label="Charger context"
-              title={selectedChargerLabel}
-            >
-              <option value="">All chargers</option>
-              {sortChargers(chargers).map((charger) => (
-                <option key={charger.id} value={getChargerContextId(charger)}>
-                  {getChargerDisplayLabel(charger)}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
         <div className="sidebar-nav-shell">
           <nav className="sidebar-nav" aria-label="Charger-scoped pages">
@@ -213,7 +187,6 @@ export function AppChrome({
           </div>
           <div className="topbar-actions">
             <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
-              <span aria-hidden="true" />
               {liveStatus === "live" ? "Live" : liveStatus === "stale" ? "Stale" : "Connecting"}
             </span>
             <Button type="button" className="button-secondary icon-button" onClick={onOpenChargerWizard} disabled={busy} title="Add charger" aria-label="Add charger">

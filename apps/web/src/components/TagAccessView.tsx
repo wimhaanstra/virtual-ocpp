@@ -20,7 +20,7 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
           <div>
             <p className="eyebrow">Authorization</p>
             <h2>Tag access</h2>
-            <p className="status-copy">Select a charger context in the sidebar to grant or revoke access for its tags.</p>
+            <p className="status-copy">Select a charger context to grant or revoke access for its tags.</p>
           </div>
         </div>
         <p>No charger is selected.</p>

@@ -18,6 +18,7 @@ import { GlobalDashboardView } from "./components/GlobalDashboardView";
 import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
 import { TagAccessView } from "./components/TagAccessView";
 import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
+import { ChargerContextSwitcher } from "./components/ChargerContextSwitcher";
 import { ChargerLabelModal } from "./components/ChargerLabelModal";
 import { ChargersView } from "./components/ChargersView";
 import { SessionsView } from "./components/SessionsView";
@@ -1394,17 +1395,13 @@ export default function App() {
     <AppChrome
       activeView={activeView}
       busy={busy}
-      chargers={chargers}
       message={message}
-      selectedChargerId={selectedChargerId}
-      selectedChargerLabel={selectedChargerLabel}
       sidebarCollapsed={sidebarCollapsed}
       theme={theme}
       liveStatus={liveStatus}
       onLogout={() => void logout()}
       onOpenChargerWizard={() => void openChargerWizard()}
       onNavigate={navigateToView}
-      onSelectedChargerChange={setSelectedChargerId}
       onSidebarCollapsedChange={setSidebarCollapsed}
       onThemeToggle={toggleTheme}
     >
@@ -1424,27 +1421,35 @@ export default function App() {
             onSelectCharger={setSelectedChargerId}
           />
         ) : activeView === "Charger dashboard" ? (
-          <DashboardView
-            activeSessionAudit={activeSessionAudit}
-            busy={busy}
-            chargingStats={chargingStats}
-            chargingStatsStatus={chargingStatsStatus}
-            dashboardConfig={dashboardConfig}
-            meterGapEvents={meterGapEvents}
-            proxyTargetHealth={proxyTargetHealth}
-            sessionSummary={sessionSummary}
-            selectedChargerId={selectedChargerId}
-            selectedChargerLabel={selectedChargerLabel}
-            selectedConnectionStatus={selectedConnectionStatus}
-            selectedConnectionTone={selectedConnectionTone}
-            onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
-            onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
-            onNavigate={navigateToView}
-            onRefresh={() => void loadScopedData(selectedChargerId)}
-            onDismissMeterGap={(event) => void dismissMeterGap(event)}
-            onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
-            onSubmitMeterGap={(event) => void openMeterGapSubmit(event)}
-          />
+          <>
+            <ChargerContextSwitcher
+              chargers={chargers}
+              selectedChargerId={selectedChargerId}
+              selectedChargerLabel={selectedChargerLabel}
+              status={selectedConnectionStatus}
+              statusTone={selectedConnectionTone}
+              onSelectCharger={setSelectedChargerId}
+            />
+            <DashboardView
+              activeSessionAudit={activeSessionAudit}
+              busy={busy}
+              chargingStats={chargingStats}
+              chargingStatsStatus={chargingStatsStatus}
+              dashboardConfig={dashboardConfig}
+              meterGapEvents={meterGapEvents}
+              proxyTargetHealth={proxyTargetHealth}
+              sessionSummary={sessionSummary}
+              selectedChargerId={selectedChargerId}
+              selectedChargerLabel={selectedChargerLabel}
+              onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
+              onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
+              onNavigate={navigateToView}
+              onRefresh={() => void loadScopedData(selectedChargerId)}
+              onDismissMeterGap={(event) => void dismissMeterGap(event)}
+              onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
+              onSubmitMeterGap={(event) => void openMeterGapSubmit(event)}
+            />
+          </>
         ) : activeView === "Chargers" ? (
           <ChargersView
             busy={busy}
@@ -1454,16 +1459,26 @@ export default function App() {
             onRefresh={() => void loadChargers()}
           />
         ) : activeView === "Sessions" ? (
-          <SessionsView
-            activeSessionAudit={activeSessionAudit}
-            busy={busy}
-            chargingSessions={chargingSessions}
-            chargingStats={chargingStats}
-            selectedChargerLabel={selectedChargerLabel}
-            onForceClose={(session) => void previewForceCloseChargingSession(session)}
-            onRefresh={() => void loadScopedData(selectedChargerId)}
-            onRemoteStop={startRemoteStopChargingSession}
-          />
+          <>
+            <ChargerContextSwitcher
+              chargers={chargers}
+              selectedChargerId={selectedChargerId}
+              selectedChargerLabel={selectedChargerLabel}
+              status={selectedConnectionStatus}
+              statusTone={selectedConnectionTone}
+              onSelectCharger={setSelectedChargerId}
+            />
+            <SessionsView
+              activeSessionAudit={activeSessionAudit}
+              busy={busy}
+              chargingSessions={chargingSessions}
+              chargingStats={chargingStats}
+              selectedChargerLabel={selectedChargerLabel}
+              onForceClose={(session) => void previewForceCloseChargingSession(session)}
+              onRefresh={() => void loadScopedData(selectedChargerId)}
+              onRemoteStop={startRemoteStopChargingSession}
+            />
+          </>
         ) : activeView === "Communication" ? (
           <CommunicationView
             busy={busy}
@@ -1550,16 +1565,35 @@ export default function App() {
             ) : null}
           </>
         ) : activeView === "Tag access" ? (
-          <TagAccessView
-            busy={busy}
-            selectedChargerId={selectedChargerId}
-            selectedChargerLabel={selectedChargerLabel}
-            tags={tags}
-            onRefresh={() => void loadTags()}
-            onToggleAccess={(tag) => void toggleTagAccess(tag)}
-          />
+          <>
+            <ChargerContextSwitcher
+              chargers={chargers}
+              selectedChargerId={selectedChargerId}
+              selectedChargerLabel={selectedChargerLabel}
+              status={selectedConnectionStatus}
+              statusTone={selectedConnectionTone}
+              onSelectCharger={setSelectedChargerId}
+            />
+            <TagAccessView
+              busy={busy}
+              selectedChargerId={selectedChargerId}
+              selectedChargerLabel={selectedChargerLabel}
+              tags={tags}
+              onRefresh={() => void loadTags()}
+              onToggleAccess={(tag) => void toggleTagAccess(tag)}
+            />
+          </>
         ) : (
-          <section className="proxy-target-layout">
+          <>
+            <ChargerContextSwitcher
+              chargers={chargers}
+              selectedChargerId={selectedChargerId}
+              selectedChargerLabel={selectedChargerLabel}
+              status={selectedConnectionStatus}
+              statusTone={selectedConnectionTone}
+              onSelectCharger={setSelectedChargerId}
+            />
+            <section className="proxy-target-layout">
             <section className="panel table-panel">
                 <div className="topbar-actions page-section-header">
                   <div>
@@ -1876,6 +1910,7 @@ export default function App() {
               </div>
             ) : null}
           </section>
+          </>
         )}
       <ForceClosePreviewModal
         busy={busy}

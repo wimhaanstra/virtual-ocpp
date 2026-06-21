@@ -135,6 +135,16 @@ const emptyVisibilityResponses = (url: string, method: string) => {
   return null;
 };
 
+async function chooseChargerFromContextSwitcher(chargerId: string) {
+  const contextStrip = within(screen.getByRole("region", { name: "Selected charger" }));
+  fireEvent.click(contextStrip.getByRole("button", { name: /^(Select|Switch)$/ }));
+
+  const picker = await screen.findByRole("dialog", { name: "Select charger" });
+  fireEvent.click(within(picker).getByRole("button", { name: new RegExp(chargerId) }));
+
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Select charger" })).not.toBeInTheDocument());
+}
+
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -388,7 +398,6 @@ describe("App", () => {
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Tags" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Chargers" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
-    expect(sidebar.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
     expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
     expect(screen.queryByText("Charger context")).not.toBeInTheDocument();
@@ -402,6 +411,7 @@ describe("App", () => {
 
     fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Charger summary")).toBeInTheDocument();
     expect(screen.getByText("Total sessions")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -1113,8 +1123,8 @@ describe("App", () => {
 
     await waitFor(() => expect(patchCalls).toEqual([{ url: "/api/chargers/SMART-EVSE-NEW", body: { label: "Garage" } }]));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
-    expect(screen.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-NEW");
     await screen.findByRole("heading", { name: "Charger dashboard" });
+    expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-NEW").length).toBeGreaterThan(0);
     expect(window.location.pathname).toBe("/charger-dashboard");
     await waitFor(() => expect(window.location.search).toContain("chargerId=SMART-EVSE-NEW"));
   });
@@ -1282,7 +1292,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
+    expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
@@ -1352,7 +1362,7 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
 
     expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
-    expect(screen.getByText("Select a charger context in the sidebar to grant or revoke access for its tags.")).toBeInTheDocument();
+    expect(screen.getByText("Select a charger context to grant or revoke access for its tags.")).toBeInTheDocument();
     expect(screen.getByText("No charger is selected.")).toBeInTheDocument();
   });
 
@@ -1499,7 +1509,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Communication" })).toBeInTheDocument();
     expect(screen.getByText(/Showing the last 24 hours by default, newest first, limit 200\./)).toBeInTheDocument();
     expect(screen.getByText("BootNotification")).toBeInTheDocument();
-    expect(screen.getByText("SMART-EVSE-1")).toBeInTheDocument();
+    expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
   });
 
   it("issues communication journal filters as query parameters", async () => {
@@ -2097,9 +2107,9 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: "SMART-EVSE-1" } });
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
+    await chooseChargerFromContextSwitcher("SMART-EVSE-1");
     expect(await screen.findByText("Tap Electric")).toBeInTheDocument();
     expect(screen.getByText("1 mapping")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
@@ -2273,10 +2283,9 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
-
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
+    await chooseChargerFromContextSwitcher(selectedChargerId);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
     expect(screen.getByText("Targets are listed for the selected charger context.")).toBeInTheDocument();
@@ -2869,18 +2878,17 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
-
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
 
     fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
+    await chooseChargerFromContextSwitcher(selectedChargerId);
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
     expect(screen.getAllByText("Tap Electric").length).toBeGreaterThan(0);
 
     fireEvent.click(sidebar.getByRole("button", { name: "Sessions" }));
     expect(await screen.findByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
-    expect(screen.getByText("SMART-EVSE-1")).toBeInTheDocument();
+    expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.getByText("Connector")).toBeInTheDocument();
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
 
@@ -2979,9 +2987,9 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
+    await chooseChargerFromContextSwitcher(selectedChargerId);
 
     expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
     expect(await screen.findByText("Blocked")).toBeInTheDocument();
