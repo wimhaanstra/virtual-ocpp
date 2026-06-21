@@ -20,12 +20,13 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Per-target external transaction id mapping for mirrored sessions
 - Repo-local OCPP charger simulator for demos and smoke tests
 - Protected operator visibility APIs for charger connections, sessions, and logs
-- Protected home dashboard as the default admin view, showing OCPP connection info, protocol/auth requirements without secrets, charger connection status, runtime proxy health, live charging state, missing-stop checks, and quick links
+- Protected global dashboard as the default admin view, showing connected chargers, active sessions, live charge details, and sessions needing attention
+- Charger-scoped dashboard showing OCPP connection info, protocol/auth requirements without secrets, charger connection status, runtime proxy health, live charging state, missing-stop checks, and quick links
 - Protected communication journal API/page with redacted charger/server/proxy protocol payloads, source/target filtering, and configurable automatic purge
 - Protected charger registry and charger context selector
 - Charger-scoped proxy targets so each local charger chooses which upstreams it mirrors to
 - Global tags with explicit per-charger access controls
-- Frontend chargers, tag, tag access, proxy target, sessions, home dashboard, and communication pages as the active admin pages
+- Frontend global dashboard, charger dashboard, chargers, tag, tag access, proxy target, sessions, and communication pages as the active admin pages
 - Frontend component split for shared types/helpers, app chrome, auth, dashboard, sessions, communication, and force-close review modal
 - Charger onboarding wizard that waits for a newly registered charger and then switches the selected charger context
 - Production Docker image that serves the compiled backend and frontend from one container with `/data` as the SQLite volume
@@ -45,7 +46,8 @@ The server loads `.env` automatically from the current directory, parent directo
 
 The Vite frontend uses client-side routes for the protected admin pages:
 
-- `/`: home dashboard
+- `/`: global dashboard
+- `/charger-dashboard`: charger-scoped dashboard
 - `/proxy-targets`: charger-scoped proxy targets
 - `/tag-access`: charger-scoped tag grants for the selected charger
 - `/chargers`: global charger registry with rename and destructive delete flow
@@ -138,9 +140,16 @@ Virtual OCPP keeps one outbound OCPP client connection per local charger and pro
 
 When a proxy target returns a transaction id from `StartTransaction`, the server stores it in `proxy_session_mappings`. Later `MeterValues` and `StopTransaction` calls for the local transaction are sent to that target with the mapped external transaction id.
 
-## Home Dashboard Workflow
+## Dashboard Workflow
 
-The protected default admin view is the home dashboard. It is read-only and gives operators the first-screen charger overview:
+The protected default admin view is the global dashboard. It is read-only and gives operators a clean first-screen fleet overview:
+
+- connected versus registered chargers
+- active sessions
+- chargers with live charge details when `MeterValues` are available
+- session audit warnings that need operator attention
+
+The charger-scoped dashboard is available at `/charger-dashboard` and gives operators selected-charger setup and runtime details:
 
 - local OCPP connection URL
 - expected websocket protocol
@@ -148,6 +157,8 @@ The protected default admin view is the home dashboard. It is read-only and give
 - charger connection status and recent activity summary
 - active charging energy, power, current, and voltage from normalized `MeterValues` when the charger supplies them
 - quick links to sessions, communication, tags, and proxy targets
+
+The sidebar keeps charger-scoped pages near the charger context selector. Global pages live at the bottom above the theme and sign-out controls, separated from charger-scoped pages without extra section labels. The sidebar can collapse to icon-only navigation; the active page keeps `aria-current="page"` for accessibility.
 
 The dashboard reads this setup information from `GET /api/dashboard-config`. That protected endpoint returns the charger URL template, the OCPP websocket subprotocol, and whether charger Basic Auth is required. It never returns the Basic Auth password. By default the displayed URL uses the backend `PORT`; set `OCPP_PUBLIC_URL` when the charger should connect through a reverse proxy or TLS hostname.
 

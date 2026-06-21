@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, the protected home dashboard, protected operator visibility pages with stale-session audit checks, runtime proxy health, a redacted communication journal for protocol troubleshooting, and a production Docker image.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, protected global and charger-scoped dashboards, protected operator visibility pages with stale-session audit checks, runtime proxy health, a redacted communication journal for protocol troubleshooting, and a production Docker image.
 
 ## Stack
 
@@ -57,7 +57,7 @@ npm run db:migrate   # apply Drizzle migrations
 
 The frontend dev server runs at `http://localhost:5173`. It proxies `/api` and `/health` to the backend at `http://localhost:3000`.
 
-Protected frontend pages use client-side routes so refresh and browser back/forward keep the current page: `/`, `/proxy-targets`, `/tags`, `/sessions`, and `/communication`. The selected charger context is preserved in `?chargerId=...`.
+Protected frontend pages use client-side routes so refresh and browser back/forward keep the current page: `/`, `/charger-dashboard`, `/proxy-targets`, `/tag-access`, `/chargers`, `/tags`, `/sessions`, and `/communication`. The selected charger context is preserved in `?chargerId=...`.
 
 ## Deployment
 
@@ -197,7 +197,8 @@ The current frontend includes global tag management, selected-charger tag access
 - Edit, toggle, or delete proxy targets.
 - View whether a proxy target has stored credentials without exposing the username or password.
 - Add per-proxy tag mappings so an upstream receives a different idTag than the charger sends locally.
-- Open the protected default home dashboard with local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, runtime proxy target health, active charging energy/power/current/voltage when available, missing-stop audit warnings, and quick links to operational pages.
+- Open the protected default global dashboard for a clean fleet overview of connected chargers, active sessions, live charge details when available, and sessions needing attention.
+- Use the charger-scoped dashboard for local OCPP connection info, websocket protocol, optional Basic Auth requirements, charger connection status, runtime proxy target health, active charging energy/power/current/voltage when available, missing-stop audit warnings, and quick links to operational pages.
 - View recent charging sessions.
 - Review missing-stop audit warnings for active sessions where the charger appears available/disconnected or an accepted remote stop has not produced `StopTransaction`.
 - Request a real OCPP remote stop for active sessions when the charger is connected.

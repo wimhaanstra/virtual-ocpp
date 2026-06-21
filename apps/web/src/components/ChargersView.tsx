@@ -32,9 +32,8 @@ export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete 
           <h2>Chargers</h2>
           <p className="status-copy">Global charger registry with rename and destructive delete actions.</p>
         </div>
-        <Button type="button" className="button-secondary" onClick={onRefresh} disabled={busy}>
+        <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
           <RefreshCcw aria-hidden="true" />
-          <span className="button-label">Refresh</span>
         </Button>
       </div>
       {chargers.length === 0 ? (
@@ -74,14 +73,26 @@ export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete 
                       {charger.firmwareVersion ? <div className="status-copy mono">Firmware {charger.firmwareVersion}</div> : null}
                     </td>
                     <td>
-                      <div className="action-row">
-                        <Button type="button" className="button-secondary" onClick={() => onEditLabel(charger)} disabled={busy}>
+                      <div className="action-row compact-action-row">
+                        <Button
+                          type="button"
+                          className="button-secondary icon-button"
+                          onClick={() => onEditLabel(charger)}
+                          disabled={busy}
+                          title="Edit label"
+                          aria-label="Edit label"
+                        >
                           <Pencil aria-hidden="true" />
-                          <span className="button-label">Edit label</span>
                         </Button>
-                        <Button type="button" className="button-danger" onClick={() => onDelete(charger)} disabled={busy}>
+                        <Button
+                          type="button"
+                        className="button-danger icon-button"
+                        onClick={() => onDelete(charger)}
+                        disabled={busy}
+                        title="Delete charger"
+                        aria-label="Delete"
+                      >
                           <Trash2 aria-hidden="true" />
-                          <span className="button-label">Delete</span>
                         </Button>
                       </div>
                     </td>

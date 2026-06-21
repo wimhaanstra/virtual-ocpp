@@ -27,22 +27,6 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Sidebar and scope navigation: charger context, add-charger action, theme toggle, and sign out moved into the sidebar with grouped charger-scoped and global/admin navigation.
 - Split tag management and tag access: global Tags page manages tag identities while charger-scoped Tag access grants or revokes existing tags for the selected charger.
 - Charger management with destructive delete: global Chargers page lists the charger registry, supports label edits, and requires admin password plus exact charger id confirmation before deleting charger-owned data and runtime connections.
+- Operator UI density cleanup: repeated table and page-level utility actions use compact icon buttons with descriptive titles/accessibility labels, table/action spacing is tighter, the sidebar has a compact title-level collapse button plus bottom-aligned global links and wider footer controls, and `/` is now a clean global dashboard while the charger-specific dashboard lives at `/charger-dashboard`.
 
 ## Next Candidate Slices
-
-### Slice 5.11: Operator UI Density Cleanup
-
-Goal: reduce remaining bulk in admin tables, modals, and repeated controls now that the main workflows exist.
-
-Scope:
-
-- Tighten remaining table rows and action columns.
-- Convert obvious text buttons to icon buttons with titles/labels.
-- Revisit modal form section spacing after the charger wizard, proxy targets, and tags flows are all present.
-- Keep the Charge Amber restrained visual direction and avoid adding new nested panels.
-
-Acceptance criteria:
-
-- Communication, sessions, tags, proxy targets, and dashboard controls fit comfortably on laptop-width screens.
-- Table actions stay understandable with icon labels/tooltips.
-- Forms align consistently across modals.

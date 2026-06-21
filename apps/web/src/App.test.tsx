@@ -340,23 +340,32 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     expect(screen.getByText(/Live|Connecting|Stale/, { selector: ".live-indicator" })).toBeInTheDocument();
-    expect(screen.getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
-    expect(screen.getByText("Use wss:// when this service is served behind TLS.")).toBeInTheDocument();
-    expect(screen.getByText("ocpp1.6")).toBeInTheDocument();
-    expect(screen.getByText(/Basic Auth is required\. Use the charger id as the username\./)).toBeInTheDocument();
-    expect(screen.getByText(/Secrets are never shown in this dashboard\./)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Charger connection" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Fleet status" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Runtime status" })).toBeInTheDocument();
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Tag access" })).toBeInTheDocument();
+    expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Overview" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Tags" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Chargers" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(sidebar.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
     expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(screen.queryByText("Charger context")).not.toBeInTheDocument();
+    expect(screen.queryByText("Charger-scoped")).not.toBeInTheDocument();
+    expect(screen.queryByText("Global / admin")).not.toBeInTheDocument();
+
+    fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
+    expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
+    expect(screen.getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
+    expect(screen.getByText("Use wss:// when this service is served behind TLS.")).toBeInTheDocument();
+    expect(screen.getByText("ocpp1.6")).toBeInTheDocument();
+    expect(screen.getByText(/Basic Auth is required\. Use the charger id as the username\./)).toBeInTheDocument();
+    expect(screen.getByText(/Secrets are never shown in this dashboard\./)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Charger connection" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Sessions" })).toBeInTheDocument();
     expect(within(screen.getByLabelText("Dashboard quick links")).getByRole("button", { name: "Proxy targets" })).toBeInTheDocument();
@@ -532,9 +541,9 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     expect(await screen.findByText("Live", { selector: ".live-indicator" })).toBeInTheDocument();
-    expect(screen.getByText("7.2 kW")).toBeInTheDocument();
+    expect(screen.getByText(/7.2 kW/)).toBeInTheDocument();
 
     latestPowerW = 4200;
     latestSampleAt = "2026-06-19T09:46:00.000Z";
@@ -555,7 +564,7 @@ describe("App", () => {
       );
     });
 
-    await screen.findByText("4.2 kW");
+    await screen.findByText(/4.2 kW/);
     expect(
       fetchMock.mock.calls.filter(([input]) => {
         const url = new URL(String(input), "http://localhost");
@@ -656,7 +665,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
 
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
@@ -676,6 +685,8 @@ describe("App", () => {
     await waitFor(() => expect(patchCalls).toEqual([{ url: "/api/chargers/SMART-EVSE-NEW", body: { label: "Garage" } }]));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
     expect(screen.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-NEW");
+    await screen.findByRole("heading", { name: "Charger dashboard" });
+    expect(window.location.pathname).toBe("/charger-dashboard");
     await waitFor(() => expect(window.location.search).toContain("chargerId=SMART-EVSE-NEW"));
   });
 
@@ -756,7 +767,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: "Add charger" })[0]);
 
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
@@ -903,7 +914,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
@@ -943,7 +954,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
@@ -955,7 +966,7 @@ describe("App", () => {
     expect(window.localStorage.getItem("virtual-ocpp-sidebar-collapsed")).toBe("true");
     expect(sidebar.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Dashboard" })).toHaveAttribute("title", "Dashboard");
-    expect(sidebar.getByRole("button", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
+    expect(sidebar.getByRole("button", { name: "Overview" })).toHaveAttribute("aria-current", "page");
     expect(sidebar.getByRole("button", { name: "Sign out" })).toHaveAttribute("title", "Sign out");
   });
 
@@ -1048,7 +1059,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
@@ -1105,7 +1116,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
@@ -1239,7 +1250,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
@@ -1326,7 +1337,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
@@ -1391,7 +1402,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
 
@@ -1500,7 +1511,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Chargers" }));
@@ -1645,7 +1656,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: "SMART-EVSE-1" } });
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
@@ -1805,7 +1816,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
 
@@ -2105,7 +2116,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Sessions" }));
@@ -2332,7 +2343,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
 
@@ -2440,7 +2451,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Charger context"), { target: { value: selectedChargerId } });
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
@@ -2523,7 +2534,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
@@ -2566,7 +2577,7 @@ describe("App", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
 

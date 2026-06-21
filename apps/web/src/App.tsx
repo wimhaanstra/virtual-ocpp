@@ -14,6 +14,7 @@ import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
 import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
+import { GlobalDashboardView } from "./components/GlobalDashboardView";
 import { TagAccessView } from "./components/TagAccessView";
 import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
 import { ChargerLabelModal } from "./components/ChargerLabelModal";
@@ -583,6 +584,7 @@ export default function App() {
       await loadChargers();
       closeChargerWizard();
       setSelectedChargerId(chargerId);
+      setActiveView("Charger dashboard");
       setMessage(label ? `Charger ${label} added.` : `Charger ${chargerId} added.`);
     } finally {
       setBusy(false);
@@ -1200,7 +1202,7 @@ export default function App() {
   }
 
   return (
-      <AppChrome
+    <AppChrome
       activeView={activeView}
       busy={busy}
       chargers={chargers}
@@ -1218,6 +1220,18 @@ export default function App() {
       onThemeToggle={toggleTheme}
     >
         {activeView === "Home" ? (
+          <GlobalDashboardView
+            activeSessionAudit={activeSessionAudit}
+            busy={busy}
+            chargers={chargers}
+            chargingSessions={chargingSessions}
+            chargingStats={chargingStats}
+            chargingStatsStatus={chargingStatsStatus}
+            onNavigate={navigateToView}
+            onRefresh={() => void loadScopedData("")}
+            onSelectCharger={setSelectedChargerId}
+          />
+        ) : activeView === "Charger dashboard" ? (
           <DashboardView
             activeSessionAudit={activeSessionAudit}
             busy={busy}
@@ -1354,9 +1368,15 @@ export default function App() {
                   <h2>Configured targets</h2>
                   <p className="status-copy">Targets are listed for the selected charger context.</p>
                   </div>
-                  <Button type="button" onClick={startProxyTargetCreate} disabled={busy || !selectedChargerId}>
+                  <Button
+                    type="button"
+                    className="button-secondary icon-button"
+                    onClick={startProxyTargetCreate}
+                    disabled={busy || !selectedChargerId}
+                    title="Add target"
+                    aria-label="Add target"
+                  >
                     <Plus aria-hidden="true" />
-                    Add target
                   </Button>
                 </div>
                 {proxyTargets.length === 0 ? (
@@ -1393,18 +1413,36 @@ export default function App() {
                             <td>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</td>
                             <td>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</td>
                             <td>
-                              <div className="action-row">
-                                <Button type="button" className="button-secondary" onClick={() => startProxyTargetEdit(target)} disabled={busy}>
+                              <div className="action-row compact-action-row">
+                                <Button
+                                  type="button"
+                                  className="button-secondary icon-button"
+                                  onClick={() => startProxyTargetEdit(target)}
+                                  disabled={busy}
+                                  title="Edit proxy target"
+                                  aria-label="Edit"
+                                >
                                   <Pencil aria-hidden="true" />
-                                  <span className="button-label">Edit</span>
                                 </Button>
-                                <Button type="button" onClick={() => void toggleProxyTarget(target)} disabled={busy}>
+                                <Button
+                                  type="button"
+                                  className="icon-button"
+                                  onClick={() => void toggleProxyTarget(target)}
+                                  disabled={busy}
+                                  title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
+                                  aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
+                                >
                                   {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
-                                  <span className="button-label">{target.enabled ? "Disable" : "Enable"}</span>
                                 </Button>
-                                <Button type="button" className="button-ghost" onClick={() => void deleteProxyTarget(target)} disabled={busy}>
+                                <Button
+                                  type="button"
+                                  className="button-ghost icon-button"
+                                  onClick={() => void deleteProxyTarget(target)}
+                                  disabled={busy}
+                                  title="Delete proxy target"
+                                  aria-label="Delete"
+                                >
                                   <Trash2 aria-hidden="true" />
-                                  <span className="button-label">Delete</span>
                                 </Button>
                               </div>
                             </td>
@@ -1541,9 +1579,15 @@ export default function App() {
                           <h3>Proxy authentication</h3>
                           <p className="status-copy">Replace local idTags only for this upstream proxy.</p>
                         </div>
-                        <Button type="button" className="button-secondary" onClick={addProxyTagMapping} disabled={busy}>
+                        <Button
+                          type="button"
+                          className="button-secondary icon-button"
+                          onClick={addProxyTagMapping}
+                          disabled={busy}
+                          title="Add tag mapping"
+                          aria-label="Add mapping"
+                        >
                           <Plus aria-hidden="true" />
-                          <span className="button-label">Add mapping</span>
                         </Button>
                       </div>
                       {proxyTargetForm.tagMappings.length === 0 ? (

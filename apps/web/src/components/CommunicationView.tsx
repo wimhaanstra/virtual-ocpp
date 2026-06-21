@@ -187,14 +187,12 @@ export function CommunicationView({
             <p className="eyebrow">Communication</p>
             <h2>Recent journal rows</h2>
           </div>
-          <div className="action-row">
-            <Button type="button" className="button-secondary" onClick={onRefresh} disabled={busy}>
+          <div className="action-row compact-action-row">
+            <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
               <RefreshCcw aria-hidden="true" />
-              <span className="button-label">Refresh</span>
             </Button>
-            <Button type="button" className="button-ghost button-danger" onClick={onPurge} disabled={busy}>
+            <Button type="button" className="button-ghost button-danger icon-button" onClick={onPurge} disabled={busy} title="Purge journal" aria-label="Purge">
               <Trash2 aria-hidden="true" />
-              <span className="button-label">Purge</span>
             </Button>
           </div>
         </div>

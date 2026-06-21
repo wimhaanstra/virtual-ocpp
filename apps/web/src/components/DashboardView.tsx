@@ -50,13 +50,25 @@ export function DashboardView({
               <h2>Charger connection</h2>
             </div>
             <span className={`pill ${selectedConnectionTone}`}>{selectedConnectionStatus}</span>
-            <Button type="button" className="button-secondary" onClick={onOpenChargerWizard} disabled={busy}>
+            <Button
+              type="button"
+              className="button-secondary icon-button"
+              onClick={onOpenChargerWizard}
+              disabled={busy}
+              title="Add charger"
+              aria-label="Add charger"
+            >
               <Plus aria-hidden="true" />
-              <span className="button-label">Add charger</span>
             </Button>
-            <Button type="button" className="button-secondary" onClick={onRefresh} disabled={busy}>
+            <Button
+              type="button"
+              className="button-secondary icon-button"
+              onClick={onRefresh}
+              disabled={busy}
+              title="Refresh dashboard"
+              aria-label="Refresh dashboard"
+            >
               <RefreshCcw aria-hidden="true" />
-              <span className="button-label">Refresh</span>
             </Button>
           </div>
 

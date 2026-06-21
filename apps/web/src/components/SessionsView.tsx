@@ -31,9 +31,8 @@ export function SessionsView({
           <h2>Recent sessions</h2>
           <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
         </div>
-        <Button type="button" className="button-secondary" onClick={onRefresh} disabled={busy}>
+        <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
           <RefreshCcw aria-hidden="true" />
-          <span className="button-label">Refresh</span>
         </Button>
       </div>
       {chargingSessions.length === 0 ? (

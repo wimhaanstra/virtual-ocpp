@@ -1,4 +1,4 @@
-import { RefreshCcw } from "lucide-react";
+import { RefreshCcw, ShieldCheck, ShieldX } from "lucide-react";
 import type { Tag } from "../types";
 import { formatDateTime, getTagAccessForCharger } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -36,9 +36,8 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
           <h2>Tag access</h2>
           <p className="status-copy">Grant or revoke existing global tags for {selectedChargerLabel}.</p>
         </div>
-        <Button type="button" className="button-secondary" onClick={onRefresh} disabled={busy}>
+        <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
           <RefreshCcw aria-hidden="true" />
-          <span className="button-label">Refresh</span>
         </Button>
       </div>
       {tags.length === 0 ? (
@@ -76,8 +75,15 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
                     </td>
                     <td>{formatDateTime(tag.createdAt)}</td>
                     <td>
-                      <Button type="button" className="button-secondary" onClick={() => onToggleAccess(tag)} disabled={busy}>
-                        {allowed ? "Revoke access" : "Grant access"}
+                      <Button
+                        type="button"
+                        className="button-secondary icon-button"
+                        onClick={() => onToggleAccess(tag)}
+                        disabled={busy}
+                        title={allowed ? "Revoke access" : "Grant access"}
+                        aria-label={allowed ? "Revoke access" : "Grant access"}
+                      >
+                        {allowed ? <ShieldX aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
                       </Button>
                     </td>
                   </tr>

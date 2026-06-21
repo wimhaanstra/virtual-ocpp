@@ -21,9 +21,15 @@ export function TagsView({ busy, tags, onCreateTag, onDeleteTag, onEditTag, onTo
           <h2>Configured tags</h2>
           <p className="status-copy">Tag access is managed on the charger-scoped Tag access page.</p>
         </div>
-        <Button type="button" onClick={onCreateTag} disabled={busy}>
+        <Button
+          type="button"
+          className="button-secondary icon-button"
+          onClick={onCreateTag}
+          disabled={busy}
+          title="Add tag"
+          aria-label="Add tag"
+        >
           <Plus aria-hidden="true" />
-          Add tag
         </Button>
       </div>
       {tags.length === 0 ? (
@@ -52,18 +58,36 @@ export function TagsView({ busy, tags, onCreateTag, onDeleteTag, onEditTag, onTo
                   </td>
                   <td>{formatDateTime(tag.createdAt)}</td>
                   <td>
-                    <div className="action-row">
-                      <Button type="button" className="button-secondary" onClick={() => onEditTag(tag)} disabled={busy}>
+                    <div className="action-row compact-action-row">
+                      <Button
+                        type="button"
+                        className="button-secondary icon-button"
+                        onClick={() => onEditTag(tag)}
+                        disabled={busy}
+                        title="Edit tag"
+                        aria-label="Edit"
+                      >
                         <Pencil aria-hidden="true" />
-                        <span className="button-label">Edit</span>
                       </Button>
-                      <Button type="button" onClick={() => onToggleTag(tag)} disabled={busy}>
+                      <Button
+                        type="button"
+                        className="icon-button"
+                        onClick={() => onToggleTag(tag)}
+                        disabled={busy}
+                        title={tag.enabled ? "Disable tag" : "Enable tag"}
+                        aria-label={tag.enabled ? "Disable" : "Enable"}
+                      >
                         {tag.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
-                        <span className="button-label">{tag.enabled ? "Disable" : "Enable"}</span>
                       </Button>
-                      <Button type="button" className="button-ghost" onClick={() => onDeleteTag(tag)} disabled={busy}>
+                      <Button
+                        type="button"
+                        className="button-ghost icon-button"
+                        onClick={() => onDeleteTag(tag)}
+                        disabled={busy}
+                        title="Delete tag"
+                        aria-label="Delete"
+                      >
                         <Trash2 aria-hidden="true" />
-                        <span className="button-label">Delete</span>
                       </Button>
                     </div>
                   </td>

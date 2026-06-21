@@ -18,13 +18,14 @@ import { getChargerContextId, getChargerDisplayLabel, sortChargers } from "../ap
 import { Button } from "./ui/button";
 
 const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
-  { view: "Home", label: "Dashboard", icon: LayoutDashboard },
+  { view: "Charger dashboard", label: "Dashboard", icon: LayoutDashboard },
   { view: "Sessions", label: "Sessions", icon: ListChecks },
   { view: "Proxy targets", label: "Proxy targets", icon: PlugZap },
   { view: "Tag access", label: "Tag access", icon: TagsIcon }
 ];
 
 const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Home", label: "Overview", icon: LayoutDashboard },
   { view: "Chargers", label: "Chargers", icon: BatteryCharging },
   { view: "Tags", label: "Tags", icon: TagsIcon },
   { view: "Communication", label: "Communication", icon: MessagesSquare }
@@ -72,12 +73,22 @@ export function AppChrome({
       <aside className="sidebar" aria-label="Main navigation">
         <div className="sidebar-top">
           <div className="brand">
-            <PlugZap aria-hidden="true" />
-            <span className="sidebar-label">Virtual OCPP</span>
+            <div className="brand-title">
+              <PlugZap aria-hidden="true" />
+              <span className="sidebar-label">Virtual OCPP</span>
+            </div>
+            <Button
+              type="button"
+              className="sidebar-collapse-button"
+              onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+            </Button>
           </div>
 
           <label className="sidebar-context" htmlFor="charger-context-select">
-            <span className="sidebar-label">Charger context</span>
             <select
               id="charger-context-select"
               value={selectedChargerId}
@@ -96,32 +107,7 @@ export function AppChrome({
         </div>
         <div className="sidebar-nav-shell">
           <nav className="sidebar-nav" aria-label="Charger-scoped pages">
-            <p className="sidebar-section-label sidebar-label">Charger-scoped</p>
             {chargerScopedNavItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = item.view === activeView;
-
-              return (
-                <button
-                  type="button"
-                  className={isActive ? "active" : undefined}
-                  aria-current={isActive ? "page" : undefined}
-                  aria-label={sidebarCollapsed ? item.label : undefined}
-                  title={item.label}
-                  onClick={() => onNavigate(item.view)}
-                  key={item.view}
-                >
-                  <span className="sidebar-nav-indicator" aria-hidden="true" />
-                  <Icon aria-hidden="true" />
-                  <span className="sidebar-label">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <nav className="sidebar-nav sidebar-nav-global" aria-label="Global and admin pages">
-            <p className="sidebar-section-label sidebar-label">Global / admin</p>
-            {globalNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = item.view === activeView;
 
@@ -145,10 +131,33 @@ export function AppChrome({
         </div>
 
         <footer className="sidebar-footer">
+          <div className="sidebar-global-separator" aria-hidden="true" />
+          <nav className="sidebar-nav sidebar-nav-global" aria-label="Global and admin pages">
+            {globalNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.view === activeView;
+
+              return (
+                <button
+                  type="button"
+                  className={isActive ? "active" : undefined}
+                  aria-current={isActive ? "page" : undefined}
+                  aria-label={sidebarCollapsed ? item.label : undefined}
+                  title={item.label}
+                  onClick={() => onNavigate(item.view)}
+                  key={item.view}
+                >
+                  <span className="sidebar-nav-indicator" aria-hidden="true" />
+                  <Icon aria-hidden="true" />
+                  <span className="sidebar-label">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
           <div className="sidebar-footer-actions">
             <Button
               type="button"
-              className="button-secondary icon-button sidebar-footer-button"
+              className="button-secondary sidebar-footer-button"
               onClick={onThemeToggle}
               disabled={busy}
               title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
@@ -159,7 +168,7 @@ export function AppChrome({
             </Button>
             <Button
               type="button"
-              className="button-secondary icon-button sidebar-footer-button"
+              className="button-secondary sidebar-footer-button"
               onClick={onLogout}
               disabled={busy}
               title="Sign out"
@@ -169,16 +178,6 @@ export function AppChrome({
               <span className="sidebar-label">Sign out</span>
             </Button>
           </div>
-          <Button
-            type="button"
-            className="sidebar-collapse-button"
-            onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
-            <span className="sidebar-label">{sidebarCollapsed ? "Expand" : "Collapse"}</span>
-          </Button>
         </footer>
       </aside>
 
@@ -186,7 +185,7 @@ export function AppChrome({
         <header className="topbar">
           <div>
             <p className="eyebrow">Self-hosted CSMS</p>
-            <h1>{activeView === "Home" ? "Home dashboard" : activeView}</h1>
+            <h1>{activeView === "Home" ? "Global dashboard" : activeView}</h1>
           </div>
           <div className="topbar-actions">
             <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
