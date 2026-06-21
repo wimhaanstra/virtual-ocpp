@@ -15,6 +15,9 @@ import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
 import { TagAccessView } from "./components/TagAccessView";
+import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
+import { ChargerLabelModal } from "./components/ChargerLabelModal";
+import { ChargersView } from "./components/ChargersView";
 import { SessionsView } from "./components/SessionsView";
 import { TagsView } from "./components/TagsView";
 import type {
@@ -76,6 +79,11 @@ export default function App() {
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [forceClosePreview, setForceClosePreview] = useState<ForceClosePreview | null>(null);
   const [forceCloseLoading, setForceCloseLoading] = useState(false);
+  const [chargerLabelTarget, setChargerLabelTarget] = useState<ChargerRegistryRow | null>(null);
+  const [chargerLabelValue, setChargerLabelValue] = useState("");
+  const [chargerDeleteTarget, setChargerDeleteTarget] = useState<ChargerRegistryRow | null>(null);
+  const [chargerDeleteAdminPassword, setChargerDeleteAdminPassword] = useState("");
+  const [chargerDeleteConfirmation, setChargerDeleteConfirmation] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [communicationJournal, setCommunicationJournal] = useState<CommunicationJournalItem[]>([]);
   const [communicationRetentionHours, setCommunicationRetentionHours] = useState<number | null>(null);
@@ -198,6 +206,11 @@ export default function App() {
       setTagModalOpen(false);
       setProxyTargetModalOpen(false);
       setChargerWizardOpen(false);
+      setChargerLabelTarget(null);
+      setChargerLabelValue("");
+      setChargerDeleteTarget(null);
+      setChargerDeleteAdminPassword("");
+      setChargerDeleteConfirmation("");
     }
 
     window.addEventListener("popstate", handlePopState);
@@ -265,6 +278,11 @@ export default function App() {
     setTagModalOpen(false);
     setProxyTargetModalOpen(false);
     setChargerWizardOpen(false);
+    setChargerLabelTarget(null);
+    setChargerLabelValue("");
+    setChargerDeleteTarget(null);
+    setChargerDeleteAdminPassword("");
+    setChargerDeleteConfirmation("");
     window.history.pushState({}, "", buildViewUrl(view, selectedChargerId));
   }
 
@@ -298,6 +316,11 @@ export default function App() {
     setActiveSessionAudit(null);
     setCommunicationFilters(emptyCommunicationJournalFilters());
     setExpandedCommunicationJournalId(null);
+    setChargerLabelTarget(null);
+    setChargerLabelValue("");
+    setChargerDeleteTarget(null);
+    setChargerDeleteAdminPassword("");
+    setChargerDeleteConfirmation("");
     setSelectedChargerId("");
     setActiveView("Home");
     setLiveStatus("connecting");
@@ -391,6 +414,105 @@ export default function App() {
       return;
     }
     setChargers(data);
+  }
+
+  function startChargerLabelEdit(charger: ChargerRegistryRow) {
+    navigateToView("Chargers");
+    setChargerLabelTarget(charger);
+    setChargerLabelValue(charger.label ?? "");
+    setMessage(`Editing charger ${charger.id}.`);
+  }
+
+  function cancelChargerLabelEdit() {
+    setChargerLabelTarget(null);
+    setChargerLabelValue("");
+  }
+
+  async function submitChargerLabelEdit() {
+    if (!chargerLabelTarget) return;
+
+    setBusy(true);
+    setMessage(`Saving label for charger ${chargerLabelTarget.id}...`);
+    try {
+      const response = await fetch(`/api/chargers/${encodeURIComponent(chargerLabelTarget.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: chargerLabelValue.trim() ? chargerLabelValue.trim() : null })
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        setMessage("Could not save charger label.");
+        return;
+      }
+
+      cancelChargerLabelEdit();
+      setMessage(`Charger ${chargerLabelTarget.id} label updated.`);
+      await loadChargers();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function startChargerDelete(charger: ChargerRegistryRow) {
+    navigateToView("Chargers");
+    setChargerDeleteTarget(charger);
+    setChargerDeleteAdminPassword("");
+    setChargerDeleteConfirmation("");
+    setMessage(`Confirm deletion of charger ${charger.id}.`);
+  }
+
+  function cancelChargerDelete() {
+    setChargerDeleteTarget(null);
+    setChargerDeleteAdminPassword("");
+    setChargerDeleteConfirmation("");
+  }
+
+  async function submitChargerDelete() {
+    if (!chargerDeleteTarget) return;
+
+    const chargerId = chargerDeleteTarget.id;
+    const confirmation = chargerDeleteConfirmation.trim();
+    if (confirmation !== chargerId || !chargerDeleteAdminPassword.length) return;
+
+    setBusy(true);
+    setMessage(`Deleting charger ${chargerId}...`);
+    try {
+      const response = await fetch(`/api/chargers/${encodeURIComponent(chargerId)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          adminPassword: chargerDeleteAdminPassword,
+          chargerIdConfirmation: confirmation
+        })
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        if (response.status === 403) {
+          setMessage("Admin password was rejected.");
+        } else if (response.status === 409) {
+          setMessage("Charger id confirmation does not match.");
+        } else {
+          setMessage("Could not delete charger.");
+        }
+        return;
+      }
+
+      const deletedSelectedCharger = selectedChargerId === getChargerContextId(chargerDeleteTarget);
+      cancelChargerDelete();
+      if (deletedSelectedCharger) {
+        setSelectedChargerId("");
+      }
+      setMessage("Charger deleted.");
+      await (deletedSelectedCharger ? loadScopedData("") : loadChargers());
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function openChargerWizard() {
@@ -1111,6 +1233,14 @@ export default function App() {
             onOpenChargerWizard={() => void openChargerWizard()}
             onRefresh={() => void loadScopedData(selectedChargerId)}
           />
+        ) : activeView === "Chargers" ? (
+          <ChargersView
+            busy={busy}
+            chargers={chargers}
+            onDelete={(charger) => void startChargerDelete(charger)}
+            onEditLabel={(charger) => void startChargerLabelEdit(charger)}
+            onRefresh={() => void loadChargers()}
+          />
         ) : activeView === "Sessions" ? (
           <SessionsView
             activeSessionAudit={activeSessionAudit}
@@ -1516,6 +1646,24 @@ export default function App() {
         forceClosePreview={forceClosePreview}
         onCancel={cancelForceClosePreview}
         onExecute={() => void executeForceCloseChargingSession()}
+      />
+      <ChargerLabelModal
+        busy={busy}
+        charger={chargerLabelTarget}
+        label={chargerLabelValue}
+        onCancel={cancelChargerLabelEdit}
+        onLabelChange={setChargerLabelValue}
+        onSubmit={() => void submitChargerLabelEdit()}
+      />
+      <ChargerDeleteModal
+        adminPassword={chargerDeleteAdminPassword}
+        busy={busy}
+        charger={chargerDeleteTarget}
+        confirmation={chargerDeleteConfirmation}
+        onAdminPasswordChange={setChargerDeleteAdminPassword}
+        onCancel={cancelChargerDelete}
+        onConfirmationChange={setChargerDeleteConfirmation}
+        onSubmit={() => void submitChargerDelete()}
       />
       {chargerWizardOpen ? (
         <ChargerOnboardingModal

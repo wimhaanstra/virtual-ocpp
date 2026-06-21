@@ -68,7 +68,12 @@ export type ChargerRegistryRow = {
   connectedAt?: string | null;
   disconnectedAt?: string | null;
   lastSeenAt?: string | null;
+  lastBootAt?: string | null;
+  chargePointVendor?: string | null;
+  chargePointModel?: string | null;
+  firmwareVersion?: string | null;
   updatedAt?: string | null;
+  enabled?: boolean;
 };
 
 export type ChargingSession = {
@@ -251,7 +256,7 @@ export type DashboardConfig = {
   ocppBasicAuthUsername: string | null;
 };
 
-export type ActiveView = "Home" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
+export type ActiveView = "Home" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
 export type ThemeMode = "dark" | "light";
 
 export type CommunicationJournalFilters = {

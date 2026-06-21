@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import {
+  BatteryCharging,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -24,6 +25,7 @@ const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: Luci
 ];
 
 const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
+  { view: "Chargers", label: "Chargers", icon: BatteryCharging },
   { view: "Tags", label: "Tags", icon: TagsIcon },
   { view: "Communication", label: "Communication", icon: MessagesSquare }
 ];

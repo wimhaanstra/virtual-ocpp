@@ -53,6 +53,7 @@ export const emptyProxyTargetForm = (): ProxyTargetFormState => ({
 
 export const viewPaths: Record<ActiveView, string> = {
   Home: "/",
+  Chargers: "/chargers",
   "Proxy targets": "/proxy-targets",
   Tags: "/tags",
   "Tag access": "/tag-access",

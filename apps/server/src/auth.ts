@@ -96,6 +96,10 @@ export async function requireAdmin(request: FastifyRequest, reply: FastifyReply,
   }
 }
 
+export function verifyAdminPassword(config: Pick<AppConfig, 'adminPassword'>, password: string) {
+  return safeEquals(password, config.adminPassword);
+}
+
 async function getSession(sessionId: string, db: Database) {
   const rows = await db
     .select()

@@ -5,8 +5,10 @@ import { buildApp } from './app.js';
 import { applyMigrations } from './db/client.js';
 import {
   chargerConnections,
+  chargerProxyAssignments,
   chargers,
   chargingSessions,
+  communicationJournal,
   logs,
   meterSamples,
   proxySessionMappings,
@@ -376,6 +378,221 @@ describe('app', () => {
     });
     expect(revoked.statusCode).toBe(200);
     expect(tempDb.db.select().from(tagChargerAccess).all()).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('deletes a charger and all charger-owned data after password and id confirmation', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+    const now = new Date('2026-06-19T09:00:00.000Z');
+
+    tempDb.db.insert(chargers).values([
+      {
+        id: 'CHARGER-DELETE',
+        label: 'Delete me',
+        enabled: true,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: 'CHARGER-KEEP',
+        label: 'Keep me',
+        enabled: true,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        createdAt: now,
+        updatedAt: now
+      }
+    ]).run();
+    tempDb.db.insert(tags).values({
+      id: 'tag-delete-access',
+      uuid: 'TAG-DELETE',
+      label: 'Shared tag',
+      enabled: true,
+      createdAt: now
+    }).run();
+    tempDb.db.insert(tagChargerAccess).values([
+      {
+        id: 'access-delete',
+        tagId: 'tag-delete-access',
+        chargerId: 'CHARGER-DELETE',
+        enabled: true,
+        createdAt: now,
+        updatedAt: now
+      },
+      {
+        id: 'access-keep',
+        tagId: 'tag-delete-access',
+        chargerId: 'CHARGER-KEEP',
+        enabled: true,
+        createdAt: now,
+        updatedAt: now
+      }
+    ]).run();
+    tempDb.db.insert(proxyTargets).values({
+      id: 'target-delete',
+      chargerId: 'CHARGER-DELETE',
+      name: 'Delete target',
+      url: 'ws://127.0.0.1:9000',
+      username: null,
+      stationId: 'REMOTE-DELETE',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      basicAuthPassword: null,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(proxyTagMappings).values({
+      id: 'mapping-delete',
+      proxyTargetId: 'target-delete',
+      localIdTag: 'LOCAL',
+      outboundIdTag: 'REMOTE',
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(chargerProxyAssignments).values({
+      id: 'assignment-delete',
+      chargerId: 'CHARGER-DELETE',
+      proxyTargetId: 'target-delete',
+      enabled: true,
+      stationId: null,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      createdAt: now,
+      updatedAt: now
+    }).run();
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'proxy-session-delete',
+      chargerId: 'CHARGER-DELETE',
+      proxyTargetId: 'target-delete',
+      localTransactionId: 10,
+      externalTransactionId: 20,
+      createdAt: now
+    }).run();
+    tempDb.db.insert(chargerConnections).values({
+      id: 'connection-delete',
+      chargerId: 'CHARGER-DELETE',
+      connectedAt: now
+    }).run();
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-delete',
+      chargerId: 'CHARGER-DELETE',
+      connectorId: 1,
+      transactionId: 10,
+      idTag: 'LOCAL',
+      startedAt: now,
+      status: 'active'
+    }).run();
+    tempDb.db.insert(meterSamples).values({
+      id: 'sample-delete',
+      chargerId: 'CHARGER-DELETE',
+      transactionId: 10,
+      connectorId: 1,
+      sampledAt: now,
+      value: '1',
+      numericValue: 1,
+      normalizedValue: 1000,
+      normalizedUnit: 'Wh',
+      measurand: 'Energy.Active.Import.Register',
+      unit: 'kWh',
+      context: null,
+      phase: null,
+      location: null,
+      format: null
+    }).run();
+    tempDb.db.insert(logs).values({
+      id: 'log-delete',
+      level: 'info',
+      category: 'charger',
+      message: 'delete log',
+      chargerId: 'CHARGER-DELETE',
+      transactionId: null,
+      metadata: null,
+      createdAt: now
+    }).run();
+    tempDb.db.insert(communicationJournal).values({
+      id: 'journal-delete',
+      createdAt: now,
+      direction: 'outbound',
+      sourceType: 'server',
+      sourceId: 'server',
+      targetType: 'proxy',
+      targetId: 'target-delete',
+      chargerId: 'CHARGER-DELETE',
+      proxyTargetId: 'target-delete',
+      messageType: 'call',
+      ocppMethod: 'Heartbeat',
+      transactionId: null,
+      idTag: null,
+      payloadJson: '{}',
+      errorCode: null,
+      errorDescription: null,
+      correlationId: null
+    }).run();
+
+    const mismatch = await app.inject({
+      method: 'DELETE',
+      url: '/api/chargers/CHARGER-DELETE',
+      headers: { cookie },
+      payload: {
+        adminPassword: 'correct-password',
+        chargerIdConfirmation: 'CHARGER-KEEP'
+      }
+    });
+    expect(mismatch.statusCode).toBe(409);
+
+    const badPassword = await app.inject({
+      method: 'DELETE',
+      url: '/api/chargers/CHARGER-DELETE',
+      headers: { cookie },
+      payload: {
+        adminPassword: 'wrong-password',
+        chargerIdConfirmation: 'CHARGER-DELETE'
+      }
+    });
+    expect(badPassword.statusCode).toBe(403);
+    expect(tempDb.db.select().from(chargers).where(eq(chargers.id, 'CHARGER-DELETE')).get()).toBeDefined();
+
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: '/api/chargers/CHARGER-DELETE',
+      headers: { cookie },
+      payload: {
+        adminPassword: 'correct-password',
+        chargerIdConfirmation: 'CHARGER-DELETE'
+      }
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toMatchObject({
+      ok: true
+    });
+
+    expect(tempDb.db.select().from(chargers).where(eq(chargers.id, 'CHARGER-DELETE')).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(proxyTargets).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(proxyTagMappings).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(proxySessionMappings).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(chargerProxyAssignments).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(chargerConnections).where(eq(chargerConnections.chargerId, 'CHARGER-DELETE')).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(chargingSessions).where(eq(chargingSessions.chargerId, 'CHARGER-DELETE')).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(meterSamples).where(eq(meterSamples.chargerId, 'CHARGER-DELETE')).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(communicationJournal).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(logs).where(eq(logs.chargerId, 'CHARGER-DELETE')).all()).toHaveLength(0);
+    expect(tempDb.db.select().from(tags).all()).toHaveLength(1);
+    expect(tempDb.db.select().from(tagChargerAccess).all()).toEqual([
+      expect.objectContaining({
+        id: 'access-keep',
+        chargerId: 'CHARGER-KEEP'
+      })
+    ]);
+    expect(tempDb.db.select().from(chargers).where(eq(chargers.id, 'CHARGER-KEEP')).all()).toHaveLength(1);
+    expect(tempDb.db.select().from(logs).where(eq(logs.message, 'charger deleted')).all()).toHaveLength(1);
 
     await app.close();
   });

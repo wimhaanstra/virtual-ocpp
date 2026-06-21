@@ -54,7 +54,7 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWith
   registerLiveUpdateRoutes(app, db, liveUpdates);
   registerDashboardConfigRoutes(app, config, db);
   registerChargingStatsRoutes(app, db);
-  registerChargerRoutes(app, db, liveUpdates);
+  registerChargerRoutes(app, config, db, liveUpdates, chargerCommands, proxyAuthorization);
   registerTagRoutes(app, db, liveUpdates);
   registerProxyTargetRoutes(app, db, proxyAuthorization, liveUpdates);
   registerCommunicationJournalRoutes(app, db, communicationJournal);

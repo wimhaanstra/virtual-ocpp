@@ -19,7 +19,13 @@ type TestChargerRegistryRow = {
   connectedAt?: string | null;
   disconnectedAt?: string | null;
   lastSeenAt?: string | null;
+  firstSeenAt?: string | null;
+  lastBootAt?: string | null;
+  chargePointVendor?: string | null;
+  chargePointModel?: string | null;
+  firmwareVersion?: string | null;
   updatedAt?: string | null;
+  enabled?: boolean;
 };
 
 type TestProxyTarget = {
@@ -346,6 +352,7 @@ describe("App", () => {
     expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Tag access" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Tags" })).toBeInTheDocument();
+    expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Chargers" })).toBeInTheDocument();
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(sidebar.getByLabelText("Charger context")).toHaveValue("SMART-EVSE-1");
     expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
@@ -1411,6 +1418,128 @@ describe("App", () => {
       label: "Dock RFID",
       enabled: false
     });
+  });
+
+  it("shows the global chargers registry, renames chargers, and requires exact delete confirmation", async () => {
+    let chargers: TestChargerRegistryRow[] = [
+      {
+        id: "SMART-EVSE-1",
+        label: "Garage",
+        active: true,
+        enabled: true,
+        firstSeenAt: "2026-06-19T08:00:00.000Z",
+        connectedAt: "2026-06-19T09:00:00.000Z",
+        disconnectedAt: null,
+        lastSeenAt: "2026-06-19T10:00:00.000Z",
+        chargePointVendor: "SmartEVSE",
+        chargePointModel: "S10",
+        firmwareVersion: "1.2.3",
+        updatedAt: "2026-06-19T10:00:00.000Z"
+      },
+      {
+        id: "SMART-EVSE-2",
+        label: null,
+        active: false,
+        enabled: true,
+        firstSeenAt: "2026-06-18T08:00:00.000Z",
+        connectedAt: "2026-06-18T09:00:00.000Z",
+        disconnectedAt: "2026-06-18T09:20:00.000Z",
+        lastSeenAt: "2026-06-18T09:30:00.000Z",
+        chargePointVendor: "SmartEVSE",
+        chargePointModel: "S10",
+        firmwareVersion: "1.2.2",
+        updatedAt: "2026-06-18T09:30:00.000Z"
+      }
+    ];
+    let patchBody: { label?: string | null } | null = null;
+    let deleteBody: { adminPassword?: string; chargerIdConfirmation?: string } | null = null;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (path === "/api/chargers" && method === "GET") {
+        return new Response(JSON.stringify(chargers), { status: 200 });
+      }
+
+      if (path === "/api/chargers/SMART-EVSE-1" && method === "PATCH") {
+        if (!init?.body) throw new Error("Missing charger label body");
+        patchBody = JSON.parse(String(init.body)) as { label?: string | null };
+        chargers = chargers.map((charger) => (charger.id === "SMART-EVSE-1" ? { ...charger, label: patchBody?.label ?? null } : charger));
+        return new Response(JSON.stringify(chargers[0]), { status: 200 });
+      }
+
+      if (path === "/api/chargers/SMART-EVSE-2" && method === "DELETE") {
+        if (!init?.body) throw new Error("Missing charger delete body");
+        deleteBody = JSON.parse(String(init.body)) as { adminPassword?: string; chargerIdConfirmation?: string };
+        chargers = chargers.filter((charger) => charger.id !== "SMART-EVSE-2");
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      if (path === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (path === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      const visibilityResponse = emptyVisibilityResponses(url, method);
+      if (visibilityResponse) return visibilityResponse;
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Home dashboard" })).toBeInTheDocument();
+
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Chargers" }));
+    expect(await screen.findByRole("heading", { name: "Chargers", level: 2 })).toBeInTheDocument();
+    expect(screen.getAllByText("Garage").length).toBeGreaterThan(0);
+    expect(screen.getByText("Registered")).toBeInTheDocument();
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+
+    const firstRow = screen.getByText("SMART-EVSE-1").closest("tr");
+    expect(firstRow).not.toBeNull();
+    fireEvent.click(within(firstRow as HTMLTableRowElement).getByRole("button", { name: "Edit label" }));
+    expect(screen.getByRole("heading", { name: "Edit charger label" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Label")).toHaveValue("Garage");
+    fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Garage rear" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save label" }));
+    await screen.findByText("Charger SMART-EVSE-1 label updated.");
+    expect(patchBody).toEqual({ label: "Garage rear" });
+    expect(screen.getAllByText("Garage rear").length).toBeGreaterThan(0);
+
+    const chargersTable = screen.getByRole("table");
+    const secondRow = within(chargersTable).getAllByText("SMART-EVSE-2")[0].closest("tr");
+    expect(secondRow).not.toBeNull();
+    fireEvent.click(within(secondRow as HTMLTableRowElement).getByRole("button", { name: "Delete" }));
+    expect(screen.getByRole("heading", { name: "Delete charger" })).toBeInTheDocument();
+    const deleteButton = screen.getByRole("button", { name: "Delete charger" });
+    expect(deleteButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Admin password"), { target: { value: "correct-password" } });
+    expect(deleteButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Type exact charger id"), { target: { value: "SMART-EVSE-2x" } });
+    expect(deleteButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Type exact charger id"), { target: { value: "SMART-EVSE-2" } });
+    expect(deleteButton).not.toBeDisabled();
+    fireEvent.click(deleteButton);
+    await screen.findByText("Charger deleted.");
+    expect(deleteBody).toEqual({
+      adminPassword: "correct-password",
+      chargerIdConfirmation: "SMART-EVSE-2"
+    });
+    await waitFor(() => expect(screen.queryByText("SMART-EVSE-2")).not.toBeInTheDocument());
   });
 
   it("shows edit state for proxy targets and can clear stored credentials", async () => {

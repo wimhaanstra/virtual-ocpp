@@ -25,7 +25,7 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Protected charger registry and charger context selector
 - Charger-scoped proxy targets so each local charger chooses which upstreams it mirrors to
 - Global tags with explicit per-charger access controls
-- Frontend tag, tag access, proxy target, sessions, home dashboard, and communication pages as the active admin pages
+- Frontend chargers, tag, tag access, proxy target, sessions, home dashboard, and communication pages as the active admin pages
 - Frontend component split for shared types/helpers, app chrome, auth, dashboard, sessions, communication, and force-close review modal
 - Charger onboarding wizard that waits for a newly registered charger and then switches the selected charger context
 - Production Docker image that serves the compiled backend and frontend from one container with `/data` as the SQLite volume
@@ -48,6 +48,7 @@ The Vite frontend uses client-side routes for the protected admin pages:
 - `/`: home dashboard
 - `/proxy-targets`: charger-scoped proxy targets
 - `/tag-access`: charger-scoped tag grants for the selected charger
+- `/chargers`: global charger registry with rename and destructive delete flow
 - `/tags`: global tag identity management
 - `/sessions`: charging sessions
 - `/communication`: redacted OCPP communication journal
@@ -190,6 +191,7 @@ The authenticated frontend exposes read-only operational views for sessions and 
 - `GET /api/charging-stats` returns active session meter summaries with normalized energy and power values.
 - `GET /api/proxy-health` returns runtime upstream proxy health for the selected charger.
 - `GET /api/chargers` and `GET /api/charger-connections` return recent charger connection records.
+- `PATCH /api/chargers/:id` renames or disables a registered charger. The frontend delete flow is wired for `DELETE /api/chargers/:id` with current admin password and exact charger id confirmation; the backend should implement the charger-owned cascade delete when that route lands. Global tags remain intact.
 - `GET /api/logs` returns recent logs with `hasMetadata` and a whitelisted context subset, but never raw metadata.
 - `GET /api/live-updates` streams authenticated Server-Sent Events for operator UI invalidation. It does not expose secrets or replace the REST APIs; it only tells the UI which data slices should be refreshed.
 

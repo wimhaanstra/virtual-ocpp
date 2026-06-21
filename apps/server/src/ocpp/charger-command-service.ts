@@ -3,6 +3,7 @@ import type { CommunicationJournalService } from '../communication-journal.js';
 
 type ConnectedChargerClient = {
   call: (method: string, params: Record<string, unknown>, options?: { callTimeoutMs?: number }) => Promise<unknown>;
+  close: (options?: { code?: number; reason?: string; awaitPending?: boolean }) => Promise<unknown>;
 };
 
 export type RemoteStopResult = {
@@ -21,6 +22,20 @@ export class ChargerCommandService {
   unregister(chargerId: string, client: ConnectedChargerClient) {
     if (this.clients.get(chargerId) === client) {
       this.clients.delete(chargerId);
+    }
+  }
+
+  async closeCharger(chargerId: string, reason = 'charger deleted') {
+    const client = this.clients.get(chargerId);
+    if (!client) return false;
+
+    this.clients.delete(chargerId);
+
+    try {
+      await client.close({ code: 1000, reason, awaitPending: false });
+      return true;
+    } catch {
+      return false;
     }
   }
 

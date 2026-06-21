@@ -20,6 +20,7 @@ type RpcClient = {
   identity: string;
   session?: { chargerId?: string };
   call: (method: string, params: Record<string, unknown>, options?: { callTimeoutMs?: number }) => Promise<unknown>;
+  close: (options?: { code?: number; reason?: string; awaitPending?: boolean }) => Promise<unknown>;
   handle: (method: string | ((call: { method: string; params: unknown }) => unknown), handler?: (call: RpcCall<never>) => unknown) => void;
   on: (event: 'close', handler: () => void) => void;
 };

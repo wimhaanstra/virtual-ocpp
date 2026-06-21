@@ -26,25 +26,9 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Charger onboarding wizard: modal flow that shows the OCPP connection template/auth guidance, waits for a newly registered charger, lets the operator label it, and switches context to the detected charger.
 - Sidebar and scope navigation: charger context, add-charger action, theme toggle, and sign out moved into the sidebar with grouped charger-scoped and global/admin navigation.
 - Split tag management and tag access: global Tags page manages tag identities while charger-scoped Tag access grants or revokes existing tags for the selected charger.
+- Charger management with destructive delete: global Chargers page lists the charger registry, supports label edits, and requires admin password plus exact charger id confirmation before deleting charger-owned data and runtime connections.
 
 ## Next Candidate Slices
-
-### Slice 5.10: Charger Management With Destructive Delete
-
-Goal: add a global Chargers page for renaming and deleting registered chargers.
-
-Scope:
-
-- List registered chargers globally with connection state and useful timestamps.
-- Allow editing the charger display label.
-- Add destructive charger delete that removes all charger-owned data and closes runtime connections.
-- Require admin password and exact charger id confirmation before deletion.
-
-Acceptance criteria:
-
-- Operators can rename a charger from the global Chargers page.
-- Charger deletion rejects incorrect password or charger id confirmation.
-- Successful charger deletion removes charger-owned proxy targets, tag grants, sessions, meter samples, logs, communication journal rows, mappings, and runtime connections.
 
 ### Slice 5.11: Operator UI Density Cleanup
 
