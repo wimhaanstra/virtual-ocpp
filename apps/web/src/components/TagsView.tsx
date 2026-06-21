@@ -36,7 +36,7 @@ export function TagsView({ busy, tags, onCreateTag, onDeleteTag, onEditTag, onTo
         <p>No tags configured yet.</p>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table className="mobile-card-table tags-table">
             <thead>
               <tr>
                 <th>Tag UUID</th>
@@ -49,15 +49,15 @@ export function TagsView({ busy, tags, onCreateTag, onDeleteTag, onEditTag, onTo
             <tbody>
               {tags.map((tag) => (
                 <tr key={tag.id}>
-                  <td className="mono">{tag.uuid}</td>
-                  <td>{tag.label || "Unlabeled"}</td>
-                  <td>
+                  <td className="mono" data-label="Tag UUID">{tag.uuid}</td>
+                  <td data-label="Label">{tag.label || "Unlabeled"}</td>
+                  <td data-label="Status">
                     <span className={`pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>
                       {tag.enabled ? "Enabled" : "Disabled"}
                     </span>
                   </td>
-                  <td>{formatDateTime(tag.createdAt)}</td>
-                  <td>
+                  <td data-label="Created">{formatDateTime(tag.createdAt)}</td>
+                  <td data-label="Actions">
                     <div className="action-row compact-action-row">
                       <Button
                         type="button"

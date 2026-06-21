@@ -1582,7 +1582,7 @@ export default function App() {
                   <p>No proxy targets configured yet.</p>
                 ) : (
                   <div className="table-wrap">
-                    <table>
+                    <table className="mobile-card-table proxy-target-table">
                       <thead>
                         <tr>
                           <th>Name</th>
@@ -1600,20 +1600,20 @@ export default function App() {
                       <tbody>
                         {proxyTargets.map((target) => (
                           <tr key={target.id}>
-                            <td>{target.name}</td>
-                            <td className="mono">{target.url}</td>
-                            <td className="mono">{target.stationId || "Default"}</td>
-                            <td>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</td>
-                            <td>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</td>
-                            <td>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</td>
-                            <td>
+                            <td data-label="Name">{target.name}</td>
+                            <td className="mono" data-label="URL">{target.url}</td>
+                            <td className="mono" data-label="Station ID">{target.stationId || "Default"}</td>
+                            <td data-label="Mode">{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</td>
+                            <td data-label="Outage">{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</td>
+                            <td data-label="Recovery">{target.allowRecoverySubmissions ? "Allowed" : "Off"}</td>
+                            <td data-label="Status">
                               <span className={`pill ${target.enabled ? "pill-good" : "pill-warning"}`}>
                                 {target.enabled ? "Enabled" : "Disabled"}
                               </span>
                             </td>
-                            <td>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</td>
-                            <td>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</td>
-                            <td>
+                            <td data-label="Credentials">{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</td>
+                            <td data-label="Tag mappings">{formatTagMappingCount(target.tagMappings?.length ?? 0)}</td>
+                            <td data-label="Actions">
                               <div className="action-row compact-action-row">
                                 <Button
                                   type="button"

@@ -44,7 +44,7 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
         <p>No tags configured yet.</p>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table className="mobile-card-table tag-access-table">
             <thead>
               <tr>
                 <th>Tag UUID</th>
@@ -61,20 +61,20 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
 
                 return (
                   <tr key={tag.id}>
-                    <td className="mono">{tag.uuid}</td>
-                    <td>{tag.label || "Unlabeled"}</td>
-                    <td>
+                    <td className="mono" data-label="Tag UUID">{tag.uuid}</td>
+                    <td data-label="Label">{tag.label || "Unlabeled"}</td>
+                    <td data-label="Global status">
                       <span className={`pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>
                         {tag.enabled ? "Enabled" : "Disabled"}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Charger access">
                       <span className={`pill ${allowed ? "pill-good" : "pill-warning"}`}>
                         {allowed ? "Allowed" : "Blocked"}
                       </span>
                     </td>
-                    <td>{formatDateTime(tag.createdAt)}</td>
-                    <td>
+                    <td data-label="Created">{formatDateTime(tag.createdAt)}</td>
+                    <td data-label="Actions">
                       <Button
                         type="button"
                         className="button-secondary icon-button"

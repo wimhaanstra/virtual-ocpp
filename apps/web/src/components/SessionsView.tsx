@@ -44,7 +44,7 @@ export function SessionsView({
         <p>No charging sessions recorded yet.</p>
       ) : (
         <div className="table-wrap">
-          <table>
+          <table className="sessions-table">
             <thead>
               <tr>
                 <th aria-label="Expand"></th>
