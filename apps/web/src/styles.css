@@ -2273,10 +2273,11 @@ td {
 
   .mobile-bottom-nav__item {
     display: grid;
+    align-content: center;
     justify-items: center;
-    gap: 3px;
+    gap: 4px;
     min-width: 0;
-    min-height: 50px;
+    min-height: 52px;
     border: 0;
     border-radius: 12px;
     background: transparent;
@@ -2284,11 +2285,17 @@ td {
     cursor: pointer;
     font-size: 10px;
     font-weight: 720;
+    line-height: 1;
+    padding: 6px 4px 5px;
   }
 
   .mobile-bottom-nav__item svg {
     width: 18px;
     height: 18px;
+  }
+
+  .mobile-bottom-nav__item span {
+    display: block;
   }
 
   .mobile-bottom-nav__item.active {
