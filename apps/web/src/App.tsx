@@ -176,6 +176,18 @@ export default function App() {
   const proxyTargetFormIdentity = proxyTargetForm.stationId.trim() || selectedChargerId;
   const proxyTargetFormConnectionUrl = buildProxyTargetConnectionUrl(proxyTargetForm.url, proxyTargetFormIdentity);
   const proxyTargetFormHasDuplicatedStationPath = proxyUrlIncludesStationId(proxyTargetForm.url, proxyTargetFormIdentity);
+  const meterGapRecoveryReadyTargets = meterGapSubmitPreview?.targets.filter((target) => target.canSubmit) ?? [];
+  const meterGapRecoveryBusyTargets = meterGapSubmitPreview?.targets.filter((target) => target.hasActiveTransaction) ?? [];
+  const meterGapSubmitDisabledReason =
+    !meterGapSubmitPreview
+      ? ""
+      : meterGapSubmitPreview.targets.length === 0
+        ? "No proxy target has recovery submissions enabled."
+        : meterGapRecoveryReadyTargets.length === 0 && meterGapRecoveryBusyTargets.length > 0
+          ? "Recovery is blocked while the selected proxy target has an active upstream charge transaction."
+          : meterGapRecoveryReadyTargets.length === 0
+            ? "No recovery-enabled proxy target is currently available."
+            : "";
 
   const isEditingTag = tagForm.id !== null;
   const isEditingProxyTarget = proxyTargetForm.id !== null;
@@ -1875,7 +1887,7 @@ export default function App() {
       {meterGapSubmitPreview ? (
         <div className="modal-backdrop" role="presentation">
           <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="meter-gap-submit-title">
-            <div className="topbar-actions page-section-header">
+            <div className="modal-header">
               <div>
                 <p className="eyebrow">Recovery replay</p>
                 <h2 id="meter-gap-submit-title">Submit meter gap</h2>
@@ -1889,23 +1901,29 @@ export default function App() {
               <section className="modal-form-section">
                 <h3>Replay window</h3>
                 <div className="form-grid modal-form-grid">
-                  <label>
-                    Start time
+                  <label className="field">
+                    <span>Start time</span>
                     <input value={meterGapSubmitStartAt} onChange={(event) => setMeterGapSubmitStartAt(event.target.value)} />
                   </label>
-                  <label>
-                    Stop time
+                  <label className="field">
+                    <span>Stop time</span>
                     <input value={meterGapSubmitStopAt} onChange={(event) => setMeterGapSubmitStopAt(event.target.value)} />
                   </label>
-                  <label>
-                    Start meter
+                  <label className="field">
+                    <span>Start meter</span>
                     <input readOnly value={`${meterGapSubmitPreview.meterStart} Wh`} />
                   </label>
-                  <label>
-                    Stop meter
+                  <label className="field">
+                    <span>Stop meter</span>
                     <input readOnly value={`${meterGapSubmitPreview.meterStop} Wh`} />
                   </label>
                 </div>
+                {meterGapSubmitDisabledReason ? (
+                  <div className="notice notice-warning">
+                    <strong>Submit unavailable</strong>
+                    <p>{meterGapSubmitDisabledReason}</p>
+                  </div>
+                ) : null}
               </section>
               <section className="modal-form-section">
                 <h3>Target payload</h3>
@@ -1920,6 +1938,9 @@ export default function App() {
                         </div>
                         <span className={`pill ${target.canSubmit ? "pill-good" : "pill-warning"}`}>{target.canSubmit ? "Ready" : "Active transaction"}</span>
                       </div>
+                      {!target.canSubmit && target.hasActiveTransaction ? (
+                        <p className="status-copy">This target already has an active upstream proxy transaction. Finish or close that session before replaying recovery energy.</p>
+                      ) : null}
                       <pre>
                         {JSON.stringify(
                           {
@@ -1967,7 +1988,7 @@ export default function App() {
                     meterGapSubmitLoading ||
                     !meterGapSubmitStartAt ||
                     !meterGapSubmitStopAt ||
-                    meterGapSubmitPreview.targets.filter((target) => target.canSubmit).length === 0
+                    meterGapRecoveryReadyTargets.length === 0
                   }
                 >
                   Submit recovery

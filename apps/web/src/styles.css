@@ -1355,6 +1355,13 @@ a {
   width: min(760px, 100%);
 }
 
+.modal-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  align-items: start;
+  gap: 16px;
+}
+
 .modal-section-form {
   display: grid;
   gap: 14px;
@@ -1391,6 +1398,31 @@ a {
 .modal-actions {
   grid-column: 1 / -1;
   justify-content: flex-end;
+}
+
+.notice {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+}
+
+.notice strong {
+  font-size: 13px;
+}
+
+.notice p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.notice-warning {
+  border-color: color-mix(in srgb, var(--warning) 50%, var(--line));
+  background: color-mix(in srgb, var(--warning) 9%, var(--panel-subtle));
 }
 
 .recovery-preview-grid {
