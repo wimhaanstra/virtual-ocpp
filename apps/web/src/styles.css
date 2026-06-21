@@ -940,6 +940,33 @@ a {
   font-weight: 760;
 }
 
+.session-row {
+  cursor: pointer;
+}
+
+.session-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.session-row:hover {
+  background: color-mix(in srgb, var(--panel-subtle) 54%, transparent);
+}
+
+.session-expand-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.table-actions-column,
+.table-actions-cell {
+  text-align: right;
+}
+
+.table-actions-cell .action-row {
+  justify-content: flex-end;
+}
+
 .session-date-row td {
   padding-top: 12px;
   padding-bottom: 6px;
@@ -1179,9 +1206,19 @@ a {
   font-size: 12px;
 }
 
+.session-detail-item {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
 .session-detail-grid strong {
   color: var(--foreground);
   font-weight: 680;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .session-audit-inline {
