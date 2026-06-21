@@ -385,6 +385,11 @@ describe("App", () => {
     expect(screen.queryByText("Charger context")).not.toBeInTheDocument();
     expect(screen.queryByText("Charger-scoped")).not.toBeInTheDocument();
     expect(screen.queryByText("Global / admin")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show communication for SMART-EVSE-1" }));
+    await screen.findByRole("heading", { name: "Recent journal rows" });
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).includes("/api/communication-journal?") && String(input).includes("sourceId=SMART-EVSE-1"))
+    ).toBe(true);
 
     fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
@@ -417,6 +422,149 @@ describe("App", () => {
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
+  });
+
+  it("drills from proxy health into the filtered communication journal", async () => {
+    window.history.replaceState({}, "", "/?chargerId=SMART-EVSE-1");
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (url === "/api/dashboard-config" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppProtocol: "ocpp1.6",
+            ocppBasicAuthRequired: false,
+            ocppBasicAuthUsername: null
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/chargers") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "charger-1",
+              chargerId: "SMART-EVSE-1",
+              label: "Bay 1",
+              active: true,
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              lastSeenAt: "2026-06-19T10:00:00.000Z"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/proxy-targets") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "proxy-1",
+              name: "Tap Electric",
+              url: "wss://tap.example/ocpp",
+              stationId: "STATION-1",
+              enabled: true,
+              mode: "deny-capable",
+              outagePolicy: "fail-closed",
+              hasUsername: true,
+              hasBasicAuthPassword: true,
+              createdAt: "2026-06-19T08:00:00.000Z",
+              updatedAt: "2026-06-19T08:00:00.000Z"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/proxy-health") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            chargerId: "SMART-EVSE-1",
+            summary: { total: 1, connected: 1, backoff: 0, waitingForCharger: 0, disabled: 0 },
+            targets: [
+              {
+                proxyTargetId: "proxy-1",
+                name: "Tap Electric",
+                chargerId: "SMART-EVSE-1",
+                enabled: true,
+                mode: "deny-capable",
+                outagePolicy: "fail-closed",
+                connected: true,
+                state: "connected",
+                detail: "Persistent upstream socket is open.",
+                upstreamIdentity: "STATION-1",
+                hadSuccessfulConnection: true,
+                lastConnectedAt: "2026-06-19T09:55:00.000Z",
+                lastDisconnectedAt: null,
+                lastSuccessAt: "2026-06-19T10:01:00.000Z",
+                lastFailureAt: "2026-06-19T09:50:00.000Z",
+                nextReconnectAt: "2026-06-19T10:05:00.000Z",
+                lastErrorCode: null
+              }
+            ]
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/active-session-audit") && method === "GET") {
+        return new Response(JSON.stringify({ summary: { activeSessions: 0, flaggedSessions: 0 }, items: [] }), { status: 200 });
+      }
+
+      if (url === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.startsWith("/api/sessions") && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.startsWith("/api/charging-stats") && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.startsWith("/api/logs") && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.startsWith("/api/communication-journal") && method === "GET") {
+        return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
+
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Dashboard" }));
+    expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
+    expect(screen.getByText(/last failure/i)).toBeInTheDocument();
+    expect(screen.getByText(/retry/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show communication for Tap Electric" }));
+
+    expect(await screen.findByRole("heading", { name: "Communication" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Proxy target id")).toHaveValue("proxy-1");
+    expect(screen.getByLabelText("Charger id")).toBeDisabled();
+    expect(screen.getByDisplayValue("SMART-EVSE-1")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/communication");
+    expect(window.location.search).toContain("chargerId=SMART-EVSE-1");
   });
 
   it("refreshes charger-scoped slices from live updates when the event stream is available", async () => {
@@ -1952,6 +2100,32 @@ describe("App", () => {
         );
       }
 
+      if (url === "/api/charging-stats" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              sessionId: "session-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              elapsedSeconds: 1860,
+              startMeterWh: 1000,
+              latestMeterWh: 2650,
+              energyUsedWh: 1650,
+              latestPowerW: 7200,
+              latestCurrentA: 31.3,
+              latestVoltageV: 230,
+              latestSampleAt: "2026-06-19T09:36:00.000Z",
+              latestEnergyContext: "Sample.Periodic",
+              latestPowerContext: "Sample.Periodic"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
       if (url === "/api/active-session-audit" && method === "GET") {
         return new Response(
           JSON.stringify({
@@ -1991,6 +2165,36 @@ describe("App", () => {
                   }
                 ]
           }),
+          { status: 200 }
+        );
+      }
+
+      if (url === "/api/charging-stats" && method === "GET") {
+        return new Response(
+          JSON.stringify(
+            sessionClosed
+              ? []
+              : [
+                  {
+                    sessionId: "session-1",
+                    chargerId: "SMART-EVSE-1",
+                    connectorId: 1,
+                    transactionId: 42,
+                    idTag: "TAG-1",
+                    startedAt: "2026-06-19T09:05:00.000Z",
+                    elapsedSeconds: 1860,
+                    startMeterWh: 1000,
+                    latestMeterWh: 2650,
+                    energyUsedWh: 1650,
+                    latestPowerW: 7200,
+                    latestCurrentA: 31.3,
+                    latestVoltageV: 230,
+                    latestSampleAt: "2026-06-19T09:36:00.000Z",
+                    latestEnergyContext: "Sample.Periodic",
+                    latestPowerContext: "Sample.Periodic"
+                  }
+                ]
+          ),
           { status: 200 }
         );
       }
@@ -2171,6 +2375,8 @@ describe("App", () => {
     expect((await screen.findAllByText("SMART-EVSE-1")).length).toBeGreaterThan(0);
     expect(await screen.findByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("Missing stop?")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Live" })).toBeInTheDocument();
+    expect(screen.getByText(/7\.2 kW/, { selector: ".session-live-value" })).toHaveTextContent("1.65 kWh");
     expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
     expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();
     expect(screen.getByText("Status: Available")).toBeInTheDocument();

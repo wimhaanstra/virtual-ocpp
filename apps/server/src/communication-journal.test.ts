@@ -153,6 +153,58 @@ describe('communication journal', () => {
     await app.close();
   });
 
+  it('filters journal rows by transaction id', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+
+    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const createdAt = new Date(Date.now() - 60_000);
+
+    journal.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: 'CHARGER-1',
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'call',
+      chargerId: 'CHARGER-1',
+      ocppMethod: 'StartTransaction',
+      transactionId: 42,
+      payload: { transactionId: 42 },
+      createdAt
+    });
+    journal.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: 'CHARGER-1',
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'call',
+      chargerId: 'CHARGER-1',
+      ocppMethod: 'Heartbeat',
+      transactionId: null,
+      payload: {},
+      createdAt: new Date(createdAt.getTime() + 1_000)
+    });
+
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/communication-journal?transactionId=42',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items).toHaveLength(1);
+    expect(response.json().items[0]).toMatchObject({
+      ocppMethod: 'StartTransaction',
+      transactionId: 42
+    });
+
+    await app.close();
+  });
+
   it('purges stale rows on startup and via the admin endpoint', async () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;

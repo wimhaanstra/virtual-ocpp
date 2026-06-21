@@ -1,13 +1,14 @@
 import { Fragment } from "react";
 import { Power, PowerOff, RefreshCcw } from "lucide-react";
-import type { ActiveSessionAuditResponse, ChargingSession } from "../types";
-import { findAuditForSession, formatDateTime, formatEnergyWh } from "../app-helpers";
+import type { ActiveSessionAuditResponse, ChargingSession, ChargingStats } from "../types";
+import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type SessionsViewProps = {
   activeSessionAudit: ActiveSessionAuditResponse | null;
   busy: boolean;
   chargingSessions: ChargingSession[];
+  chargingStats: ChargingStats[];
   selectedChargerLabel: string;
   onForceClose: (session: ChargingSession) => void;
   onRefresh: () => void;
@@ -18,6 +19,7 @@ export function SessionsView({
   activeSessionAudit,
   busy,
   chargingSessions,
+  chargingStats,
   selectedChargerLabel,
   onForceClose,
   onRefresh,
@@ -47,6 +49,7 @@ export function SessionsView({
                 <th>Transaction</th>
                 <th>Tag</th>
                 <th>Status</th>
+                <th>Live</th>
                 <th>Started</th>
                 <th>Stopped</th>
                 <th>Meter Wh</th>
@@ -57,6 +60,7 @@ export function SessionsView({
             <tbody>
               {chargingSessions.map((session) => {
                 const audit = findAuditForSession(activeSessionAudit, session);
+                const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
                 return (
                   <Fragment key={session.id}>
                     <tr>
@@ -71,6 +75,15 @@ export function SessionsView({
                           </span>
                           {audit && audit.warnings.length > 0 ? <span className="pill pill-warning">Missing stop?</span> : null}
                         </div>
+                      </td>
+                      <td>
+                        {session.active && liveStats ? (
+                          <span className="session-live-value">
+                            {formatPowerW(liveStats.latestPowerW)} · {formatEnergyWh(liveStats.energyUsedWh)}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td>{formatDateTime(session.startedAt)}</td>
                       <td>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</td>
@@ -111,7 +124,7 @@ export function SessionsView({
                     </tr>
                     {audit ? (
                       <tr>
-                        <td className="session-audit-row" colSpan={10}>
+                        <td className="session-audit-row" colSpan={11}>
                           <div className="session-audit-inline">
                             <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
                             <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>

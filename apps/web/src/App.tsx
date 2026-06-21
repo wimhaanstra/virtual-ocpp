@@ -228,6 +228,13 @@ export default function App() {
   }, [activeView, selectedChargerId, authenticated]);
 
   useEffect(() => {
+    if (!authenticated || !message) return;
+
+    const timeout = window.setTimeout(() => setMessage(""), 5_000);
+    return () => window.clearTimeout(timeout);
+  }, [authenticated, message]);
+
+  useEffect(() => {
     if (!authenticated) return;
     setCommunicationFilters((current) => (current.chargerId === selectedChargerId ? current : { ...current, chargerId: selectedChargerId }));
     void loadScopedData(selectedChargerId);
@@ -425,7 +432,6 @@ export default function App() {
     navigateToView("Chargers");
     setChargerLabelTarget(charger);
     setChargerLabelValue(charger.label ?? "");
-    setMessage(`Editing charger ${charger.id}.`);
   }
 
   function cancelChargerLabelEdit() {
@@ -466,7 +472,6 @@ export default function App() {
     setChargerDeleteTarget(charger);
     setChargerDeleteAdminPassword("");
     setChargerDeleteConfirmation("");
-    setMessage(`Confirm deletion of charger ${charger.id}.`);
   }
 
   function cancelChargerDelete() {
@@ -524,7 +529,6 @@ export default function App() {
     setChargerWizardLabel("");
     setChargerWizardOpen(true);
     setChargerWizardLoading(true);
-    setMessage("Waiting for a new charger connection.");
     const startedAt = new Date().toISOString();
     setChargerWizardStartedAt(startedAt);
     const chargerData = await fetchAdminJson<ChargerRegistryRow[]>("/api/chargers");
@@ -822,6 +826,21 @@ export default function App() {
     }
   }
 
+  function openCommunicationForFilters(filters: Partial<CommunicationJournalFilters>, chargerId = selectedChargerId) {
+    const nextFilters = { ...emptyCommunicationJournalFilters(), chargerId, ...filters };
+    setCommunicationFilters(nextFilters);
+    setSelectedChargerId(chargerId);
+    setActiveView("Communication");
+    window.history.pushState({}, "", buildViewUrl("Communication", chargerId));
+    void loadCommunicationJournal(chargerId, nextFilters);
+  }
+
+  function openSessionsForCharger(chargerId = selectedChargerId) {
+    setSelectedChargerId(chargerId);
+    setActiveView("Sessions");
+    window.history.pushState({}, "", buildViewUrl("Sessions", chargerId));
+  }
+
   async function logout() {
     setBusy(true);
     try {
@@ -878,7 +897,6 @@ export default function App() {
       label: tag.label ?? "",
       enabled: tag.enabled
     });
-    setMessage(`Editing tag ${tag.uuid}.`);
   }
 
   function cancelTagEdit() {
@@ -1040,7 +1058,6 @@ export default function App() {
       tagMappings: target.tagMappings?.map((mapping) => ({ ...mapping })) ?? [],
       tagMappingsDirty: false
     });
-    setMessage(`Editing proxy target ${target.name}.`);
   }
 
   function addProxyTagMapping() {
@@ -1242,6 +1259,8 @@ export default function App() {
             chargingSessions={chargingSessions}
             chargingStats={chargingStats}
             chargingStatsStatus={chargingStatsStatus}
+            onOpenCommunication={(filters, chargerId) => openCommunicationForFilters(filters, chargerId)}
+            onOpenSessions={openSessionsForCharger}
             onNavigate={navigateToView}
             onRefresh={() => void loadScopedData("")}
             onSelectCharger={setSelectedChargerId}
@@ -1259,6 +1278,8 @@ export default function App() {
             selectedChargerLabel={selectedChargerLabel}
             selectedConnectionStatus={selectedConnectionStatus}
             selectedConnectionTone={selectedConnectionTone}
+            onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
+            onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
             onNavigate={navigateToView}
             onRefresh={() => void loadScopedData(selectedChargerId)}
           />
@@ -1275,6 +1296,7 @@ export default function App() {
             activeSessionAudit={activeSessionAudit}
             busy={busy}
             chargingSessions={chargingSessions}
+            chargingStats={chargingStats}
             selectedChargerLabel={selectedChargerLabel}
             onForceClose={(session) => void previewForceCloseChargingSession(session)}
             onRefresh={() => void loadScopedData(selectedChargerId)}

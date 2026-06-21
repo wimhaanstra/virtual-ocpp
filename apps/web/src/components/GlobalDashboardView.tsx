@@ -1,5 +1,5 @@
-import { ArrowRight, BatteryCharging, Gauge, RefreshCcw, TriangleAlert } from "lucide-react";
-import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats } from "../types";
+import { ArrowRight, BatteryCharging, Gauge, MessageSquareText, RefreshCcw, TriangleAlert } from "lucide-react";
+import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats, CommunicationJournalFilters } from "../types";
 import { formatDateTime, formatDuration, formatEnergyWh, formatPowerW, getChargerContextId, getChargerDisplayLabel, sortChargers } from "../app-helpers";
 import { Button } from "./ui/button";
 
@@ -10,6 +10,8 @@ type GlobalDashboardViewProps = {
   chargingSessions: ChargingSession[];
   chargingStats: ChargingStats[];
   chargingStatsStatus: "idle" | "loading" | "ready" | "error";
+  onOpenCommunication: (filters: Partial<CommunicationJournalFilters>, chargerId: string) => void;
+  onOpenSessions: (chargerId: string) => void;
   onNavigate: (view: ActiveView) => void;
   onRefresh: () => void;
   onSelectCharger: (chargerId: string) => void;
@@ -30,6 +32,8 @@ export function GlobalDashboardView({
   chargingSessions,
   chargingStats,
   chargingStatsStatus,
+  onOpenCommunication,
+  onOpenSessions,
   onNavigate,
   onRefresh,
   onSelectCharger
@@ -121,7 +125,11 @@ export function GlobalDashboardView({
                             {charger.active ? "Connected" : "Disconnected"}
                           </span>
                         </td>
-                        <td>{sessions.length}</td>
+                        <td>
+                          <button className="inline-drilldown" type="button" onClick={() => onOpenSessions(chargerId)}>
+                            {sessions.length}
+                          </button>
+                        </td>
                         <td>
                           {stats ? (
                             <span>
@@ -133,18 +141,29 @@ export function GlobalDashboardView({
                         </td>
                         <td>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</td>
                         <td>
-                          <Button
-                            type="button"
-                            className="button-secondary icon-button"
-                            onClick={() => {
-                              onSelectCharger(chargerId);
-                              onNavigate("Charger dashboard");
-                            }}
-                            title="Open charger dashboard"
-                            aria-label="Open charger dashboard"
-                          >
-                            <ArrowRight aria-hidden="true" />
-                          </Button>
+                          <div className="action-row compact-action-row">
+                            <Button
+                              type="button"
+                              className="button-secondary icon-button"
+                              onClick={() => onOpenCommunication({ sourceType: "charger", sourceId: chargerId }, chargerId)}
+                              title="Show charger communication"
+                              aria-label={`Show communication for ${chargerId}`}
+                            >
+                              <MessageSquareText aria-hidden="true" />
+                            </Button>
+                            <Button
+                              type="button"
+                              className="button-secondary icon-button"
+                              onClick={() => {
+                                onSelectCharger(chargerId);
+                                onNavigate("Charger dashboard");
+                              }}
+                              title="Open charger dashboard"
+                              aria-label="Open charger dashboard"
+                            >
+                              <ArrowRight aria-hidden="true" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -181,7 +200,14 @@ export function GlobalDashboardView({
                         {session.chargerId} · connector {session.connectorId} · {formatDuration(Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000))}
                       </p>
                     </div>
-                    <span>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : formatEnergyWh(session.stopMeterWh)}</span>
+                    <div className="global-session-actions">
+                      <span>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : formatEnergyWh(session.stopMeterWh)}</span>
+                      <div className="action-row compact-action-row">
+                        <Button type="button" className="button-secondary icon-button" onClick={() => onOpenSessions(session.chargerId)} title="Open sessions" aria-label={`Open sessions for ${session.chargerId}`}>
+                          <ArrowRight aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </div>
                   </article>
                 );
               })}

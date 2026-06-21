@@ -44,6 +44,7 @@ export type CommunicationJournalListFilters = {
   proxyTargetId?: string;
   ocppMethod?: string;
   messageType?: CommunicationMessageType;
+  transactionId?: number;
   limit?: number;
 };
 
@@ -288,6 +289,7 @@ export class CommunicationJournalService {
     if (filters.proxyTargetId) conditions.push(eq(communicationJournal.proxyTargetId, filters.proxyTargetId));
     if (filters.ocppMethod) conditions.push(eq(communicationJournal.ocppMethod, filters.ocppMethod));
     if (filters.messageType) conditions.push(eq(communicationJournal.messageType, filters.messageType));
+    if (typeof filters.transactionId === 'number') conditions.push(eq(communicationJournal.transactionId, filters.transactionId));
 
     const rows = this.db
       .select()

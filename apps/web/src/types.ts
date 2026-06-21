@@ -284,6 +284,7 @@ export type CommunicationJournalFilters = {
   chargerId: string;
   proxyTargetId: string;
   ocppMethod: string;
+  transactionId: string;
   messageType: string;
 };
 

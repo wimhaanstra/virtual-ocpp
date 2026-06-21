@@ -176,6 +176,15 @@ export function CommunicationView({
                   placeholder="proxy-1"
                 />
               </label>
+              <label className="field">
+                <span>Transaction</span>
+                <input
+                  value={communicationFilters.transactionId}
+                  onChange={(event) => updateFilters({ transactionId: event.target.value })}
+                  inputMode="numeric"
+                  placeholder="1781932670376"
+                />
+              </label>
             </div>
           </details>
         </form>

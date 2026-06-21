@@ -1,6 +1,6 @@
-import { ArrowRight, Gauge, RefreshCcw } from "lucide-react";
+import { ArrowRight, Gauge, MessageSquareText, RefreshCcw } from "lucide-react";
 import { Button } from "./ui/button";
-import type { ActiveSessionAuditResponse, ActiveView, ChargingStats, DashboardConfig, ProxyHealthTarget, ProxyTarget, SessionSummary } from "../types";
+import type { ActiveSessionAuditResponse, ActiveView, ChargingStats, CommunicationJournalFilters, DashboardConfig, ProxyHealthTarget, ProxyTarget, SessionSummary } from "../types";
 import { formatDateTime, formatDecimalUnit, formatDuration, formatEnergyWh, formatPowerW, formatProxyHealthState, proxyHealthTone } from "../app-helpers";
 
 type ProxyTargetHealthEntry = {
@@ -22,6 +22,8 @@ type DashboardViewProps = {
   selectedConnectionStatus: string;
   selectedConnectionTone: string;
   onNavigate: (view: ActiveView) => void;
+  onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
+  onOpenSessions: () => void;
   onRefresh: () => void;
 };
 
@@ -38,10 +40,13 @@ export function DashboardView({
   selectedConnectionStatus,
   selectedConnectionTone,
   onNavigate,
+  onOpenCommunication,
+  onOpenSessions,
   onRefresh
 }: DashboardViewProps) {
   const primaryActiveSession = chargingStats[0] ?? null;
   const activeSessionCount = selectedChargerId ? (sessionSummary?.activeSessions ?? chargingStats.length) : 0;
+  const hasFailingProxy = proxyTargetHealth.some(({ health }) => health.state === "backoff" || health.state === "disconnected");
 
   return (
     <section className="home-stack">
@@ -83,6 +88,10 @@ export function DashboardView({
           <article>
             <span>Session active</span>
             <strong>{activeSessionCount > 0 ? "Yes" : "No"}</strong>
+          </article>
+          <article>
+            <span>Proxy health</span>
+            <strong>{hasFailingProxy ? "Review" : `${proxyTargetHealth.filter(({ health }) => health.connected).length}/${proxyTargetHealth.length}`}</strong>
           </article>
         </div>
 
@@ -155,6 +164,11 @@ export function DashboardView({
                       Started {formatDuration(stats.elapsedSeconds)} ago on connector {stats.connectorId}
                       {stats.latestSampleAt ? `; last meter sample ${formatDateTime(stats.latestSampleAt)}` : "; no meter sample yet"}.
                     </p>
+                    <div className="action-row compact-action-row">
+                      <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
+                        <ArrowRight aria-hidden="true" />
+                      </Button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -180,15 +194,27 @@ export function DashboardView({
             <p>No proxy targets configured for this charger.</p>
           ) : (
             <div className="proxy-health-list">
-              {proxyTargetHealth.map(({ target, health }) => (
+              {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
                 <article className="proxy-health-list-item" key={health.proxyTargetId}>
                   <div>
                     <strong>{health.name}</strong>
-                    <span className="status-copy">{health.lastSuccessAt ? `Last success ${formatDateTime(health.lastSuccessAt)}` : health.detail}</span>
+                    <span className="status-copy">{buildProxyHealthDetail(health)}</span>
+                    <span className="status-copy mono">{connectionUrl || health.upstreamIdentity || "No upstream identity"}</span>
                   </div>
-                  <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
-                    {formatProxyHealthState(health.state)}
-                  </span>
+                  <div className="proxy-health-actions">
+                    <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
+                      {formatProxyHealthState(health.state)}
+                    </span>
+                    <Button
+                      type="button"
+                      className="button-secondary icon-button"
+                      onClick={() => onOpenCommunication({ proxyTargetId: health.proxyTargetId })}
+                      title="Show proxy communication"
+                      aria-label={`Show communication for ${health.name}`}
+                    >
+                      <MessageSquareText aria-hidden="true" />
+                    </Button>
+                  </div>
                 </article>
               ))}
             </div>
@@ -226,6 +252,11 @@ export function DashboardView({
                   <span className="pill pill-warning">Needs review</span>
                 </div>
                 <p className="status-copy">{item.warnings[0]?.message}</p>
+                <div className="action-row compact-action-row">
+                  <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open sessions" aria-label={`Open session ${item.transactionId}`}>
+                    <ArrowRight aria-hidden="true" />
+                  </Button>
+                </div>
               </article>
             ))}
           </div>
@@ -235,4 +266,25 @@ export function DashboardView({
     </section>
 
   );
+}
+
+function buildProxyHealthDetail(health: ProxyHealthTarget) {
+  if (!health.enabled) return "Disabled";
+
+  const details = [health.connected ? "Connected" : formatProxyHealthState(health.state), health.detail];
+  if (health.lastFailureAt) {
+    details.push(`last failure ${formatDateTime(health.lastFailureAt)}`);
+  } else if (health.lastSuccessAt) {
+    details.push(`last success ${formatDateTime(health.lastSuccessAt)}`);
+  }
+
+  if (health.nextReconnectAt) {
+    details.push(`retry ${formatDateTime(health.nextReconnectAt)}`);
+  }
+
+  if (health.lastErrorCode) {
+    details.push(health.lastErrorCode);
+  }
+
+  return details.filter(Boolean).join(" · ");
 }

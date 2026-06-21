@@ -23,6 +23,7 @@ export const emptyCommunicationJournalFilters = (): CommunicationJournalFilters 
   chargerId: "",
   proxyTargetId: "",
   ocppMethod: "",
+  transactionId: "",
   messageType: ""
 });
 

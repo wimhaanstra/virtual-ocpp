@@ -15,6 +15,7 @@ const QuerySchema = z.object({
   proxyTargetId: z.string().trim().min(1).optional(),
   ocppMethod: z.string().trim().min(1).optional(),
   messageType: z.enum(['call', 'callResult', 'callError', 'connection', 'disconnect']).optional(),
+  transactionId: z.coerce.number().int().optional(),
   limit: z.coerce.number().int().positive().max(1000).default(200)
 });
 const DEFAULT_LIST_WINDOW_HOURS = 24;
@@ -49,6 +50,7 @@ export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Dat
       proxyTargetId: parsed.data.proxyTargetId,
       ocppMethod: parsed.data.ocppMethod,
       messageType: parsed.data.messageType,
+      transactionId: parsed.data.transactionId,
       limit: parsed.data.limit
     });
   });

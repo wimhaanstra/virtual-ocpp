@@ -14,6 +14,8 @@
   --success: #45d391;
   --warning: #facc15;
   --danger: #ff6464;
+  --danger-contrast: #fff1f2;
+  --danger-surface: #7f1d1d;
   --radius: 2px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   font-family:
@@ -45,6 +47,8 @@
   --success: #12805c;
   --warning: #ca8a04;
   --danger: #dc2626;
+  --danger-contrast: #ffffff;
+  --danger-surface: #b91c1c;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
@@ -378,13 +382,38 @@ a {
 }
 
 .button-danger {
-  border-color: rgba(248, 113, 113, 0.18);
-  background: rgba(127, 29, 29, 0.18);
-  color: #fecaca;
+  border-color: color-mix(in srgb, var(--danger) 66%, var(--line));
+  background: color-mix(in srgb, var(--danger-surface) 78%, var(--panel));
+  color: var(--danger-contrast);
+}
+
+.button-danger svg {
+  color: var(--danger-contrast);
+  stroke-width: 2.4;
 }
 
 .button-danger:hover {
-  background: rgba(153, 27, 27, 0.28);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-surface) 90%, var(--panel));
+}
+
+.button-ghost.button-danger {
+  border-color: color-mix(in srgb, var(--danger) 44%, transparent);
+  background: transparent;
+  color: var(--danger);
+}
+
+.button-ghost.button-danger svg {
+  color: var(--danger);
+}
+
+.button-ghost.button-danger:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger-contrast);
+}
+
+.button-ghost.button-danger:hover svg {
+  color: var(--danger-contrast);
 }
 
 .app-shell {
@@ -761,7 +790,7 @@ a {
 }
 
 .charger-dashboard-metrics {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .charger-dashboard-metrics article,
@@ -884,6 +913,31 @@ a {
   color: var(--foreground);
   font-weight: 760;
   white-space: nowrap;
+}
+
+.global-session-actions {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  color: var(--foreground);
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.inline-drilldown {
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-weight: 760;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.session-live-value {
+  display: block;
+  font-weight: 760;
 }
 
 .connection-url {
@@ -1057,7 +1111,7 @@ a {
 
 .proxy-health-list-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
@@ -1071,6 +1125,14 @@ a {
   display: grid;
   min-width: 0;
   gap: 2px;
+}
+
+.proxy-health-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: max-content;
 }
 
 .proxy-health-list-item strong,
