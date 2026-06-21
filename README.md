@@ -2,7 +2,7 @@
 
 Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger to a local primary CSMS, recording charging activity, and eventually proxying selected OCPP traffic to external backends.
 
-This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, the OCPP charger simulator, protected global and charger-scoped dashboards, protected operator visibility pages with stale-session audit checks, runtime proxy health, a redacted communication journal for protocol troubleshooting, and a production Docker image.
+This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, charger connectivity warnings, live charging state that stays in `Charging` while waiting for the first `MeterValues`, SmartEVSE offline replay recovery for `StopTransaction` `transactionId = -1`, the OCPP charger simulator, protected global and charger-scoped dashboards, protected operator visibility pages with stale-session audit checks, runtime proxy health, a redacted communication journal for protocol troubleshooting, and a production Docker image.
 
 ## Stack
 
@@ -117,6 +117,8 @@ Implemented OCPP 1.6j calls:
 - `StatusNotification`
 - `MeterValues`
 
+`FirmwareStatusNotification` is accepted and recorded as charger firmware status metadata for operator visibility.
+
 Server-initiated command:
 
 - `RemoteStopTransaction`
@@ -138,13 +140,15 @@ Proxy targets can define tag mappings for outbound `Authorize` and `StartTransac
 
 When an upstream target returns its own transaction id from `StartTransaction`, Virtual OCPP stores a per-target transaction mapping. Later `MeterValues` and `StopTransaction` calls are forwarded with that upstream transaction id while the charger continues using the local transaction id.
 
-Charging sessions, meter samples, charger connection events, authorization decisions, and status notifications are persisted to SQLite. Raw OCPP meter sample values are retained, and supported numeric samples are also normalized for dashboard use:
+SmartEVSE offline replay `StopTransaction` messages with `transactionId = -1` are recovered when they match exactly one active session. The server rewrites the call to the recovered local transaction, closes that session, and forwards the recovered transaction id to any active proxy mappings. Ambiguous or timestamp-less replays are logged for review and left unmatched.
+
+Charging sessions, meter samples, charger connection events, authorization decisions, status notifications, and firmware status notifications are persisted to SQLite. Raw OCPP meter sample values are retained, and supported numeric samples are also normalized for dashboard use:
 
 - `Energy.Active.Import.Register` is normalized to Wh, including kWh samples.
 - `Power.Active.Import` is normalized to W, including kW samples.
 - Aggregate/no-phase `Current.Import` and `Voltage` are exposed as amps and volts when supplied by the charger.
 
-The dashboard can show live energy used and charging speed only when the charger emits periodic `MeterValues`. Chargers that only send `StartTransaction.meterStart` and `StopTransaction.meterStop` still produce session totals once stopped, but live power/current/voltage remain unavailable. Phase-scoped current/voltage samples are stored but not collapsed into a fake total on the dashboard.
+The dashboard can show live energy used and charging speed only when the charger emits periodic `MeterValues`. While a session is waiting for its first meter sample, the UI keeps the card in `Charging` instead of reverting to an idle state. Chargers that only send `StartTransaction.meterStart` and `StopTransaction.meterStop` still produce session totals once stopped, but live power/current/voltage remain unavailable. Phase-scoped current/voltage samples are stored but not collapsed into a fake total on the dashboard.
 
 ## OCPP Charger Simulator
 

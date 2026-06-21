@@ -10,6 +10,7 @@ import {
   chargingSessions,
   communicationJournal,
   logs,
+  meterGapEvents,
   meterSamples,
   proxySessionMappings,
   proxyTagMappings,
@@ -929,6 +930,160 @@ describe('OCPP 1.6 local primary', () => {
       unit: 'kWh'
     });
     expect(server.db.select().from(chargingSessions).all()).toHaveLength(1);
+  });
+
+  it('recovers SmartEVSE offline replay StopTransaction calls with transactionId -1 when exactly one active session matches', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'OFFLINE-REPLAY-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-OFFLINE-REPLAY' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-offline-replay',
+      chargerId: 'SMART-EVSE-OFFLINE-REPLAY',
+      name: 'Offline replay CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-OFFLINE-REPLAY',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-OFFLINE-REPLAY');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const start = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'OFFLINE-REPLAY-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { transactionId: number; idTagInfo: { status: string } };
+
+    const stop = await charger.call('StopTransaction', {
+      transactionId: -1,
+      idTag: 'OFFLINE-REPLAY-TAG',
+      meterStop: 1550,
+      timestamp: '2026-06-19T10:10:00.000Z',
+      reason: 'Local'
+    });
+
+    expect(stop).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(server.db.select().from(chargingSessions).where(eq(chargingSessions.transactionId, start.transactionId)).get()).toMatchObject({
+      status: 'stopped',
+      stopMeterWh: 1550,
+      stopReason: 'Local',
+      stoppedAt: new Date('2026-06-19T10:10:00.000Z')
+    });
+    expect(proxy.calls.find((call) => call.method === 'StopTransaction')?.params).toMatchObject({
+      transactionId: 4242,
+      idTag: 'OFFLINE-REPLAY-TAG',
+      meterStop: 1550,
+      timestamp: '2026-06-19T10:10:00.000Z',
+      reason: 'Local'
+    });
+    expect(
+      server.db
+        .select()
+        .from(logs)
+        .all()
+        .some((row) => row.message === 'unmatched stop transaction recovery candidate')
+    ).toBe(false);
+  });
+
+  it('detects meter gaps when a new transaction starts above the previous stop meter threshold', async () => {
+    const server = await startTestServer({ meterGapThresholdWh: 500 });
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'GAP-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-GAP' });
+    server.db.insert(chargingSessions).values({
+      id: 'previous-gap-session',
+      chargerId: 'SMART-EVSE-GAP',
+      connectorId: 1,
+      transactionId: 100,
+      idTag: 'GAP-TAG',
+      startedAt: new Date('2026-06-19T09:00:00.000Z'),
+      stoppedAt: new Date('2026-06-19T09:30:00.000Z'),
+      startMeterWh: 500,
+      stopMeterWh: 1000,
+      stopReason: 'Local',
+      status: 'stopped'
+    }).run();
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-GAP');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const start = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'GAP-TAG',
+      meterStart: 2500,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { transactionId: number; idTagInfo: { status: string } };
+
+    expect(start.idTagInfo.status).toBe('Accepted');
+    const event = server.db.select().from(meterGapEvents).get();
+    expect(event).toMatchObject({
+      chargerId: 'SMART-EVSE-GAP',
+      connectorId: 1,
+      previousSessionId: 'previous-gap-session',
+      previousMeterWh: 1000,
+      newMeterStartWh: 2500,
+      deltaWh: 1500,
+      thresholdWh: 500,
+      status: 'pending'
+    });
+    expect(event?.newSessionId).toBe(
+      server.db.select().from(chargingSessions).where(eq(chargingSessions.transactionId, start.transactionId)).get()?.id
+    );
+  });
+
+  it('does not close or forward an offline replay StopTransaction when more than one active session matches the recovery rules', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-OFFLINE-AMBIGUOUS');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'AMBIGUOUS-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    });
+    await charger.call('StartTransaction', {
+      connectorId: 2,
+      idTag: 'AMBIGUOUS-TAG',
+      meterStart: 1200,
+      timestamp: '2026-06-19T10:01:00.000Z'
+    });
+
+    const stop = await charger.call('StopTransaction', {
+      transactionId: -1,
+      meterStop: 1300,
+      timestamp: '2026-06-19T10:10:00.000Z',
+      reason: 'Local'
+    });
+
+    expect(stop).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(proxy.calls.some((call) => call.method === 'StopTransaction')).toBe(false);
+    expect(
+      server.db
+        .select()
+        .from(chargingSessions)
+        .all()
+        .every((session) => session.status === 'active')
+    ).toBe(true);
+    expect(
+      server.db
+        .select()
+        .from(logs)
+        .all()
+        .some((row) => row.message === 'unmatched stop transaction recovery candidate')
+    ).toBe(true);
   });
 
   it('force closes lingering sessions by sending StopTransaction to proxy targets first', async () => {

@@ -15,8 +15,13 @@ But it will also include an OCPP Proxy, allowing charging sessions to be mirrore
 - SQL lite database to store charging sessions, tag, etc
 - Logs when connections to other OCPP services are disconnected etc.
 - Home dashboard with charger connection information and current connection state.
+- Charger connectivity diagnostics that warn when a charger has gone silent and no recent OCPP traffic is arriving.
+- Live charging cards that stay in `Charging` state while waiting for the first `MeterValues`.
+- SmartEVSE offline replay handling for `StopTransaction` with `transactionId = -1` when the session can be recovered unambiguously.
+- Meter-gap recovery context that uses the latest stored meter sample, or the start meter when needed, for operator review and force-close previews.
 - Runtime proxy health so operators can see whether upstream OCPP targets are connected, retrying, disabled, or waiting for the charger.
 - Session audit warnings for active sessions that likely missed `StopTransaction`, with enough meter/proxy context to safely review before force closing.
+- `FirmwareStatusNotification` handling that records charger firmware status for visibility without changing session state.
 - OCPP charger simulator for development, demos, and deployment smoke tests.
 - Deployable to a docker image which we will publish to docker hub later.
 

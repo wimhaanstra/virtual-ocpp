@@ -72,6 +72,14 @@ export type ChargerRegistryRow = {
   chargePointVendor?: string | null;
   chargePointModel?: string | null;
   firmwareVersion?: string | null;
+  connectionState?: "connected" | "recently_seen" | "silent" | "disabled";
+  lastMessageAt?: string | null;
+  connectionWarning?: {
+    code: string;
+    severity: "warn";
+    message: string;
+    lastMessageAt: string;
+  } | null;
   updatedAt?: string | null;
   enabled?: boolean;
 };
@@ -108,6 +116,28 @@ export type ChargingStats = {
   latestSampleAt: string | null;
   latestEnergyContext: string | null;
   latestPowerContext: string | null;
+};
+
+export type MeterGapEvent = {
+  id: string;
+  chargerId: string;
+  connectorId: number;
+  previousSessionId: string | null;
+  newSessionId: string;
+  previousStoppedAt: string | null;
+  newStartedAt: string;
+  previousMeterWh: number;
+  newMeterStartWh: number;
+  deltaWh: number;
+  thresholdWh: number;
+  status: "pending" | "ignored" | "submitted" | "failed";
+  submissionResult: unknown | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MeterGapEventsResponse = {
+  items: MeterGapEvent[];
 };
 
 export type SessionSummary = {

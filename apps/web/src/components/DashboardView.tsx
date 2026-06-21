@@ -1,6 +1,16 @@
 import { ArrowRight, Gauge, MessageSquareText, RefreshCcw } from "lucide-react";
 import { Button } from "./ui/button";
-import type { ActiveSessionAuditResponse, ActiveView, ChargingStats, CommunicationJournalFilters, DashboardConfig, ProxyHealthTarget, ProxyTarget, SessionSummary } from "../types";
+import type {
+  ActiveSessionAuditResponse,
+  ActiveView,
+  ChargingStats,
+  CommunicationJournalFilters,
+  DashboardConfig,
+  MeterGapEvent,
+  ProxyHealthTarget,
+  ProxyTarget,
+  SessionSummary
+} from "../types";
 import { formatDateTime, formatDecimalUnit, formatDuration, formatEnergyWh, formatPowerW, formatProxyHealthState, proxyHealthTone } from "../app-helpers";
 
 type ProxyTargetHealthEntry = {
@@ -15,6 +25,7 @@ type DashboardViewProps = {
   chargingStats: ChargingStats[];
   chargingStatsStatus: "idle" | "loading" | "ready" | "error";
   dashboardConfig: DashboardConfig | null;
+  meterGapEvents: MeterGapEvent[];
   proxyTargetHealth: ProxyTargetHealthEntry[];
   sessionSummary: SessionSummary | null;
   selectedChargerId: string;
@@ -33,6 +44,7 @@ export function DashboardView({
   chargingStats,
   chargingStatsStatus,
   dashboardConfig,
+  meterGapEvents,
   proxyTargetHealth,
   sessionSummary,
   selectedChargerId,
@@ -45,6 +57,7 @@ export function DashboardView({
   onRefresh
 }: DashboardViewProps) {
   const primaryActiveSession = chargingStats[0] ?? null;
+  const primarySessionAwaitingMeterValues = primaryActiveSession?.latestSampleAt === null;
   const activeSessionCount = selectedChargerId ? (sessionSummary?.activeSessions ?? chargingStats.length) : 0;
   const hasFailingProxy = proxyTargetHealth.some(({ health }) => health.state === "backoff" || health.state === "disconnected");
 
@@ -123,7 +136,9 @@ export function DashboardView({
                     : chargingStats.length > 1
                       ? `${chargingStats.length} active sessions`
                       : primaryActiveSession
-                        ? `Transaction ${primaryActiveSession.transactionId}`
+                        ? primarySessionAwaitingMeterValues
+                          ? "Charging"
+                          : `Transaction ${primaryActiveSession.transactionId}`
                         : chargingStatsStatus === "loading"
                           ? "Loading stats"
                           : "No active session"}
@@ -137,11 +152,32 @@ export function DashboardView({
               <div className="charging-session-stack">
                 {chargingStats.map((stats) => (
                   <article className="charging-session-card" key={stats.sessionId}>
-                    {chargingStats.length > 1 ? (
-                      <p className="mono charging-session-card__title">
-                        {stats.chargerId} / tx {stats.transactionId}
-                      </p>
-                    ) : null}
+                    <div className="charging-session-card__header">
+                      {chargingStats.length > 1 ? (
+                        <p className="mono charging-session-card__title">
+                          {stats.chargerId} / tx {stats.transactionId}
+                        </p>
+                      ) : null}
+                      <span className={`pill ${stats.latestSampleAt === null ? "pill-warning" : "pill-good"}`}>Charging</span>
+                    </div>
+                    <div className="charging-session-summary">
+                      <div>
+                        <span>Transaction</span>
+                        <strong>{stats.transactionId}</strong>
+                      </div>
+                      <div>
+                        <span>Tag</span>
+                        <strong>{stats.idTag ?? "None"}</strong>
+                      </div>
+                      <div>
+                        <span>Start meter</span>
+                        <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
+                      </div>
+                      <div>
+                        <span>Status</span>
+                        <strong className="charging-session-status">Charging</strong>
+                      </div>
+                    </div>
                     <div className="charging-stats-grid">
                       <div>
                         <span>Energy used</span>
@@ -161,8 +197,9 @@ export function DashboardView({
                       </div>
                     </div>
                     <p className="status-copy">
-                      Started {formatDuration(stats.elapsedSeconds)} ago on connector {stats.connectorId}
-                      {stats.latestSampleAt ? `; last meter sample ${formatDateTime(stats.latestSampleAt)}` : "; no meter sample yet"}.
+                      {stats.latestSampleAt === null
+                        ? `Charging, waiting for first MeterValues. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}.`
+                        : `Charging. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}; last meter sample ${formatDateTime(stats.latestSampleAt)}.`}
                     </p>
                     <div className="action-row compact-action-row">
                       <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
@@ -221,6 +258,31 @@ export function DashboardView({
           )}
         </section>
       </section>
+
+      {meterGapEvents.length > 0 ? (
+        <section className="panel table-panel">
+          <div className="topbar-actions page-section-header">
+            <div>
+              <p className="eyebrow">Recovery</p>
+              <h2>Meter gaps</h2>
+              <p className="status-copy">Possible missed charging between a previous stop meter and a later session start meter.</p>
+            </div>
+          </div>
+          <div className="meter-gap-list">
+            {meterGapEvents.slice(0, 3).map((event) => (
+              <article key={event.id}>
+                <div>
+                  <strong>{formatEnergyWh(event.deltaWh)} gap</strong>
+                  <p className="status-copy">
+                    Connector {event.connectorId} · {formatDateTime(event.previousStoppedAt)} to {formatDateTime(event.newStartedAt)}
+                  </p>
+                </div>
+                <span className="pill pill-warning">{event.status}</span>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel table-panel">
         <div className="topbar-actions page-section-header">

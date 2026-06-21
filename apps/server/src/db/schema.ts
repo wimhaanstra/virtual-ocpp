@@ -86,6 +86,31 @@ export const meterSamples = sqliteTable('meter_samples', {
   format: text('format')
 });
 
+export const meterGapEvents = sqliteTable(
+  'meter_gap_events',
+  {
+    id: text('id').primaryKey(),
+    chargerId: text('charger_id').notNull(),
+    connectorId: integer('connector_id').notNull(),
+    previousSessionId: text('previous_session_id'),
+    newSessionId: text('new_session_id').notNull(),
+    previousStoppedAt: integer('previous_stopped_at', { mode: 'timestamp_ms' }),
+    newStartedAt: integer('new_started_at', { mode: 'timestamp_ms' }).notNull(),
+    previousMeterWh: integer('previous_meter_wh').notNull(),
+    newMeterStartWh: integer('new_meter_start_wh').notNull(),
+    deltaWh: integer('delta_wh').notNull(),
+    thresholdWh: integer('threshold_wh').notNull(),
+    status: text('status').notNull(),
+    submissionResultJson: text('submission_result_json'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull()
+  },
+  (table) => ({
+    chargerIdx: index('meter_gap_events_charger_id_idx').on(table.chargerId),
+    statusIdx: index('meter_gap_events_status_idx').on(table.status)
+  })
+);
+
 export const proxyTargets = sqliteTable('proxy_targets', {
   id: text('id').primaryKey(),
   chargerId: text('charger_id'),

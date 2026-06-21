@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargerConnections, chargingSessions, logs, meterSamples, proxySessionMappings, proxyTargets } from './db/schema.js';
+import { chargerConnections, chargingSessions, logs, meterGapEvents, meterSamples, proxySessionMappings, proxyTargets } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
 import { recordLogEntry } from './log-writer.js';
 import { ChargerCommandError, type ChargerCommandService } from './ocpp/charger-command-service.js';
@@ -16,6 +16,9 @@ const REMOTE_STOP_GRACE_MS = 30_000;
 
 const ChargerScopedQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
+});
+const MeterGapEventsQuerySchema = ChargerScopedQuerySchema.extend({
+  status: z.enum(['pending', 'ignored', 'submitted', 'failed']).optional()
 });
 
 export function registerVisibilityRoutes(
@@ -118,6 +121,28 @@ export function registerVisibilityRoutes(
         flaggedSessions: items.filter((item) => item.warnings.length > 0).length
       },
       items
+    };
+  });
+
+  app.get('/api/meter-gap-events', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = MeterGapEventsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_meter_gap_events_query', details: parsed.error.flatten() });
+    }
+
+    const conditions = [];
+    if (parsed.data.chargerId) conditions.push(eq(meterGapEvents.chargerId, parsed.data.chargerId));
+    if (parsed.data.status) conditions.push(eq(meterGapEvents.status, parsed.data.status));
+
+    const query = db.select().from(meterGapEvents);
+    const rows = conditions.length
+      ? query.where(conditions.length === 1 ? conditions[0] : and(...conditions)).orderBy(desc(meterGapEvents.createdAt)).limit(RECENT_LIMIT).all()
+      : query.orderBy(desc(meterGapEvents.createdAt)).limit(RECENT_LIMIT).all();
+
+    return {
+      items: rows.map(toPublicMeterGapEvent)
     };
   });
 
@@ -636,6 +661,36 @@ function toPublicChargingSession(session: typeof chargingSessions.$inferSelect) 
     status: session.status,
     active: session.status === 'active'
   };
+}
+
+function toPublicMeterGapEvent(event: typeof meterGapEvents.$inferSelect) {
+  return {
+    id: event.id,
+    chargerId: event.chargerId,
+    connectorId: event.connectorId,
+    previousSessionId: event.previousSessionId,
+    newSessionId: event.newSessionId,
+    previousStoppedAt: event.previousStoppedAt?.toISOString() ?? null,
+    newStartedAt: event.newStartedAt.toISOString(),
+    previousMeterWh: event.previousMeterWh,
+    newMeterStartWh: event.newMeterStartWh,
+    deltaWh: event.deltaWh,
+    thresholdWh: event.thresholdWh,
+    status: event.status,
+    submissionResult: parseSubmissionResult(event.submissionResultJson),
+    createdAt: event.createdAt.toISOString(),
+    updatedAt: event.updatedAt.toISOString()
+  };
+}
+
+function parseSubmissionResult(value: string | null) {
+  if (!value) return null;
+
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function toPublicLog(entry: typeof logs.$inferSelect) {

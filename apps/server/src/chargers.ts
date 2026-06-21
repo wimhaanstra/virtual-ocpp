@@ -36,6 +36,8 @@ const DeleteChargerSchema = z.object({
   chargerIdConfirmation: z.string().trim().min(1)
 });
 
+type ChargerConnectionState = 'connected' | 'recently_seen' | 'silent' | 'disabled';
+
 export function registerChargerRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -70,6 +72,14 @@ export function registerChargerRoutes(
         .orderBy(desc(chargerConnections.connectedAt))
         .limit(1)
         .get();
+      const lastMessageAt = charger.lastSeenAt;
+      const connectionState = getChargerConnectionState({
+        enabled: charger.enabled,
+        active: Boolean(activeConnection),
+        lastMessageAt,
+        silentAfterMs: config.chargerSilentAfterSeconds * 1000
+      });
+      const connectionWarning = getChargerConnectionWarning(connectionState, lastMessageAt);
 
       return {
         id: charger.id,
@@ -85,6 +95,9 @@ export function registerChargerRoutes(
         activeConnectionId: activeConnection?.id ?? null,
         connectedAt: activeConnection?.connectedAt.toISOString() ?? null,
         disconnectedAt: activeConnection?.disconnectedAt?.toISOString() ?? null,
+        connectionState,
+        lastMessageAt: lastMessageAt.toISOString(),
+        connectionWarning,
         createdAt: charger.createdAt.toISOString(),
         updatedAt: charger.updatedAt.toISOString()
       };
@@ -242,4 +255,30 @@ export function registerChargerRoutes(
 
     return { ok: true, chargerId: request.params.id, deleted: deletedCounts };
   });
+}
+
+function getChargerConnectionState(input: {
+  enabled: boolean;
+  active: boolean;
+  lastMessageAt: Date;
+  silentAfterMs: number;
+}): ChargerConnectionState {
+  if (!input.enabled) return 'disabled';
+  if (input.active) return 'connected';
+
+  const ageMs = Date.now() - input.lastMessageAt.getTime();
+  if (ageMs <= input.silentAfterMs) return 'recently_seen';
+
+  return 'silent';
+}
+
+function getChargerConnectionWarning(state: ChargerConnectionState, lastMessageAt: Date) {
+  if (state !== 'silent') return null;
+
+  return {
+    code: 'no_recent_ocpp_traffic',
+    severity: 'warn',
+    message: 'No recent OCPP traffic received. Check that OCPP is enabled on the charger, the URL and station id are correct, and the charger can reach this server.',
+    lastMessageAt: lastMessageAt.toISOString()
+  };
 }

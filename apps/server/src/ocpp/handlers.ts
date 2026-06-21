@@ -19,7 +19,8 @@ let nextTransactionId = Date.now();
 export class OcppHandlers {
   constructor(
     private readonly repository: OcppRepository,
-    private readonly proxyAuthorization: ProxyAuthorizationService
+    private readonly proxyAuthorization: ProxyAuthorizationService,
+    private readonly meterGapThresholdWh = 1000
   ) {}
 
   async bootNotification(context: OcppHandlerContext, params: BootNotificationRequest) {
@@ -51,6 +52,19 @@ export class OcppHandlers {
     return {
       currentTime: new Date().toISOString()
     };
+  }
+
+  async firmwareStatusNotification(context: OcppHandlerContext, params: Record<string, unknown>) {
+    this.repository.recordLog({
+      category: 'ocpp',
+      message: 'firmware status notification received',
+      chargerId: context.chargerId,
+      metadata: {
+        status: typeof params.status === 'string' ? params.status : null
+      }
+    });
+
+    return {};
   }
 
   async authorize(context: OcppHandlerContext, params: AuthorizeRequest) {
@@ -125,13 +139,21 @@ export class OcppHandlers {
           reason: 'ReplacedByNewTransaction'
         });
       }
-      this.repository.createSession({
+      const sessionId = this.repository.createSession({
         chargerId: context.chargerId,
         connectorId: params.connectorId ?? 0,
         transactionId,
         idTag: params.idTag,
         startedAt,
         meterStart: params.meterStart
+      });
+      this.repository.detectMeterGapForSession({
+        chargerId: context.chargerId,
+        connectorId: params.connectorId ?? 0,
+        newSessionId: sessionId,
+        startedAt,
+        meterStart: params.meterStart,
+        thresholdWh: this.meterGapThresholdWh
       });
     } else {
       this.repository.recordLog({
@@ -157,6 +179,81 @@ export class OcppHandlers {
   async stopTransaction(context: OcppHandlerContext, params: StopTransactionRequest) {
     if (typeof params.transactionId !== 'number') {
       throw createRPCError('ProtocolError', 'transactionId is required');
+    }
+
+    if (params.transactionId === -1) {
+      const stoppedAt = parseOcppDateOrNull(params.timestamp);
+      if (!stoppedAt) {
+        this.repository.recordLog({
+          level: 'warn',
+          category: 'session',
+          message: 'unmatched stop transaction recovery candidate',
+          chargerId: context.chargerId,
+          transactionId: params.transactionId,
+          metadata: {
+            reason: params.reason ?? null,
+            meterStop: params.meterStop ?? null,
+            idTag: params.idTag ?? null,
+            timestamp: params.timestamp ?? null,
+            recoveryReason: 'missing_or_invalid_timestamp'
+          }
+        });
+        return {
+          idTagInfo: {
+            status: 'Accepted'
+          }
+        };
+      }
+
+      const recovery = this.repository.findRecoverableStopTransactionSession({
+        chargerId: context.chargerId,
+        stoppedAt,
+        meterStop: params.meterStop
+      });
+      if (!recovery.session) {
+        this.repository.recordLog({
+          level: 'warn',
+          category: 'session',
+          message: 'unmatched stop transaction recovery candidate',
+          chargerId: context.chargerId,
+          transactionId: params.transactionId,
+          metadata: {
+            reason: params.reason ?? null,
+            meterStop: params.meterStop ?? null,
+            idTag: params.idTag ?? null,
+            timestamp: stoppedAt.toISOString(),
+            recoveryReason: 'no_unique_session_match',
+            candidateCount: recovery.candidateCount
+          }
+        });
+        return {
+          idTagInfo: {
+            status: 'Accepted'
+          }
+        };
+      }
+
+      const recoveredTransactionId = recovery.session.transactionId;
+      const recoveredParams: StopTransactionRequest = {
+        ...params,
+        transactionId: recoveredTransactionId
+      };
+
+      this.repository.stopSession({
+        chargerId: context.chargerId,
+        transactionId: recoveredTransactionId,
+        stoppedAt,
+        meterStop: params.meterStop,
+        reason: params.reason
+      });
+
+      await this.proxyAuthorization.stopTransaction(context.chargerId, recoveredParams);
+
+      return {
+        idTagInfo: {
+          status: 'Accepted'
+        }
+      };
     }
 
     this.repository.stopSession({
@@ -229,6 +326,12 @@ function parseOcppDate(value: string | undefined) {
   if (!value) return new Date();
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function parseOcppDateOrNull(value: string | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function normalizeSampledValue(sampledValue: SampledValue) {

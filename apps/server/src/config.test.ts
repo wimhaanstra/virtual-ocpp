@@ -18,6 +18,8 @@ describe('loadConfig', () => {
     expect(config.adminUsername).toBe('admin');
     expect(config.adminPassword).toBe('correct-password');
     expect(config.communicationLogRetentionHours).toBe(24);
+    expect(config.chargerSilentAfterSeconds).toBe(300);
+    expect(config.meterGapThresholdWh).toBe(1000);
   });
 
   it('accepts DB_PATH as an alias for SQLITE_PATH', () => {
@@ -46,5 +48,23 @@ describe('loadConfig', () => {
     });
 
     expect(config.communicationLogRetentionHours).toBe(72);
+  });
+
+  it('parses the configured charger silence threshold', () => {
+    const config = loadConfig({
+      ...baseEnv,
+      CHARGER_SILENT_AFTER_SECONDS: '180'
+    });
+
+    expect(config.chargerSilentAfterSeconds).toBe(180);
+  });
+
+  it('parses the configured meter gap threshold', () => {
+    const config = loadConfig({
+      ...baseEnv,
+      METER_GAP_THRESHOLD_WH: '2500'
+    });
+
+    expect(config.meterGapThresholdWh).toBe(2500);
   });
 });

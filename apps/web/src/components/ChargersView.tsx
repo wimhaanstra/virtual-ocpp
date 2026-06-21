@@ -1,6 +1,6 @@
 import { Pencil, RefreshCcw, Trash2 } from "lucide-react";
 import type { ChargerRegistryRow } from "../types";
-import { formatDateTime } from "../app-helpers";
+import { formatDateTime, getChargerConnectionLabel, getChargerConnectionTone } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type ChargersViewProps = {
@@ -12,15 +12,7 @@ type ChargersViewProps = {
 };
 
 function getChargerStatus(charger: ChargerRegistryRow) {
-  if (charger.enabled === false) {
-    return { label: "Disabled", tone: "pill-warning" };
-  }
-
-  if (charger.active) {
-    return { label: "Connected", tone: "pill-good" };
-  }
-
-  return { label: "Registered", tone: "pill-neutral" };
+  return { label: getChargerConnectionLabel(charger), tone: getChargerConnectionTone(charger) };
 }
 
 export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete }: ChargersViewProps) {
@@ -64,6 +56,7 @@ export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete 
                     <td>{charger.label?.trim() || "Unlabeled"}</td>
                     <td>
                       <span className={`pill ${status.tone}`}>{status.label}</span>
+                      {charger.connectionWarning ? <div className="status-copy">{charger.connectionWarning.message}</div> : null}
                     </td>
                     <td>{formatDateTime(charger.firstSeenAt ?? null)}</td>
                     <td>{formatDateTime(charger.lastSeenAt ?? null)}</td>
@@ -86,9 +79,9 @@ export function ChargersView({ busy, chargers, onEditLabel, onRefresh, onDelete 
                         </Button>
                         <Button
                           type="button"
-                        className="button-danger icon-button"
-                        onClick={() => onDelete(charger)}
-                        disabled={busy}
+                          className="button-danger icon-button"
+                          onClick={() => onDelete(charger)}
+                          disabled={busy}
                         title="Delete charger"
                         aria-label="Delete"
                       >

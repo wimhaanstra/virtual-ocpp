@@ -37,6 +37,8 @@ import type {
   LiveUpdateEnvelope,
   LiveUpdateEvent,
   LogEntry,
+  MeterGapEvent,
+  MeterGapEventsResponse,
   ProxyHealthResponse,
   ProxyTagMapping,
   ProxyTarget,
@@ -78,6 +80,7 @@ export default function App() {
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
   const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
+  const [meterGapEvents, setMeterGapEvents] = useState<MeterGapEvent[]>([]);
   const [proxyHealth, setProxyHealth] = useState<ProxyHealthResponse | null>(null);
   const [activeSessionAudit, setActiveSessionAudit] = useState<ActiveSessionAuditResponse | null>(null);
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -378,6 +381,7 @@ export default function App() {
       loadProxyTargets(chargerId),
       loadProxyHealth(chargerId),
       loadActiveSessionAudit(chargerId),
+      loadMeterGapEvents(chargerId),
       loadTags(),
       loadChargingSessions(chargerId),
       loadSessionSummary(chargerId),
@@ -650,6 +654,16 @@ export default function App() {
       return;
     }
     setActiveSessionAudit(data);
+  }
+
+  async function loadMeterGapEvents(chargerId = selectedChargerId) {
+    const data = await fetchAdminJson<MeterGapEventsResponse>(withChargerContext("/api/meter-gap-events?status=pending", chargerId));
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load meter gap events.");
+      return;
+    }
+    setMeterGapEvents(data.items);
   }
 
   async function loadChargingStats(chargerId = selectedChargerId) {
@@ -1274,6 +1288,7 @@ export default function App() {
             chargingSessions={chargingSessions}
             chargingStats={chargingStats}
             chargingStatsStatus={chargingStatsStatus}
+            meterGapEvents={meterGapEvents}
             onOpenCommunication={(filters, chargerId) => openCommunicationForFilters(filters, chargerId)}
             onOpenSessions={openSessionsForCharger}
             onNavigate={navigateToView}
@@ -1287,6 +1302,7 @@ export default function App() {
             chargingStats={chargingStats}
             chargingStatsStatus={chargingStatsStatus}
             dashboardConfig={dashboardConfig}
+            meterGapEvents={meterGapEvents}
             proxyTargetHealth={proxyTargetHealth}
             sessionSummary={sessionSummary}
             selectedChargerId={selectedChargerId}

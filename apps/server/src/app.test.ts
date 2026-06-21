@@ -832,6 +832,9 @@ describe('app', () => {
         activeConnectionId: 'connection-active',
         connectedAt: '2026-06-19T09:00:00.000Z',
         disconnectedAt: null,
+        connectionState: 'connected',
+        lastMessageAt: '2026-06-19T09:05:00.000Z',
+        connectionWarning: null,
         createdAt: '2026-06-19T09:00:00.000Z',
         updatedAt: '2026-06-19T09:05:00.000Z'
       },
@@ -849,6 +852,15 @@ describe('app', () => {
         activeConnectionId: null,
         connectedAt: null,
         disconnectedAt: null,
+        connectionState: 'silent',
+        lastMessageAt: '2026-06-19T08:30:00.000Z',
+        connectionWarning: {
+          code: 'no_recent_ocpp_traffic',
+          severity: 'warn',
+          message:
+            'No recent OCPP traffic received. Check that OCPP is enabled on the charger, the URL and station id are correct, and the charger can reach this server.',
+          lastMessageAt: '2026-06-19T08:30:00.000Z'
+        },
         createdAt: '2026-06-19T08:00:00.000Z',
         updatedAt: '2026-06-19T08:30:00.000Z'
       }

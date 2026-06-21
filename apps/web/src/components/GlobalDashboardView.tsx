@@ -1,6 +1,16 @@
 import { ArrowRight, BatteryCharging, Gauge, MessageSquareText, RefreshCcw, TriangleAlert } from "lucide-react";
-import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats, CommunicationJournalFilters } from "../types";
-import { formatDateTime, formatDuration, formatEnergyWh, formatPowerW, getChargerContextId, getChargerDisplayLabel, sortChargers } from "../app-helpers";
+import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats, CommunicationJournalFilters, MeterGapEvent } from "../types";
+import {
+  formatDateTime,
+  formatDuration,
+  formatEnergyWh,
+  formatPowerW,
+  getChargerConnectionLabel,
+  getChargerConnectionTone,
+  getChargerContextId,
+  getChargerDisplayLabel,
+  sortChargers
+} from "../app-helpers";
 import { Button } from "./ui/button";
 
 type GlobalDashboardViewProps = {
@@ -10,6 +20,7 @@ type GlobalDashboardViewProps = {
   chargingSessions: ChargingSession[];
   chargingStats: ChargingStats[];
   chargingStatsStatus: "idle" | "loading" | "ready" | "error";
+  meterGapEvents: MeterGapEvent[];
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>, chargerId: string) => void;
   onOpenSessions: (chargerId: string) => void;
   onNavigate: (view: ActiveView) => void;
@@ -32,6 +43,7 @@ export function GlobalDashboardView({
   chargingSessions,
   chargingStats,
   chargingStatsStatus,
+  meterGapEvents,
   onOpenCommunication,
   onOpenSessions,
   onNavigate,
@@ -77,7 +89,7 @@ export function GlobalDashboardView({
         <article>
           <TriangleAlert aria-hidden="true" />
           <span>Needs attention</span>
-          <strong>{flaggedSessions.length}</strong>
+          <strong>{flaggedSessions.length + meterGapEvents.length}</strong>
         </article>
       </section>
 
@@ -113,6 +125,7 @@ export function GlobalDashboardView({
                     const chargerId = getChargerContextId(charger);
                     const sessions = getActiveSessions(chargerId, chargingSessions);
                     const stats = getLatestChargingStats(chargerId, chargingStats);
+                    const warning = charger.connectionWarning?.message;
 
                     return (
                       <tr key={charger.id}>
@@ -121,9 +134,10 @@ export function GlobalDashboardView({
                           <span className="status-copy mono">{chargerId}</span>
                         </td>
                         <td>
-                          <span className={`pill ${charger.active ? "pill-good" : "pill-neutral"}`}>
-                            {charger.active ? "Connected" : "Disconnected"}
+                          <span className={`pill ${getChargerConnectionTone(charger)}`}>
+                            {getChargerConnectionLabel(charger)}
                           </span>
+                          {warning ? <div className="status-copy">{warning}</div> : null}
                         </td>
                         <td>
                           <button className="inline-drilldown" type="button" onClick={() => onOpenSessions(chargerId)}>

@@ -35,7 +35,7 @@ export async function registerOcppServer(
   liveUpdates?: LiveUpdateBus
 ) {
   const repository = new OcppRepository(db, communicationJournal, liveUpdates);
-  const handlers = new OcppHandlers(repository, proxyAuthorization);
+  const handlers = new OcppHandlers(repository, proxyAuthorization, config.meterGapThresholdWh);
   const rpcServer = new RPCServer({
     protocols: ['ocpp1.6'],
     strictMode: false,
@@ -70,6 +70,9 @@ export async function registerOcppServer(
     );
     registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'Heartbeat', (params: Parameters<typeof handlers.heartbeat>[1]) =>
       handlers.heartbeat(context, params)
+    );
+    registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'FirmwareStatusNotification', (params: Record<string, unknown>) =>
+      handlers.firmwareStatusNotification(context, params)
     );
     registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'Authorize', (params: Parameters<typeof handlers.authorize>[1]) =>
       handlers.authorize(context, params)

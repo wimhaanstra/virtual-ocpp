@@ -19,9 +19,9 @@ The current implementation creates the foundation and initial OCPP local-primary
 - Persistent outbound OCPP mirroring for supported charger calls
 - Per-target external transaction id mapping for mirrored sessions
 - Repo-local OCPP charger simulator for demos and smoke tests
-- Protected operator visibility APIs for charger connections, sessions, and logs
+- Protected operator visibility APIs for charger connections, sessions, logs, and firmware status visibility
 - Protected global dashboard as the default admin view, showing connected chargers, active sessions, live charge details, and sessions needing attention
-- Charger-scoped dashboard showing OCPP connection info, protocol/auth requirements without secrets, charger connection status, runtime proxy health, live charging state, missing-stop checks, and quick links
+- Charger-scoped dashboard showing OCPP connection info, protocol/auth requirements without secrets, charger connection status, runtime proxy health, live charging state, charger silence warnings, missing-stop checks, and quick links
 - Protected communication journal API/page with redacted charger/server/proxy protocol payloads, source/target filtering, and configurable automatic purge
 - Protected charger registry and charger context selector
 - Charger-scoped proxy targets so each local charger chooses which upstreams it mirrors to
@@ -168,11 +168,15 @@ The charger hero reads lifetime stored session aggregates from `GET /api/session
 
 Operators can start the charger wizard from the topbar charger controls or the dashboard. The wizard snapshots the currently known charger ids, shows the same OCPP URL template/protocol/auth guidance, then waits for the next charger that appears in `GET /api/chargers`. Live updates usually refresh the registry automatically; the wizard also has a manual refresh fallback. Finishing the wizard optionally saves a charger label with `PATCH /api/chargers/:id` and switches the UI context to the detected charger.
 
-Live charging stats are read from `GET /api/charging-stats`, scoped with the same optional `chargerId` query parameter as the other visibility endpoints. The endpoint derives active-session values from `charging_sessions` and `meter_samples`: energy import register samples are normalized to Wh, power import samples to W, and aggregate/no-phase current/voltage are returned when present. Phase-scoped current/voltage samples are stored for later detail views but are not displayed as total charger current or voltage. If a charger does not send periodic `MeterValues`, the dashboard still shows the active transaction but leaves live meter fields blank until data arrives.
+Live charging stats are read from `GET /api/charging-stats`, scoped with the same optional `chargerId` query parameter as the other visibility endpoints. The endpoint derives active-session values from `charging_sessions` and `meter_samples`: energy import register samples are normalized to Wh, power import samples to W, and aggregate/no-phase current/voltage are returned when present. Phase-scoped current/voltage samples are stored for later detail views but are not displayed as total charger current or voltage. If a charger does not send periodic `MeterValues`, the dashboard still shows the active transaction. While the first meter sample is missing, the UI keeps the card in `Charging`; once samples arrive it continues to show `Charging` with the latest meter timestamp. If meter samples stop later, the latest stored sample remains available for audit and force-close previews.
 
 The dashboard also shows selected-charger proxy target health from `GET /api/proxy-health`, which reports the in-memory runtime state of persistent upstream sockets. The response includes a summary plus one row per charger-scoped proxy target with state, detail, last success/failure timestamps, and the next reconnect time when backoff is active. This is advisory operational state; it is not inferred from logs and it resets when the server process restarts.
 
 The dashboard and sessions page also read `GET /api/active-session-audit`, scoped by optional `chargerId`. The audit lists active sessions with latest meter sample context, latest connector status, active proxy transaction mappings, and warnings for cases that may indicate a missing `StopTransaction`: connector `Available`/`Finishing`, charger disconnected while the session is active, or an accepted remote stop that has not produced a later stop after a short grace window. The endpoint does not close sessions by itself; it gives operators the context needed to request remote stop or open the force-close preview.
+
+The charger list adds a warning when a charger has gone silent and no recent OCPP traffic is arriving. That warning is based on the current last-seen timestamp, not on logs.
+
+Accepted `StartTransaction` calls are also checked for meter gaps. When the start meter is higher than the last stopped session meter by at least `METER_GAP_THRESHOLD_WH`, Virtual OCPP stores a pending `meter_gap_events` review row and exposes it through `GET /api/meter-gap-events`, scoped by optional `chargerId` and `status`.
 
 Proxy target forms treat `url` as the upstream base websocket URL and append `stationId`, or the local charger id when `stationId` is blank, as the upstream OCPP identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 
@@ -214,6 +218,10 @@ The authenticated frontend exposes read-only operational views for sessions and 
 The sessions page shows charger id, connector, transaction id, tag id, status, timestamps, meter readings, stop reason, a remote stop action for active connected charger sessions, and a force-close action for lingering active session records. Active-session audit warnings are shown inline so operators can see why a session needs review before acting. Remote stop is a charger command: it records the request/result in the communication journal and activity logs, but the local session remains active until the charger sends `StopTransaction`. Force close first shows a preview of the synthesized `StopTransaction` payload that will be sent to each active proxy mapping, using the latest stored energy meter sample for that charger/connector after the session started when the charger did not provide a final stop. After operator confirmation, Virtual OCPP attempts proxy `StopTransaction` calls before marking the local session stopped with reason `OperatorForceClosed`. The legacy local close endpoint is only for stale record cleanup. For logs, only safe context fields such as `proxyTargetId`, `method`, and `status` are exposed.
 
 Accepted `StartTransaction` calls automatically close older active local sessions for the same `chargerId` and `connectorId` with reason `ReplacedByNewTransaction`. Before closing the replaced local session, Virtual OCPP sends `StopTransaction` to active proxy mappings using the latest stored energy meter sample for that session when available. This avoids stale sessions for single-connector chargers without incorrectly closing legitimate sessions on other connectors.
+
+`StopTransaction` with `transactionId = -1` is handled as the SmartEVSE offline replay case. If exactly one active session matches the timestamp and meter-stop recovery rules, Virtual OCPP rewrites the call to that session, closes it, and forwards the recovered transaction id to any active proxy mappings. Ambiguous or timestamp-less replays are accepted but left unmatched, with a warning log for operator review.
+
+`FirmwareStatusNotification` is accepted and logged with the reported firmware status. It does not alter charger connectivity, sessions, or proxy state.
 
 ## Database
 

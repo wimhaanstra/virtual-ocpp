@@ -3,7 +3,16 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import type { Database } from '../db/client.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { LiveUpdateBus } from '../live-updates.js';
-import { chargerConnections, chargers, chargingSessions, meterSamples, proxySessionMappings, tagChargerAccess, tags } from '../db/schema.js';
+import {
+  chargerConnections,
+  chargers,
+  chargingSessions,
+  meterGapEvents,
+  meterSamples,
+  proxySessionMappings,
+  tagChargerAccess,
+  tags
+} from '../db/schema.js';
 import { recordLogEntry } from '../log-writer.js';
 import type { StopTransactionRequest } from './types.js';
 
@@ -215,6 +224,73 @@ export class OcppRepository {
       connectorId: input.connectorId,
       startedAt: input.startedAt.toISOString()
     });
+
+    return sessionId;
+  }
+
+  detectMeterGapForSession(input: {
+    chargerId: string;
+    connectorId: number;
+    newSessionId: string;
+    startedAt: Date;
+    meterStart?: number;
+    thresholdWh: number;
+  }) {
+    if (typeof input.meterStart !== 'number') return null;
+    if (input.thresholdWh <= 0) return null;
+
+    const previousSession = this.db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, input.chargerId), eq(chargingSessions.connectorId, input.connectorId), eq(chargingSessions.status, 'stopped')))
+      .orderBy(desc(chargingSessions.stoppedAt))
+      .all()
+      .find((session) => typeof session.stopMeterWh === 'number');
+
+    if (!previousSession || typeof previousSession.stopMeterWh !== 'number') return null;
+
+    const deltaWh = input.meterStart - previousSession.stopMeterWh;
+    if (deltaWh < input.thresholdWh) return null;
+
+    const now = new Date();
+    const id = randomUUID();
+    this.db.insert(meterGapEvents).values({
+      id,
+      chargerId: input.chargerId,
+      connectorId: input.connectorId,
+      previousSessionId: previousSession.id,
+      newSessionId: input.newSessionId,
+      previousStoppedAt: previousSession.stoppedAt,
+      newStartedAt: input.startedAt,
+      previousMeterWh: previousSession.stopMeterWh,
+      newMeterStartWh: input.meterStart,
+      deltaWh,
+      thresholdWh: input.thresholdWh,
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now
+    }).run();
+
+    this.recordLog({
+      level: 'warn',
+      category: 'session',
+      message: 'meter gap detected',
+      chargerId: input.chargerId,
+      transactionId: this.db.select().from(chargingSessions).where(eq(chargingSessions.id, input.newSessionId)).limit(1).get()?.transactionId,
+      metadata: {
+        meterGapEventId: id,
+        connectorId: input.connectorId,
+        previousSessionId: previousSession.id,
+        newSessionId: input.newSessionId,
+        previousMeterWh: previousSession.stopMeterWh,
+        newMeterStartWh: input.meterStart,
+        deltaWh,
+        thresholdWh: input.thresholdWh
+      }
+    });
+
+    this.liveUpdates?.publish('sessions', input.chargerId);
+    return id;
   }
 
   getActiveSessionsForConnector(chargerId: string, connectorId: number) {
@@ -223,6 +299,24 @@ export class OcppRepository {
       .from(chargingSessions)
       .where(and(eq(chargingSessions.chargerId, chargerId), eq(chargingSessions.connectorId, connectorId), eq(chargingSessions.status, 'active')))
       .all();
+  }
+
+  findRecoverableStopTransactionSession(input: {
+    chargerId: string;
+    stoppedAt: Date;
+    meterStop?: number;
+  }) {
+    const activeSessions = this.db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, input.chargerId), eq(chargingSessions.status, 'active')))
+      .all();
+    const candidates = activeSessions.filter((session) => isRecoverableStopTransactionSession(session, input.stoppedAt, input.meterStop));
+
+    return {
+      session: candidates.length === 1 ? candidates[0] : null,
+      candidateCount: candidates.length
+    };
   }
 
   buildReplacementStopTransaction(session: typeof chargingSessions.$inferSelect, stoppedAt: Date): StopTransactionRequest {
@@ -453,4 +547,15 @@ function normalizeEnergyWh(sample: typeof meterSamples.$inferSelect) {
   const value = typeof sample.normalizedValue === 'number' ? sample.normalizedValue : typeof sample.numericValue === 'number' ? sample.numericValue : Number.parseFloat(sample.value);
   if (!Number.isFinite(value)) return null;
   return sample.unit?.trim().toLowerCase() === 'kwh' ? value * 1000 : value;
+}
+
+function isRecoverableStopTransactionSession(
+  session: typeof chargingSessions.$inferSelect,
+  stoppedAt: Date,
+  meterStop?: number
+) {
+  if (!(stoppedAt > session.startedAt)) return false;
+  if (typeof meterStop !== 'number') return false;
+  if (typeof session.startMeterWh === 'number' && meterStop < session.startMeterWh) return false;
+  return true;
 }

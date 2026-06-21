@@ -141,6 +141,20 @@ export function sortChargers(chargers: ChargerRegistryRow[]) {
   return [...chargers].sort((left, right) => getChargerSortTime(right) - getChargerSortTime(left));
 }
 
+export function getChargerConnectionLabel(charger: ChargerRegistryRow) {
+  if (charger.connectionState === "disabled" || charger.enabled === false) return "Disabled";
+  if (charger.connectionState === "connected" || charger.active) return "Connected";
+  if (charger.connectionState === "recently_seen") return "Recently seen";
+  if (charger.connectionState === "silent") return "No OCPP traffic";
+  return "Registered";
+}
+
+export function getChargerConnectionTone(charger: ChargerRegistryRow) {
+  if (charger.connectionState === "connected" || charger.active) return "pill-good";
+  if (charger.connectionState === "silent") return "pill-warning";
+  return "pill-neutral";
+}
+
 export function getTagAccessForCharger(tag: Tag, chargerId: string) {
   if (!chargerId) return null;
 

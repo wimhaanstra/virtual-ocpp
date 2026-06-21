@@ -117,6 +117,10 @@ const emptyVisibilityResponses = (url: string, method: string) => {
     return new Response(JSON.stringify({ summary: { activeSessions: 0, flaggedSessions: 0 }, items: [] }), { status: 200 });
   }
 
+  if (path === "/api/meter-gap-events" && method === "GET") {
+    return new Response(JSON.stringify({ items: [] }), { status: 200 });
+  }
+
   if ((path === "/api/live-updates" || path === "/api/events") && method === "GET") {
     return new Response("", {
       status: 404
@@ -422,6 +426,171 @@ describe("App", () => {
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Activity" })).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
+  });
+
+  it("shows an active charging session before the first MeterValues sample arrives", async () => {
+    window.history.replaceState({}, "", "/?chargerId=SMART-EVSE-1");
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (url === "/api/dashboard-config" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppProtocol: "ocpp1.6",
+            ocppBasicAuthRequired: false,
+            ocppBasicAuthUsername: null
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url === "/api/chargers" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "SMART-EVSE-1",
+              label: null,
+              lastSeenAt: "2026-06-19T09:00:00.000Z",
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              active: true
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/proxy-targets") && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.startsWith("/api/proxy-health") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            chargerId: "SMART-EVSE-1",
+            summary: { total: 0, connected: 0, backoff: 0, waitingForCharger: 0, disabled: 0 },
+            targets: []
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/active-session-audit") && method === "GET") {
+        return new Response(JSON.stringify({ summary: { activeSessions: 1, flaggedSessions: 0 }, items: [] }), { status: 200 });
+      }
+
+      if (url.startsWith("/api/sessions") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "session-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              stoppedAt: null,
+              startMeterWh: 1000,
+              stopMeterWh: null,
+              stopReason: null,
+              status: "active",
+              active: true
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/session-summary") && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            chargerId: "SMART-EVSE-1",
+            totalSessions: 3,
+            activeSessions: 1,
+            totalEnergyWh: 12450,
+            lastSession: {
+              id: "session-1",
+              transactionId: 42,
+              startedAt: "2026-06-19T09:05:00.000Z",
+              stoppedAt: null,
+              active: true,
+              energyWh: null
+            }
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/charging-stats") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              sessionId: "session-1",
+              chargerId: "SMART-EVSE-1",
+              connectorId: 1,
+              transactionId: 42,
+              idTag: "TAG-1",
+              startedAt: "2026-06-19T09:05:00.000Z",
+              elapsedSeconds: 1860,
+              startMeterWh: 1000,
+              latestMeterWh: null,
+              energyUsedWh: null,
+              latestPowerW: null,
+              latestCurrentA: null,
+              latestVoltageV: null,
+              latestSampleAt: null,
+              latestEnergyContext: null,
+              latestPowerContext: null
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/logs") && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.startsWith("/api/communication-journal") && method === "GET") {
+        return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
+
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Dashboard" }));
+
+    expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Charging" })).toBeInTheDocument();
+    expect(screen.getByText(/waiting for first MeterValues/i)).toBeInTheDocument();
+    expect(screen.getByText("Transaction")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("Tag")).toBeInTheDocument();
+    expect(screen.getByText("TAG-1")).toBeInTheDocument();
+    expect(screen.getByText("Start meter")).toBeInTheDocument();
+    expect(screen.getByText("1.00 kWh")).toBeInTheDocument();
+    expect(screen.getByText("Charging", { selector: ".charging-session-status" })).toBeInTheDocument();
+    expect(screen.getByText(/Charging, waiting for first MeterValues\./)).toBeInTheDocument();
   });
 
   it("drills from proxy health into the filtered communication journal", async () => {
