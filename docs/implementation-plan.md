@@ -43,8 +43,9 @@ Scope:
 - Reuse the existing charger onboarding mechanics to show the OCPP URL, protocol/auth details, wait for a newly registered charger, label it, and switch to that charger context.
 - Let the operator optionally create a global tag during onboarding.
 - Let the operator grant that tag access to the newly detected charger before finishing.
-- Show a clear completion state with next actions: add proxy targets, test authorization, and review communication logs.
-- Persist onboarding completion so the wizard does not reappear after refresh, while still allowing operators to relaunch it from an admin/settings or chargers entry point.
+- Let the operator optionally create the first proxy target for the detected charger, including URL, username, password, station id, enabled state, mode, and outage policy.
+- Show a clear completion state with next actions: test authorization, review proxy health, and inspect communication logs.
+- Persist onboarding completion so the wizard does not reappear after refresh, while still allowing operators to relaunch it from the Settings page for testing or repeat walkthroughs.
 
 Acceptance criteria:
 
@@ -53,6 +54,8 @@ Acceptance criteria:
 - A new charger can be detected through the same registry polling/live-update pattern as the current charger wizard.
 - A tag can be created or an existing tag can be selected during onboarding.
 - The chosen tag can be granted to the detected charger before finishing.
+- A proxy target can be skipped or created for the detected charger before finishing.
+- The Settings page exposes a manual "Run onboarding" action that opens the same flow even after onboarding was completed or skipped.
 - The final state routes the operator to the charger dashboard for the new charger.
-- Frontend tests cover first-run opening, skip/complete persistence, charger detection, tag creation/selection, and tag grant submission.
+- Frontend tests cover first-run opening, skip/complete persistence, manual relaunch from Settings, charger detection, tag creation/selection, tag grant submission, and optional proxy target creation.
 - Operator documentation explains when onboarding appears and how to rerun the setup manually.
