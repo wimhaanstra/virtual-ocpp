@@ -87,6 +87,51 @@ describe('app', () => {
     await app.close();
   });
 
+  it('does not mark session cookies secure on plain http production requests', async () => {
+    const config = testConfig({ nodeEnv: 'production' });
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {
+        username: 'admin',
+        password: 'correct-password'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(String(response.headers['set-cookie'])).not.toContain('Secure');
+
+    await app.close();
+  });
+
+  it('marks session cookies secure when forwarded over https', async () => {
+    const config = testConfig({ nodeEnv: 'production' });
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers: {
+        'x-forwarded-proto': 'https'
+      },
+      payload: {
+        username: 'admin',
+        password: 'correct-password'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(String(response.headers['set-cookie'])).toContain('Secure');
+
+    await app.close();
+  });
+
   it('requires authentication for operator routes', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();

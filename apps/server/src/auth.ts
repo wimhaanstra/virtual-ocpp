@@ -44,7 +44,7 @@ export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, db: 
     reply.setCookie(SESSION_COOKIE, sessionId, {
       httpOnly: true,
       sameSite: 'lax',
-      secure: config.nodeEnv === 'production',
+      secure: isSecureRequest(request),
       path: '/',
       signed: true,
       maxAge: SESSION_TTL_MS / 1000
@@ -118,4 +118,14 @@ function safeEquals(left: string, right: string) {
 
 function hash(value: string) {
   return createHash('sha256').update(value).digest();
+}
+
+function isSecureRequest(request: FastifyRequest) {
+  const forwardedProto = request.headers['x-forwarded-proto'];
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  if (proto) {
+    return proto.split(',')[0]?.trim().toLowerCase() === 'https';
+  }
+
+  return request.protocol === 'https';
 }
