@@ -79,6 +79,35 @@ Terminate TLS at your reverse proxy and forward websocket upgrades to the contai
 
 If the public charger URL uses TLS, set `OCPP_PUBLIC_URL` to a `wss://` value so the dashboard shows the correct charger-facing address.
 
+The application serves the UI, API, live updates, and OCPP charger websocket endpoint from the same internal port, `8797`. A reverse proxy should route the whole host to container port `8797`; it does not need a separate websocket service or path-specific backend.
+
+## Traefik
+
+Use `docker-compose.traefik.example.yml` as an override when the base `docker-compose.yml` is synced read-only. It adds Traefik labels and attaches the app to an external Traefik network.
+
+Add these values to `.env`:
+
+```env
+OCPP_PUBLIC_URL=wss://ocpp.example.com/ocpp/:chargerId
+VIRTUAL_OCPP_HOST=ocpp.example.com
+TRAEFIK_ENTRYPOINT=websecure
+TRAEFIK_CERT_RESOLVER=letsencrypt
+TRAEFIK_NETWORK=traefik
+```
+
+Then start the stack with both compose files:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.traefik.example.yml pull
+docker compose -f docker-compose.yml -f docker-compose.traefik.example.yml up -d
+```
+
+The override creates a single router for `Host(${VIRTUAL_OCPP_HOST})` and points Traefik at service port `8797`. Traefik handles websocket upgrades automatically when it forwards HTTP/1.1 requests, so `/ocpp/:chargerId` works through the same router as the admin interface.
+
+Traefik normally sets `X-Forwarded-Proto`. Virtual OCPP uses that header to mark admin session cookies as `Secure` when requests arrive over HTTPS. If you use another proxy, make sure it forwards `X-Forwarded-Proto: https` for TLS traffic.
+
+If Traefik uses a different external Docker network, set `TRAEFIK_NETWORK` to that network name. If your certificate resolver or entrypoint has a different name, set `TRAEFIK_CERT_RESOLVER` or `TRAEFIK_ENTRYPOINT` accordingly.
+
 ## Health And Smoke Test
 
 `/health` reports that the process is running. `/ready` also verifies database access and is used by the Docker healthcheck.

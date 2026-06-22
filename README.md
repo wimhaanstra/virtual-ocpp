@@ -71,7 +71,7 @@ docker run --rm -p 8797:8797 -v virtual-ocpp-data:/data \
   sortedbit/virtual-ocpp:latest
 ```
 
-Use `npm run docker:publish` to push multi-platform `linux/amd64` and `linux/arm64` tags for `sortedbit/virtual-ocpp:latest` and the current package-version tag to Docker Hub. See `docs/deployment.md` for Docker Compose, reverse proxy, TLS, and smoke-test notes.
+Use `npm run docker:publish` to push multi-platform `linux/amd64` and `linux/arm64` tags for `sortedbit/virtual-ocpp:latest` and the current package-version tag to Docker Hub. See `docs/deployment.md` for Docker Compose, Traefik/reverse proxy, TLS, and smoke-test notes.
 
 ## Current Endpoints
 
