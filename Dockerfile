@@ -18,7 +18,7 @@ FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
-    PORT=3000 \
+    PORT=8797 \
     SQLITE_PATH=/data/virtual-ocpp.sqlite \
     WEB_DIST_PATH=/app/apps/web/dist
 
@@ -33,8 +33,8 @@ COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 
 VOLUME ["/data"]
-EXPOSE 3000
+EXPOSE 8797
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 8797) + '/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "apps/server/dist/index.js"]

@@ -10,7 +10,7 @@ import * as schema from './db/schema.js';
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
     nodeEnv: 'test',
-    port: 3000,
+    port: 8797,
     host: '127.0.0.1',
     sqlitePath: `./data/test-${randomUUID()}.sqlite`,
     sessionSecret: 'test-session-secret-with-enough-length',

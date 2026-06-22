@@ -71,7 +71,7 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
   if (path === "/api/dashboard-config" && method === "GET") {
     return new Response(
       JSON.stringify({
-        ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+        ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
         ocppProtocol: "ocpp1.6",
         ocppBasicAuthRequired: false,
         ocppBasicAuthUsername: null
@@ -270,7 +270,7 @@ describe("App", () => {
       if (url === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
-            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
             ocppProtocol: "ocpp1.6",
             ocppBasicAuthRequired: true,
             ocppBasicAuthUsername: "charger id"
@@ -439,10 +439,10 @@ describe("App", () => {
     expect(screen.getByText("Last session")).toBeInTheDocument();
     expect(screen.getByText("Session active")).toBeInTheDocument();
     expect(screen.getByText("Yes")).toBeInTheDocument();
-    expect(screen.queryByText("ws://localhost:3000/ocpp/:chargerId")).not.toBeInTheDocument();
+    expect(screen.queryByText("ws://localhost:8797/ocpp/:chargerId")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show OCPP connection info" }));
     const connectionDialog = await screen.findByRole("dialog", { name: "OCPP connection" });
-    expect(within(connectionDialog).getByText("ws://localhost:3000/ocpp/:chargerId")).toBeInTheDocument();
+    expect(within(connectionDialog).getByText("ws://localhost:8797/ocpp/:chargerId")).toBeInTheDocument();
     expect(within(connectionDialog).getByText("ocpp1.6")).toBeInTheDocument();
     expect(within(connectionDialog).getByText("Basic Auth: charger id")).toBeInTheDocument();
     fireEvent.click(within(connectionDialog).getByRole("button", { name: "Close OCPP connection info" }));
@@ -481,7 +481,7 @@ describe("App", () => {
       if (url === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
-            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
             ocppProtocol: "ocpp1.6",
             ocppBasicAuthRequired: false,
             ocppBasicAuthUsername: null
@@ -716,7 +716,7 @@ describe("App", () => {
       if (url === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
-            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
             ocppProtocol: "ocpp1.6",
             ocppBasicAuthRequired: false,
             ocppBasicAuthUsername: null
@@ -1049,7 +1049,7 @@ describe("App", () => {
       if (path === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
-            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
             ocppProtocol: "ocpp1.6",
             ocppBasicAuthRequired: false,
             ocppBasicAuthUsername: null
@@ -1131,7 +1131,7 @@ describe("App", () => {
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
     expect(wizard).toBeInTheDocument();
     expect(within(wizard).getByText("Waiting for a new charger")).toBeInTheDocument();
-    expect(screen.getAllByText("ws://localhost:3000/ocpp/:chargerId").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ws://localhost:8797/ocpp/:chargerId").length).toBeGreaterThan(0);
 
     includeNewCharger = true;
     fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
@@ -1283,7 +1283,7 @@ describe("App", () => {
       if (path === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
-            ocppWebSocketUrl: "ws://localhost:3000/ocpp/:chargerId",
+            ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
             ocppProtocol: "ocpp1.6",
             ocppBasicAuthRequired: false,
             ocppBasicAuthUsername: null

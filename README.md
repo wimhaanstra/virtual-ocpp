@@ -32,7 +32,7 @@ The server automatically loads `.env` from the current working directory or near
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `PORT` | No | `3000` | Backend HTTP port. |
+| `PORT` | No | `8797` | Backend HTTP port. |
 | `HOST` | No | `0.0.0.0` | Backend bind host. |
 | `SQLITE_PATH` | No | `./data/virtual-ocpp.sqlite` | SQLite database file path. |
 | `SESSION_SECRET` | Yes | None | At least 32 characters; signs admin session cookies. |
@@ -55,7 +55,7 @@ npm run lint         # typecheck all workspaces
 npm run db:migrate   # apply Drizzle migrations
 ```
 
-The frontend dev server runs at `http://localhost:5173`. It proxies `/api` and `/health` to the backend at `http://localhost:3000`.
+The frontend dev server runs at `http://localhost:5173`. It proxies `/api` and `/health` to the backend at `http://localhost:8797`.
 
 Protected frontend pages use client-side routes so refresh and browser back/forward keep the current page: `/`, `/charger-dashboard`, `/proxy-targets`, `/tag-access`, `/chargers`, `/tags`, `/sessions`, and `/communication`. The selected charger context is preserved in `?chargerId=...`.
 
@@ -65,7 +65,7 @@ The production Docker image serves the API, OCPP websocket endpoint, and built f
 
 ```sh
 docker build -t virtual-ocpp:local .
-docker run --rm -p 3000:3000 -v virtual-ocpp-data:/data \
+docker run --rm -p 8797:8797 -v virtual-ocpp-data:/data \
   -e SESSION_SECRET=replace-with-at-least-32-random-characters \
   -e ADMIN_PASSWORD=replace-me-with-at-least-8-characters \
   virtual-ocpp:local
@@ -101,7 +101,7 @@ See `docs/deployment.md` for Docker Compose, reverse proxy, TLS, and smoke-test 
 - `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` to the connected charger for an active session. Requires admin session.
 - `POST /api/sessions/:id/close` locally closes a lingering active session record without sending an OCPP command. Requires admin session.
 - `GET /api/logs` lists recent log/activity entries with safe context and without raw metadata. Requires admin session.
-- `ws://host:3000/ocpp/:chargerId` accepts OCPP 1.6j charger websocket connections. The dashboard shows the configured URL template from `OCPP_PUBLIC_URL`, or a local backend-port default when no override is set.
+- `ws://host:8797/ocpp/:chargerId` accepts OCPP 1.6j charger websocket connections. The dashboard shows the configured URL template from `OCPP_PUBLIC_URL`, or a local backend-port default when no override is set.
 
 ## Current OCPP Support
 
@@ -164,7 +164,7 @@ npm run simulator -- --charger-id SIM-001 --tag-id SIM-TAG-001 --ensure-tag
 
 Useful options:
 
-- `--url ws://localhost:3000/ocpp`: OCPP websocket endpoint.
+- `--url ws://localhost:8797/ocpp`: OCPP websocket endpoint.
 - `--charger-id SIM-001`: charger identity.
 - `--tag-id SIM-TAG-001`: tag id used for authorization and session start.
 - `--meter-samples 3`: number of meter samples to emit.

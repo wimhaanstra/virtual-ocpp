@@ -12,7 +12,7 @@ describe('loadConfig', () => {
   it('loads the configured sqlite path and credentials', () => {
     const config = loadConfig(baseEnv);
 
-    expect(config.port).toBe(3000);
+    expect(config.port).toBe(8797);
     expect(config.host).toBe('0.0.0.0');
     expect(config.sqlitePath).toBe('./data/virtual-ocpp.sqlite');
     expect(config.adminUsername).toBe('admin');

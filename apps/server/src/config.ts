@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 const ConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  PORT: z.coerce.number().int().min(1).max(65535).default(8797),
   HOST: z.string().min(1).default('0.0.0.0'),
   SQLITE_PATH: z.string().min(1).default('./data/virtual-ocpp.sqlite'),
   DB_PATH: z.string().min(1).optional(),

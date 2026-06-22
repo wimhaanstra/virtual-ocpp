@@ -13,15 +13,15 @@ Run it with a persistent SQLite volume:
 ```sh
 docker run --rm \
   --name virtual-ocpp \
-  -p 3000:3000 \
+  -p 8797:8797 \
   -v virtual-ocpp-data:/data \
   -e SESSION_SECRET="$SESSION_SECRET" \
   -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-  -e OCPP_PUBLIC_URL=ws://localhost:3000/ocpp/:chargerId \
+  -e OCPP_PUBLIC_URL=ws://localhost:8797/ocpp/:chargerId \
   virtual-ocpp:local
 ```
 
-The container serves the API, OCPP websocket endpoint, and built frontend from one Fastify process on port `3000`.
+The container serves the API, OCPP websocket endpoint, and built frontend from one Fastify process on port `8797`.
 Set `SESSION_SECRET` and `ADMIN_PASSWORD` to real values before starting the container. Production startup rejects the placeholders from `.env.example`.
 
 ## Docker Compose
@@ -34,7 +34,7 @@ docker compose up -d --build
 ```
 
 `docker-compose.yml` reads supported settings from `.env`, keeps the container internals fixed, and publishes the app on `http://localhost:8797`.
-The container listens on port `3000`, but Compose maps host port `8797` to avoid common local development port conflicts.
+The container also listens on port `8797`, so Compose maps `8797:8797`.
 
 Inside the image, SQLite is stored at `/data/virtual-ocpp.sqlite` and the built frontend is served from `/app/apps/web/dist`.
 Override SQLite storage by changing the volume mount, for example by replacing the named volume with a bind mount to `/data`.
@@ -66,16 +66,7 @@ If the public charger URL uses TLS, set `OCPP_PUBLIC_URL` to a `wss://` value so
 
 `/health` reports that the process is running. `/ready` also verifies database access and is used by the Docker healthcheck.
 
-After the container starts:
-
-```sh
-curl http://localhost:3000/health
-curl http://localhost:3000/ready
-```
-
-Open `http://localhost:3000` and sign in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
-
-For the Compose stack, use:
+After the container or Compose stack starts:
 
 ```sh
 curl http://localhost:8797/health

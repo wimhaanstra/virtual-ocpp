@@ -5,8 +5,8 @@ describe('simulator cli', () => {
   it('parses defaults and infers the admin URL from the OCPP endpoint', () => {
     const options = parseSimulatorArgs([], {});
 
-    expect(options.url).toBe('ws://localhost:3000/ocpp');
-    expect(options.adminUrl).toBe('http://localhost:3000');
+    expect(options.url).toBe('ws://localhost:8797/ocpp');
+    expect(options.adminUrl).toBe('http://localhost:8797');
     expect(options.chargerId).toBe('SIM-001');
     expect(options.tagId).toBe('SIM-TAG-001');
     expect(options.connectorId).toBe(1);
@@ -74,7 +74,7 @@ describe('simulator cli', () => {
   });
 
   it('infers admin URLs from websocket endpoints', () => {
-    expect(inferAdminUrl('ws://127.0.0.1:3000/ocpp')).toBe('http://127.0.0.1:3000');
+    expect(inferAdminUrl('ws://127.0.0.1:8797/ocpp')).toBe('http://127.0.0.1:8797');
     expect(inferAdminUrl('wss://charge.example/ocpp/SIM-1')).toBe('https://charge.example');
   });
 

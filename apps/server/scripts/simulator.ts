@@ -74,7 +74,7 @@ export function parseSimulatorArgs(argv: string[], env: NodeJS.ProcessEnv = proc
     if (inlineValue === undefined) index += 1;
   }
 
-  const url = values.get('url') ?? env.SIMULATOR_OCPP_URL ?? 'ws://localhost:3000/ocpp';
+  const url = values.get('url') ?? env.SIMULATOR_OCPP_URL ?? 'ws://localhost:8797/ocpp';
   const adminUrl = values.get('admin-url') ?? env.SIMULATOR_ADMIN_URL ?? inferAdminUrl(url);
   const runTimeRaw = values.get('run-time') ?? env.SIMULATOR_RUN_TIME;
   const hasSampleInterval = values.has('sample-interval-ms') || env.SIMULATOR_SAMPLE_INTERVAL_MS !== undefined;
@@ -122,7 +122,7 @@ Usage:
   npm run simulator -- [options]
 
 Options:
-  --url <ws-url>                  OCPP websocket endpoint. Default: ws://localhost:3000/ocpp
+  --url <ws-url>                  OCPP websocket endpoint. Default: ws://localhost:8797/ocpp
   --charger-id <id>               Charger identity. Default: ${DEFAULT_CHARGER_ID}
   --tag-id <id>                   RFID/tag id used for Authorize and StartTransaction. Default: ${DEFAULT_TAG_ID}
   --connector-id <number>         Connector id. Default: 1
