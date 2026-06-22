@@ -30,7 +30,15 @@ To publish the image to Docker Hub as `sortedbit/virtual-ocpp`, make sure `docke
 npm run docker:publish
 ```
 
-This builds and pushes both `sortedbit/virtual-ocpp:latest` and `sortedbit/virtual-ocpp:<package-version>`.
+This uses Docker Buildx to build and push a multi-platform image for `linux/amd64` and `linux/arm64`.
+It publishes both `sortedbit/virtual-ocpp:latest` and `sortedbit/virtual-ocpp:<package-version>` as multi-architecture manifest tags.
+On Apple hardware, this is the publish command to use for Linux amd64 servers.
+
+For a local amd64-only test image on Apple hardware, run:
+
+```sh
+npm run docker:build:amd64
+```
 
 ## Docker Compose
 

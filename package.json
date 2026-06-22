@@ -18,8 +18,9 @@
     "lint": "npm run lint --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=@virtual-ocpp/server",
     "docker:build": "docker build -t sortedbit/virtual-ocpp:latest -t sortedbit/virtual-ocpp:$npm_package_version .",
-    "docker:push": "docker push sortedbit/virtual-ocpp:latest && docker push sortedbit/virtual-ocpp:$npm_package_version",
-    "docker:publish": "npm run docker:build && npm run docker:push"
+    "docker:build:amd64": "docker buildx build --platform linux/amd64 -t sortedbit/virtual-ocpp:$npm_package_version-amd64 --load .",
+    "docker:push": "npm run docker:publish",
+    "docker:publish": "docker buildx build --platform linux/amd64,linux/arm64 -t sortedbit/virtual-ocpp:latest -t sortedbit/virtual-ocpp:$npm_package_version --push ."
   },
   "engines": {
     "node": ">=22.0.0"
