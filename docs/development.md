@@ -54,7 +54,7 @@ The Settings page is the operator entry point for onboarding state:
 
 Onboarding state is stored in SQLite. When neither `completedAt` nor `skippedAt` is set, the frontend automatically opens the onboarding wizard after admin login.
 
-The first-run onboarding flow can:
+The first-run onboarding flow is presented as a multi-step wizard. It can:
 
 - wait for the next newly registered charger
 - create or select a tag

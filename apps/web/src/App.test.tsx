@@ -1495,9 +1495,11 @@ describe("App", () => {
     fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
 
     expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
+    fireEvent.click(within(wizard).getByRole("button", { name: "Next" }));
     fireEvent.click(within(wizard).getByRole("button", { name: "Create" }));
     fireEvent.change(within(wizard).getByLabelText("Tag ID"), { target: { value: "4227105" } });
     fireEvent.change(within(wizard).getByLabelText("Label"), { target: { value: "Main tag" } });
+    fireEvent.click(within(wizard).getByRole("button", { name: "Next" }));
     fireEvent.click(within(wizard).getByLabelText("Create a proxy target during onboarding"));
     fireEvent.change(within(wizard).getByLabelText("Name"), { target: { value: "Tap Electric" } });
     fireEvent.change(within(wizard).getByLabelText("URL"), { target: { value: "wss://proxy.example/ocpp" } });
