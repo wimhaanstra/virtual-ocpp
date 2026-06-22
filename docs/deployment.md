@@ -38,10 +38,11 @@ Copy the example environment file, replace the placeholder secrets, and start th
 
 ```sh
 cp .env.example .env
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-`docker-compose.yml` reads supported settings from `.env`, keeps the container internals fixed, and publishes the app on `http://localhost:8797`.
+`docker-compose.yml` reads supported settings from `.env`, uses `sortedbit/virtual-ocpp:latest` by default, keeps the container internals fixed, and publishes the app on `http://localhost:8797`.
 The container also listens on port `8797`, so Compose maps `8797:8797`.
 
 Inside the image, SQLite is stored at `/data/virtual-ocpp.sqlite` and the built frontend is served from `/app/apps/web/dist`.
