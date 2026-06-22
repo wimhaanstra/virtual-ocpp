@@ -5,7 +5,7 @@
 Build the production image from the repository root:
 
 ```sh
-docker build -t virtual-ocpp:local .
+npm run docker:build
 ```
 
 Run it with a persistent SQLite volume:
@@ -18,11 +18,19 @@ docker run --rm \
   -e SESSION_SECRET="$SESSION_SECRET" \
   -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   -e OCPP_PUBLIC_URL=ws://localhost:8797/ocpp/:chargerId \
-  virtual-ocpp:local
+  sortedbit/virtual-ocpp:latest
 ```
 
 The container serves the API, OCPP websocket endpoint, and built frontend from one Fastify process on port `8797`.
 Set `SESSION_SECRET` and `ADMIN_PASSWORD` to real values before starting the container. Production startup rejects the placeholders from `.env.example`.
+
+To publish the image to Docker Hub as `sortedbit/virtual-ocpp`, make sure `docker login` has an active Docker Hub session and run:
+
+```sh
+npm run docker:publish
+```
+
+This builds and pushes both `sortedbit/virtual-ocpp:latest` and `sortedbit/virtual-ocpp:<package-version>`.
 
 ## Docker Compose
 

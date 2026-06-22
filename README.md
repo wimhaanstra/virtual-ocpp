@@ -64,14 +64,14 @@ Protected frontend pages use client-side routes so refresh and browser back/forw
 The production Docker image serves the API, OCPP websocket endpoint, and built frontend from one Fastify process:
 
 ```sh
-docker build -t virtual-ocpp:local .
+npm run docker:build
 docker run --rm -p 8797:8797 -v virtual-ocpp-data:/data \
   -e SESSION_SECRET=replace-with-at-least-32-random-characters \
   -e ADMIN_PASSWORD=replace-me-with-at-least-8-characters \
-  virtual-ocpp:local
+  sortedbit/virtual-ocpp:latest
 ```
 
-See `docs/deployment.md` for Docker Compose, reverse proxy, TLS, and smoke-test notes.
+Use `npm run docker:publish` to push `sortedbit/virtual-ocpp:latest` and the current package-version tag to Docker Hub. See `docs/deployment.md` for Docker Compose, reverse proxy, TLS, and smoke-test notes.
 
 ## Current Endpoints
 
