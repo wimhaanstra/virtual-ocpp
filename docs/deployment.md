@@ -33,8 +33,11 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-`docker-compose.yml` reads values from `.env`, passes `.env` into the container, and mounts `/data` as a named volume.
-Inside the image, the SQLite database defaults to `/data/virtual-ocpp.sqlite` through `DOCKER_SQLITE_PATH`.
+`docker-compose.yml` reads supported settings from `.env`, keeps the container internals fixed, and publishes the app on `http://localhost:8797`.
+The container listens on port `3000`, but Compose maps host port `8797` to avoid common local development port conflicts.
+
+Inside the image, SQLite is stored at `/data/virtual-ocpp.sqlite` and the built frontend is served from `/app/apps/web/dist`.
+Override SQLite storage by changing the volume mount, for example by replacing the named volume with a bind mount to `/data`.
 
 ## Required Environment
 
@@ -72,10 +75,19 @@ curl http://localhost:3000/ready
 
 Open `http://localhost:3000` and sign in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
 
+For the Compose stack, use:
+
+```sh
+curl http://localhost:8797/health
+curl http://localhost:8797/ready
+```
+
+Open `http://localhost:8797` and sign in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
+
 For an end-to-end local OCPP smoke test from the repository checkout, run:
 
 ```sh
-ADMIN_PASSWORD="$ADMIN_PASSWORD" npm run smoke:simulator -- --url ws://localhost:3000/ocpp
+ADMIN_PASSWORD="$ADMIN_PASSWORD" npm run smoke:simulator -- --url ws://localhost:8797/ocpp
 ```
 
 The smoke command connects charger `SMOKE-001`, creates and grants tag `SMOKE-TAG-001`, starts a short charging session, sends meter values, and exits after `StopTransaction`.

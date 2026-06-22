@@ -68,6 +68,17 @@ describe('loadConfig', () => {
     expect(config.meterGapThresholdWh).toBe(2500);
   });
 
+  it('treats blank optional OCPP values as unset', () => {
+    const config = loadConfig({
+      ...baseEnv,
+      OCPP_BASIC_AUTH_PASSWORD: '',
+      OCPP_PUBLIC_URL: ''
+    });
+
+    expect(config.ocppBasicAuthPassword).toBeUndefined();
+    expect(config.ocppPublicUrl).toBeUndefined();
+  });
+
   it('rejects placeholder production secrets', () => {
     expect(() =>
       loadConfig({

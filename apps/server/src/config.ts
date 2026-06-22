@@ -11,12 +11,16 @@ const ConfigSchema = z.object({
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
   ADMIN_USERNAME: z.string().min(1).default('admin'),
   ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD must be at least 8 characters'),
-  OCPP_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
-  OCPP_PUBLIC_URL: z.string().min(1).optional(),
+  OCPP_BASIC_AUTH_PASSWORD: optionalNonEmptyString(),
+  OCPP_PUBLIC_URL: optionalNonEmptyString(),
   COMMUNICATION_LOG_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
   CHARGER_SILENT_AFTER_SECONDS: z.coerce.number().int().positive().default(300),
   METER_GAP_THRESHOLD_WH: z.coerce.number().int().nonnegative().default(1000)
 });
+
+function optionalNonEmptyString() {
+  return z.preprocess((value) => (value === '' ? undefined : value), z.string().min(1).optional());
+}
 
 export type AppConfig = {
   nodeEnv: 'development' | 'test' | 'production';
