@@ -22,18 +22,19 @@ docker run --rm \
 ```
 
 The container serves the API, OCPP websocket endpoint, and built frontend from one Fastify process on port `3000`.
-Set `SESSION_SECRET` and `ADMIN_PASSWORD` to real values before starting the container. Production startup rejects the placeholders from `.env.example` and `docker-compose.example.yml`.
+Set `SESSION_SECRET` and `ADMIN_PASSWORD` to real values before starting the container. Production startup rejects the placeholders from `.env.example`.
 
 ## Docker Compose
 
-The checked-in `docker-compose.example.yml` uses the same container image and mounts `/data` as a named volume:
+Copy the example environment file, replace the placeholder secrets, and start the checked-in compose stack:
 
 ```sh
-docker compose -f docker-compose.example.yml up -d --build
+cp .env.example .env
+docker compose up -d --build
 ```
 
-Inside the image, the SQLite database defaults to `/data/virtual-ocpp.sqlite`.
-Replace the example `SESSION_SECRET` and `ADMIN_PASSWORD` values before starting compose.
+`docker-compose.yml` reads values from `.env`, passes `.env` into the container, and mounts `/data` as a named volume.
+Inside the image, the SQLite database defaults to `/data/virtual-ocpp.sqlite` through `DOCKER_SQLITE_PATH`.
 
 ## Required Environment
 
