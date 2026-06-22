@@ -41,6 +41,21 @@ describe('loadConfig', () => {
     ).toThrow(/SESSION_SECRET/);
   });
 
+  it('requires a non-empty admin password without enforcing length', () => {
+    const config = loadConfig({
+      ...baseEnv,
+      ADMIN_PASSWORD: 'x'
+    });
+
+    expect(config.adminPassword).toBe('x');
+    expect(() =>
+      loadConfig({
+        ...baseEnv,
+        ADMIN_PASSWORD: ''
+      })
+    ).toThrow(/ADMIN_PASSWORD/);
+  });
+
   it('parses the configured communication log retention hours', () => {
     const config = loadConfig({
       ...baseEnv,

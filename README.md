@@ -37,7 +37,7 @@ The server automatically loads `.env` from the current working directory or near
 | `SQLITE_PATH` | No | `./data/virtual-ocpp.sqlite` | SQLite database file path. |
 | `SESSION_SECRET` | Yes | None | At least 32 characters; signs admin session cookies. |
 | `ADMIN_USERNAME` | No | `admin` | Local admin username. |
-| `ADMIN_PASSWORD` | Yes | None | Local admin password; at least 8 characters. |
+| `ADMIN_PASSWORD` | Yes | None | Local admin password; must not be empty. |
 | `OCPP_BASIC_AUTH_PASSWORD` | No | None | Optional charger Basic Auth password. When set, the charger Basic Auth username must match the charger id. |
 | `OCPP_PUBLIC_URL` | No | `ws://localhost:<PORT>/ocpp/:chargerId` | Optional charger WebSocket URL template shown on the dashboard; set this for TLS/reverse-proxy deployments. |
 | `COMMUNICATION_LOG_RETENTION_HOURS` | No | `24` | Number of hours to keep full redacted communication journal rows before automatic purge. |
@@ -67,7 +67,7 @@ The production Docker image serves the API, OCPP websocket endpoint, and built f
 npm run docker:build
 docker run --rm -p 8797:8797 -v virtual-ocpp-data:/data \
   -e SESSION_SECRET=replace-with-at-least-32-random-characters \
-  -e ADMIN_PASSWORD=replace-me-with-at-least-8-characters \
+  -e ADMIN_PASSWORD=replace-me \
   sortedbit/virtual-ocpp:latest
 ```
 

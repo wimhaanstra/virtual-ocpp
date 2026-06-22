@@ -59,7 +59,7 @@ Override SQLite storage by changing the volume mount, for example by replacing t
 ## Required Environment
 
 - `SESSION_SECRET`: at least 32 characters; signs the admin session cookie.
-- `ADMIN_PASSWORD`: at least 8 characters; password for the local admin user.
+- `ADMIN_PASSWORD`: must not be empty; password for the local admin user.
 
 Common optional values:
 

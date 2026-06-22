@@ -10,7 +10,7 @@ const ConfigSchema = z.object({
   DB_PATH: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
   ADMIN_USERNAME: z.string().min(1).default('admin'),
-  ADMIN_PASSWORD: z.string().min(8, 'ADMIN_PASSWORD must be at least 8 characters'),
+  ADMIN_PASSWORD: z.string().min(1, 'ADMIN_PASSWORD must not be empty'),
   OCPP_BASIC_AUTH_PASSWORD: optionalNonEmptyString(),
   OCPP_PUBLIC_URL: optionalNonEmptyString(),
   COMMUNICATION_LOG_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
