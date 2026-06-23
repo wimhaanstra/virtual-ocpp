@@ -45,6 +45,7 @@ const mobileMoreNavItems: Array<{ view: ActiveView; label: string; icon: LucideI
 
 type AppChromeProps = {
   activeView: ActiveView;
+  appVersion: string | null;
   busy: boolean;
   children: ReactNode;
   message: string;
@@ -59,6 +60,7 @@ type AppChromeProps = {
 
 export function AppChrome({
   activeView,
+  appVersion,
   busy,
   children,
   message,
@@ -175,6 +177,10 @@ export function AppChrome({
               <span className="sidebar-label">Sign out</span>
             </Button>
           </div>
+          <p className="app-version" title={appVersion ? `Virtual OCPP ${appVersion}` : "Version unavailable"}>
+            <span className="sidebar-label">Version </span>
+            <span>{appVersion ?? "unknown"}</span>
+          </p>
         </footer>
       </aside>
 

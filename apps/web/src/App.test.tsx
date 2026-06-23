@@ -74,7 +74,8 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
         ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
         ocppProtocol: "ocpp1.6",
         ocppBasicAuthRequired: false,
-        ocppBasicAuthUsername: null
+        ocppBasicAuthUsername: null,
+        appVersion: "0.1.0-20260623"
       }),
       { status: 200 }
     );
@@ -273,7 +274,8 @@ describe("App", () => {
             ocppWebSocketUrl: "ws://localhost:8797/ocpp/:chargerId",
             ocppProtocol: "ocpp1.6",
             ocppBasicAuthRequired: true,
-            ocppBasicAuthUsername: "charger id"
+            ocppBasicAuthUsername: "charger id",
+            appVersion: "0.1.0-20260623"
           }),
           { status: 200 }
         );
@@ -419,6 +421,7 @@ describe("App", () => {
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(sidebar.getByText("0.1.0-20260623")).toBeInTheDocument();
     expect(screen.queryByText("Charger context")).not.toBeInTheDocument();
     expect(screen.queryByText("Charger-scoped")).not.toBeInTheDocument();
     expect(screen.queryByText("Global / admin")).not.toBeInTheDocument();

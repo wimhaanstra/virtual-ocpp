@@ -1,6 +1,6 @@
 {
   "name": "virtual-ocpp",
-  "version": "0.1.0",
+  "version": "0.1.0-20260623",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -17,10 +17,11 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=@virtual-ocpp/server",
-    "docker:build": "docker build -t sortedbit/virtual-ocpp:latest -t sortedbit/virtual-ocpp:$npm_package_version .",
-    "docker:build:amd64": "docker buildx build --platform linux/amd64 -t sortedbit/virtual-ocpp:$npm_package_version-amd64 --load .",
+    "release:version": "node scripts/set-release-version.mjs",
+    "docker:build": "npm run release:version && node scripts/docker-image.mjs build",
+    "docker:build:amd64": "npm run release:version && node scripts/docker-image.mjs build:amd64",
     "docker:push": "npm run docker:publish",
-    "docker:publish": "docker buildx build --platform linux/amd64,linux/arm64 -t sortedbit/virtual-ocpp:latest -t sortedbit/virtual-ocpp:$npm_package_version --push ."
+    "docker:publish": "npm run release:version && node scripts/docker-image.mjs publish"
   },
   "engines": {
     "node": ">=22.0.0"

@@ -31,8 +31,11 @@ npm run docker:publish
 ```
 
 This uses Docker Buildx to build and push a multi-platform image for `linux/amd64` and `linux/arm64`.
+Before building, the publish script updates the root and web `package.json` versions to a date-stamped semver prerelease such as `0.1.0-20260623`.
 It publishes both `sortedbit/virtual-ocpp:latest` and `sortedbit/virtual-ocpp:<package-version>` as multi-architecture manifest tags.
 On Apple hardware, this is the publish command to use for Linux amd64 servers.
+
+The admin interface shows the same package version in the sidebar after login, so a running container can be matched to the Docker image tag.
 
 For a local amd64-only test image on Apple hardware, run:
 

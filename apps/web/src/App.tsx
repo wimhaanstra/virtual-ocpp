@@ -1752,6 +1752,7 @@ export default function App() {
   return (
     <AppChrome
       activeView={activeView}
+      appVersion={dashboardConfig?.appVersion ?? null}
       busy={busy}
       message={message}
       sidebarCollapsed={sidebarCollapsed}

@@ -603,6 +603,17 @@ a {
   height: 16px;
 }
 
+.app-version {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-shell-collapsed .sidebar {
   padding-inline: 10px;
 }
@@ -611,7 +622,8 @@ a {
 .app-shell-collapsed .sidebar-nav button,
 .app-shell-collapsed .sidebar-context,
 .app-shell-collapsed .sidebar-add-button,
-.app-shell-collapsed .sidebar-footer-button {
+.app-shell-collapsed .sidebar-footer-button,
+.app-shell-collapsed .app-version {
   justify-content: center;
   padding-inline: 0;
 }

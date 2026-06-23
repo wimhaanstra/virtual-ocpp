@@ -381,6 +381,7 @@ export type DashboardConfig = {
   ocppProtocol: string;
   ocppBasicAuthRequired: boolean;
   ocppBasicAuthUsername: string | null;
+  appVersion: string;
 };
 
 export type OnboardingSettings = {
