@@ -1,5 +1,5 @@
 import { Send, X } from "lucide-react";
-import type { ChargingSession, ProxyStopRecoveryPreview, ProxyTarget } from "../types";
+import type { ChargingSession, ProxyStopRecoveryPreview, ProxyStopRecoverySuggestion, ProxyTarget } from "../types";
 import { formatDateTime, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
 
@@ -11,6 +11,7 @@ type ProxyStopRecoveryModalProps = {
   proxyTargetId: string;
   proxyTargets: ProxyTarget[];
   session: ChargingSession | null;
+  suggestion: ProxyStopRecoverySuggestion | null;
   onCancel: () => void;
   onExternalTransactionIdChange: (value: string) => void;
   onPreview: () => void;
@@ -26,6 +27,7 @@ export function ProxyStopRecoveryModal({
   proxyTargetId,
   proxyTargets,
   session,
+  suggestion,
   onCancel,
   onExternalTransactionIdChange,
   onPreview,
@@ -68,6 +70,14 @@ export function ProxyStopRecoveryModal({
           <label className="field">
             <span>Upstream transaction ID</span>
             <input inputMode="numeric" value={externalTransactionId} onChange={(event) => onExternalTransactionIdChange(event.target.value)} placeholder="10084" disabled={busy} />
+            {suggestion?.predictedExternalTransactionId ? (
+              <small>
+                Predicted {suggestion.predictedExternalTransactionId} from last known upstream transaction{" "}
+                {suggestion.lastKnownExternalTransactionId ?? "unknown"}.
+              </small>
+            ) : (
+              <small>No prediction available for this proxy target yet.</small>
+            )}
           </label>
         </div>
 

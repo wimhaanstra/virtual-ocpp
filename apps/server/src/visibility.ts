@@ -28,6 +28,9 @@ const ProxyStopRecoverySchema = z.object({
   proxyTargetId: z.string().trim().min(1),
   externalTransactionId: z.coerce.number().int().positive()
 });
+const ProxyStopRecoverySuggestionSchema = z.object({
+  proxyTargetId: z.string().trim().min(1)
+});
 
 export function registerVisibilityRoutes(
   app: FastifyInstance,
@@ -328,6 +331,27 @@ export function registerVisibilityRoutes(
     }
 
     return preview;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/proxy-stop-recovery-suggestion', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = ProxyStopRecoverySuggestionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_proxy_stop_recovery_suggestion', details: parsed.error.flatten() });
+    }
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    const suggestion = buildProxyStopRecoverySuggestion(db, session, parsed.data.proxyTargetId);
+    if (!suggestion) {
+      return reply.code(404).send({ error: 'proxy_target_not_found' });
+    }
+
+    return suggestion;
   });
 
   app.post<{ Params: { id: string } }>('/api/sessions/:id/proxy-stop-recovery', async (request, reply) => {
@@ -830,6 +854,41 @@ function buildProxyStopRecoveryPreview(
         }
       : null,
     warnings
+  };
+}
+
+function buildProxyStopRecoverySuggestion(
+  db: Database,
+  session: typeof chargingSessions.$inferSelect,
+  proxyTargetId: string
+) {
+  const target = db
+    .select()
+    .from(proxyTargets)
+    .where(and(eq(proxyTargets.id, proxyTargetId), eq(proxyTargets.chargerId, session.chargerId)))
+    .limit(1)
+    .get();
+  if (!target) return null;
+
+  const latestMapping = db
+    .select()
+    .from(proxySessionMappings)
+    .where(and(eq(proxySessionMappings.chargerId, session.chargerId), eq(proxySessionMappings.proxyTargetId, proxyTargetId)))
+    .orderBy(desc(proxySessionMappings.externalTransactionId))
+    .limit(1)
+    .get();
+
+  return {
+    session: toPublicChargingSession(session),
+    proxyTarget: {
+      id: target.id,
+      name: target.name,
+      enabled: target.enabled
+    },
+    predictedExternalTransactionId: latestMapping ? latestMapping.externalTransactionId + 1 : null,
+    lastKnownExternalTransactionId: latestMapping?.externalTransactionId ?? null,
+    lastKnownLocalTransactionId: latestMapping?.localTransactionId ?? null,
+    source: latestMapping ? 'last-proxy-mapping' : 'none'
   };
 }
 

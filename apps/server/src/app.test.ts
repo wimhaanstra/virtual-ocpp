@@ -1294,6 +1294,37 @@ describe('app', () => {
       createdAt: new Date('2026-06-22T10:00:00.000Z'),
       updatedAt: new Date('2026-06-22T10:00:00.000Z')
     }).run();
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'previous-proxy-session',
+      chargerId: 'SMART-EVSE-ORPHANED',
+      proxyTargetId: 'proxy-orphaned-stop',
+      localTransactionId: 899,
+      externalTransactionId: 10083,
+      createdAt: new Date('2026-06-22T09:00:00.000Z'),
+      stoppedAt: new Date('2026-06-22T10:00:00.000Z')
+    }).run();
+
+    const suggestionResponse = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-orphaned-proxy/proxy-stop-recovery-suggestion',
+      headers: { cookie },
+      payload: {
+        proxyTargetId: 'proxy-orphaned-stop'
+      }
+    });
+
+    expect(suggestionResponse.statusCode).toBe(200);
+    expect(suggestionResponse.json()).toMatchObject({
+      predictedExternalTransactionId: 10084,
+      lastKnownExternalTransactionId: 10083,
+      lastKnownLocalTransactionId: 899,
+      source: 'last-proxy-mapping',
+      proxyTarget: {
+        id: 'proxy-orphaned-stop',
+        name: 'TapElectric',
+        enabled: true
+      }
+    });
 
     const previewResponse = await app.inject({
       method: 'POST',

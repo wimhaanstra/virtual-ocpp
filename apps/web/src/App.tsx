@@ -48,6 +48,7 @@ import type {
   OnboardingSettingsStatus,
   ProxyHealthResponse,
   ProxyStopRecoveryPreview,
+  ProxyStopRecoverySuggestion,
   ProxyTagMapping,
   ProxyTarget,
   ProxyTargetFormState,
@@ -122,6 +123,7 @@ export default function App() {
   const [proxyStopRecoveryTargetId, setProxyStopRecoveryTargetId] = useState("");
   const [proxyStopRecoveryExternalId, setProxyStopRecoveryExternalId] = useState("");
   const [proxyStopRecoveryPreview, setProxyStopRecoveryPreview] = useState<ProxyStopRecoveryPreview | null>(null);
+  const [proxyStopRecoverySuggestion, setProxyStopRecoverySuggestion] = useState<ProxyStopRecoverySuggestion | null>(null);
   const [proxyStopRecoveryLoading, setProxyStopRecoveryLoading] = useState(false);
   const [meterGapSubmitPreview, setMeterGapSubmitPreview] = useState<MeterGapRecoveryPreview | null>(null);
   const [meterGapSubmitStartAt, setMeterGapSubmitStartAt] = useState("");
@@ -1121,6 +1123,10 @@ export default function App() {
     setProxyStopRecoveryTargetId(firstEnabledTarget?.id ?? "");
     setProxyStopRecoveryExternalId("");
     setProxyStopRecoveryPreview(null);
+    setProxyStopRecoverySuggestion(null);
+    if (firstEnabledTarget) {
+      void loadProxyStopRecoverySuggestion(session, firstEnabledTarget.id);
+    }
   }
 
   function cancelProxyStopRecovery() {
@@ -1128,7 +1134,32 @@ export default function App() {
     setProxyStopRecoveryTargetId("");
     setProxyStopRecoveryExternalId("");
     setProxyStopRecoveryPreview(null);
+    setProxyStopRecoverySuggestion(null);
     setProxyStopRecoveryLoading(false);
+  }
+
+  async function loadProxyStopRecoverySuggestion(session: ChargingSession, proxyTargetId: string) {
+    if (!proxyTargetId) return;
+
+    setProxyStopRecoveryLoading(true);
+    try {
+      const response = await fetch(`/api/sessions/${session.id}/proxy-stop-recovery-suggestion`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proxyTargetId })
+      });
+
+      if (handleUnauthorized(response) || !response.ok) return;
+
+      const suggestion = (await response.json()) as ProxyStopRecoverySuggestion;
+      setProxyStopRecoverySuggestion(suggestion);
+      if (typeof suggestion.predictedExternalTransactionId === "number") {
+        setProxyStopRecoveryExternalId(String(suggestion.predictedExternalTransactionId));
+      }
+    } finally {
+      setProxyStopRecoveryLoading(false);
+    }
   }
 
   async function previewProxyStopRecovery() {
@@ -2263,6 +2294,7 @@ export default function App() {
         proxyTargetId={proxyStopRecoveryTargetId}
         proxyTargets={proxyTargets}
         session={proxyStopRecoverySession}
+        suggestion={proxyStopRecoverySuggestion}
         onCancel={cancelProxyStopRecovery}
         onExternalTransactionIdChange={(value) => {
           setProxyStopRecoveryExternalId(value);
@@ -2271,7 +2303,12 @@ export default function App() {
         onPreview={() => void previewProxyStopRecovery()}
         onProxyTargetChange={(proxyTargetId) => {
           setProxyStopRecoveryTargetId(proxyTargetId);
+          setProxyStopRecoveryExternalId("");
           setProxyStopRecoveryPreview(null);
+          setProxyStopRecoverySuggestion(null);
+          if (proxyStopRecoverySession) {
+            void loadProxyStopRecoverySuggestion(proxyStopRecoverySession, proxyTargetId);
+          }
         }}
         onSubmit={() => void submitProxyStopRecovery()}
       />

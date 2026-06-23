@@ -99,6 +99,7 @@ Use `npm run docker:publish` to push multi-platform `linux/amd64` and `linux/arm
 - `GET /api/sessions` lists recent charging sessions. Requires admin session.
 - `GET /api/active-session-audit?chargerId=...` lists active sessions that may have missed `StopTransaction`, with latest meter/status context and active proxy mappings. Requires admin session.
 - `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` to the connected charger for an active session. Requires admin session.
+- `POST /api/sessions/:id/proxy-stop-recovery-suggestion` predicts the next upstream transaction id for one proxy target from the latest stored proxy mapping. Requires admin session.
 - `POST /api/sessions/:id/proxy-stop-recovery-preview` previews a manual `StopTransaction` for one proxy target using an operator-supplied upstream transaction id. Requires admin session.
 - `POST /api/sessions/:id/proxy-stop-recovery` sends that manual proxy `StopTransaction` for an already-stopped local session and records the recovered upstream mapping. Requires admin session.
 - `POST /api/sessions/:id/close` locally closes a lingering active session record without sending an OCPP command. Requires admin session.
@@ -209,7 +210,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Review missing-stop audit warnings for active sessions where the charger appears available/disconnected or an accepted remote stop has not produced `StopTransaction`.
 - Request a real OCPP remote stop for active sessions when the charger is connected.
 - Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
-- Recover an orphaned upstream proxy session by previewing and sending a manual proxy `StopTransaction` for an already-stopped local session when the upstream transaction id is known.
+- Recover an orphaned upstream proxy session by previewing and sending a manual proxy `StopTransaction` for an already-stopped local session. The recovery modal shows a predicted upstream transaction id when it can infer one from the latest stored mapping for that proxy target.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.
 
 Tag access and proxy target changes affect OCPP behavior immediately because the server reads current SQLite state during authorization and proxied calls. Proxy target edits and deletes are rejected while that charger/target has an active mirrored transaction mapping, so in-flight upstream sessions are not silently orphaned.

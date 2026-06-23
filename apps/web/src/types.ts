@@ -326,6 +326,19 @@ export type ProxyStopRecoveryPreview = {
   };
 };
 
+export type ProxyStopRecoverySuggestion = {
+  session: ChargingSession;
+  proxyTarget: {
+    id: string;
+    name: string;
+    enabled: boolean;
+  };
+  predictedExternalTransactionId: number | null;
+  lastKnownExternalTransactionId: number | null;
+  lastKnownLocalTransactionId: number | null;
+  source: "last-proxy-mapping" | "none";
+};
+
 export type LogEntry = {
   id: string;
   level: string;
