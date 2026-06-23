@@ -128,7 +128,7 @@ Server-initiated command:
 
 Authorization uses the SQLite `tags` allowlist and `tag_charger_access`. Known enabled tags are still rejected until they have explicit enabled access for the charger that is authorizing. Unknown tags, disabled tags, or tags without charger access are rejected. Operators can manage global tags and grant/revoke selected-charger access from the protected admin UI.
 
-Proxy targets are scoped directly to one charger. A charger with no enabled proxy targets does not mirror traffic. `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction` are forwarded to enabled proxy targets for the active charger.
+Proxy targets are scoped directly to one charger. A charger can have at most three enabled proxy targets; disabled targets can still be saved for later. A charger with no enabled proxy targets does not mirror traffic. `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction` are forwarded to enabled proxy targets for the active charger in deterministic oldest-first order.
 
 Virtual OCPP keeps one upstream OCPP websocket connection per charger and proxy target. The connection uses the target `stationId` as the upstream OCPP identity when configured, otherwise it uses the local charger id. When a charger connects, enabled proxy targets for that charger are warmed immediately instead of waiting for the next authorization or transaction call. If a proxy call or connection fails, the connection is closed, a short exponential reconnect backoff is recorded in memory, and the service keeps retrying while the local charger remains connected. Runtime proxy state is available through the dashboard and `GET /api/proxy-health`; proxy connect, reconnect, close, and outage events are also written to logs without exposing passwords.
 
@@ -199,7 +199,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Choose whether the tag is enabled for charging.
 - Edit, toggle, or delete tags.
 - Grant or revoke a global tag's access to the selected charger.
-- Add unlimited proxy targets per charger with name, URL, optional credentials, station id, mode, outage policy, and enabled state.
+- Add proxy targets per charger with name, URL, optional credentials, station id, mode, outage policy, and enabled state. Up to three targets can be enabled for one charger at the same time.
 - Enter the proxy target URL as the upstream base websocket URL. Virtual OCPP appends the configured station id, or the local charger id when station id is blank, as the OCPP websocket identity path. For example, URL `ws://10.210.1.1:8887` plus station id `8889` connects upstream as `ws://10.210.1.1:8887/8889`.
 - Edit, toggle, or delete proxy targets.
 - Edit proxy credentials through masked inputs; unchanged masks preserve stored values, cleared inputs remove stored values.

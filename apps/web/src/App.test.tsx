@@ -2616,7 +2616,7 @@ describe("App", () => {
     await chooseChargerFromContextSwitcher(selectedChargerId);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(screen.getByText("Targets are listed for the selected charger context.")).toBeInTheDocument();
+    expect(screen.getByText(/Targets are listed for the selected charger context\./)).toHaveTextContent("0/3 enabled");
     expect(screen.getByText("No proxy targets configured yet.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add target" }));
@@ -2652,6 +2652,86 @@ describe("App", () => {
         }
       ]
     });
+  });
+
+  it("shows and enforces the enabled proxy target limit in the proxy target UI", async () => {
+    const selectedChargerId = "SMART-EVSE-1";
+    const proxyTargets: TestProxyTarget[] = [1, 2, 3, 4].map((index) => ({
+      id: `proxy-${index}`,
+      name: `Proxy ${index}`,
+      url: `wss://proxy-${index}.example/ocpp`,
+      stationId: null,
+      enabled: index < 4,
+      mode: "monitor-only" as const,
+      outagePolicy: "fail-open" as const,
+      allowRecoverySubmissions: false,
+      hasUsername: false,
+      hasBasicAuthPassword: false,
+      tagMappings: [],
+      createdAt: "2026-06-19T10:30:00.000Z",
+      updatedAt: "2026-06-19T10:30:00.000Z"
+    }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+      if (path === "/api/chargers" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "charger-row-1",
+              chargerId: selectedChargerId,
+              label: "Bay 1",
+              active: true,
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              lastSeenAt: "2026-06-19T10:00:00.000Z"
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+      if (path === "/api/proxy-targets" && method === "GET") {
+        return new Response(JSON.stringify(parsedUrl.searchParams.get("chargerId") === selectedChargerId ? proxyTargets : []), { status: 200 });
+      }
+      if (path === "/api/tags" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (path === "/api/sessions" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (path === "/api/logs" && method === "GET") {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (path === "/api/communication-journal" && method === "GET") {
+        return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
+    await chooseChargerFromContextSwitcher(selectedChargerId);
+
+    expect(await screen.findByText(/Targets are listed for the selected charger context\./)).toHaveTextContent("3/3 enabled");
+    expect(screen.getByRole("button", { name: "Enable proxy target" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add target" }));
+    const targetEditor = within(screen.getByRole("heading", { name: "Add target" }).closest("section") as HTMLElement);
+    expect(targetEditor.getByLabelText("Enabled")).not.toBeChecked();
+    expect(targetEditor.getByLabelText("Enabled")).toBeDisabled();
   });
 
   it("shows sessions and communication pages after authentication", async () => {

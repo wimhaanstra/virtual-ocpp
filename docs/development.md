@@ -75,12 +75,12 @@ Tags are global records in SQLite, but each charger needs an explicit grant befo
 - unknown tag: rejected
 - enabled tag without charger access: rejected
 
-Proxy targets are charger-scoped and have no hard-coded count limit. A target can be `monitor-only` or `deny-capable`, and can use `fail-open` or `fail-closed` outage handling.
+Proxy targets are charger-scoped. Each charger can have at most three enabled proxy targets, while disabled targets can remain configured for later. A target can be `monitor-only` or `deny-capable`, and can use `fail-open` or `fail-closed` outage handling.
 
 Current proxy behavior:
 
 - deny-capable targets are consulted only after local tag access is accepted
-- mirrored calls go to `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction`
+- mirrored calls go to `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction` in deterministic oldest-first target order
 - outbound tag mappings only affect the mirrored `Authorize` and `StartTransaction` payloads
 - one outbound websocket connection is kept per charger/target pair and is warmed when a charger connects
 - connection failures trigger in-memory reconnect backoff and are reflected in proxy health

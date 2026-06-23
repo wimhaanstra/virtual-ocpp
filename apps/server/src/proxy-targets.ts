@@ -11,6 +11,7 @@ import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 
 const ModeSchema = z.enum(['monitor-only', 'deny-capable']);
 const OutagePolicySchema = z.enum(['fail-open', 'fail-closed']);
+const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 3;
 const TagMappingsSchema = z
   .array(
     z.object({
@@ -112,6 +113,12 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     if (!charger) {
       return reply.code(404).send({ error: 'charger_not_found' });
     }
+    if (body.data.enabled && countEnabledProxyTargets(db, body.data.chargerId) >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER) {
+      return reply.code(409).send({
+        error: 'proxy_target_limit_exceeded',
+        maxEnabledTargets: MAX_ENABLED_PROXY_TARGETS_PER_CHARGER
+      });
+    }
 
     const id = randomUUID();
     const now = new Date();
@@ -176,6 +183,12 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     const hasDisruptiveUpdate = hasDisruptiveProxyTargetUpdate(existing, update);
     if (hasActiveMappings && !disablingTarget && hasDisruptiveUpdate) {
       return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
+    }
+    if (enablingTarget && countEnabledProxyTargets(db, existing.chargerId, existing.id) >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER) {
+      return reply.code(409).send({
+        error: 'proxy_target_limit_exceeded',
+        maxEnabledTargets: MAX_ENABLED_PROXY_TARGETS_PER_CHARGER
+      });
     }
 
     db.update(proxyTargets).set(update).where(eq(proxyTargets.id, request.params.id)).run();
@@ -307,6 +320,17 @@ function closeActiveProxyMappings(db: Database, chargerId: string | null, proxyT
       )
     )
     .run();
+}
+
+function countEnabledProxyTargets(db: Database, chargerId: string | null, excludingProxyTargetId?: string) {
+  if (!chargerId) return 0;
+
+  return db
+    .select({ id: proxyTargets.id })
+    .from(proxyTargets)
+    .where(and(eq(proxyTargets.chargerId, chargerId), eq(proxyTargets.enabled, true)))
+    .all()
+    .filter((target) => target.id !== excludingProxyTargetId).length;
 }
 
 function hasDisruptiveProxyTargetUpdate(existing: typeof proxyTargets.$inferSelect, update: Partial<typeof proxyTargets.$inferSelect>) {

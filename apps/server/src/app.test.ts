@@ -376,6 +376,110 @@ describe('app', () => {
     await app.close();
   });
 
+  it('enforces at most three enabled proxy targets per charger', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+    const now = new Date('2026-06-19T09:00:00.000Z');
+
+    for (const chargerId of ['CHARGER-PROXY-LIMIT', 'CHARGER-PROXY-OTHER']) {
+      tempDb.db.insert(chargers).values({
+        id: chargerId,
+        enabled: true,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        createdAt: now,
+        updatedAt: now
+      }).run();
+    }
+
+    for (let index = 1; index <= 3; index += 1) {
+      tempDb.db.insert(proxyTargets).values({
+        id: `proxy-limit-${index}`,
+        chargerId: 'CHARGER-PROXY-LIMIT',
+        name: `Proxy ${index}`,
+        url: `ws://127.0.0.1:90${index}/ocpp`,
+        stationId: `STATION-${index}`,
+        enabled: true,
+        mode: 'monitor-only',
+        outagePolicy: 'fail-open',
+        allowRecoverySubmissions: false,
+        createdAt: now,
+        updatedAt: now
+      }).run();
+    }
+
+    const blockedCreate = await app.inject({
+      method: 'POST',
+      url: '/api/proxy-targets',
+      headers: { cookie },
+      payload: {
+        chargerId: 'CHARGER-PROXY-LIMIT',
+        name: 'Fourth enabled',
+        url: 'ws://127.0.0.1:9004/ocpp',
+        enabled: true
+      }
+    });
+    expect(blockedCreate.statusCode).toBe(409);
+    expect(blockedCreate.json()).toMatchObject({ error: 'proxy_target_limit_exceeded', maxEnabledTargets: 3 });
+    expect(tempDb.db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, 'CHARGER-PROXY-LIMIT')).all()).toHaveLength(3);
+
+    const disabledCreate = await app.inject({
+      method: 'POST',
+      url: '/api/proxy-targets',
+      headers: { cookie },
+      payload: {
+        chargerId: 'CHARGER-PROXY-LIMIT',
+        name: 'Fourth disabled',
+        url: 'ws://127.0.0.1:9005/ocpp',
+        enabled: false
+      }
+    });
+    expect(disabledCreate.statusCode).toBe(201);
+    expect(disabledCreate.json()).toMatchObject({ enabled: false });
+
+    const blockedEnable = await app.inject({
+      method: 'PATCH',
+      url: `/api/proxy-targets/${disabledCreate.json().id}`,
+      headers: { cookie },
+      payload: {
+        enabled: true
+      }
+    });
+    expect(blockedEnable.statusCode).toBe(409);
+    expect(blockedEnable.json()).toMatchObject({ error: 'proxy_target_limit_exceeded', maxEnabledTargets: 3 });
+    expect(tempDb.db.select().from(proxyTargets).where(eq(proxyTargets.id, disabledCreate.json().id)).get()).toMatchObject({ enabled: false });
+
+    const enabledUpdate = await app.inject({
+      method: 'PATCH',
+      url: '/api/proxy-targets/proxy-limit-1',
+      headers: { cookie },
+      payload: {
+        name: 'Proxy 1 renamed'
+      }
+    });
+    expect(enabledUpdate.statusCode).toBe(200);
+    expect(enabledUpdate.json()).toMatchObject({ name: 'Proxy 1 renamed', enabled: true });
+
+    const otherChargerCreate = await app.inject({
+      method: 'POST',
+      url: '/api/proxy-targets',
+      headers: { cookie },
+      payload: {
+        chargerId: 'CHARGER-PROXY-OTHER',
+        name: 'Other charger proxy',
+        url: 'ws://127.0.0.1:9010/ocpp',
+        enabled: true
+      }
+    });
+    expect(otherChargerCreate.statusCode).toBe(201);
+    expect(otherChargerCreate.json()).toMatchObject({ chargerId: 'CHARGER-PROXY-OTHER', enabled: true });
+
+    await app.close();
+  });
+
   it('creates and revokes charger-specific tag access', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();

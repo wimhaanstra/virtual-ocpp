@@ -80,6 +80,7 @@ import {
 
 type ChargerWizardMode = "add-charger" | "manual-onboarding" | "first-run-onboarding";
 type OnboardingTagMode = "skip" | "existing" | "create";
+const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 3;
 type OnboardingProxyDraft = {
   enabled: boolean;
   name: string;
@@ -219,6 +220,8 @@ export default function App() {
     }),
     [proxyHealth, proxyTargetHealth]
   );
+  const enabledProxyTargetCount = proxyTargets.filter((target) => target.enabled).length;
+  const proxyTargetEnabledLimitReached = enabledProxyTargetCount >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER;
   const proxyTargetFormIdentity = proxyTargetForm.stationId.trim() || selectedChargerId;
   const proxyTargetFormConnectionUrl = buildProxyTargetConnectionUrl(proxyTargetForm.url, proxyTargetFormIdentity);
   const proxyTargetFormHasDuplicatedStationPath = proxyUrlIncludesStationId(proxyTargetForm.url, proxyTargetFormIdentity);
@@ -427,6 +430,15 @@ export default function App() {
     if (handleUnauthorized(response)) return null;
     if (!response.ok) return undefined;
     return (await response.json()) as T;
+  }
+
+  async function readErrorResponse(response: Response) {
+    try {
+      const payload = (await response.json()) as { error?: unknown };
+      return typeof payload.error === "string" ? payload.error : null;
+    } catch {
+      return null;
+    }
   }
 
   function eventAppliesToSelectedCharger(event: LiveUpdateEvent) {
@@ -1547,7 +1559,10 @@ export default function App() {
   }
 
   function startProxyTargetCreate() {
-    setProxyTargetForm(emptyProxyTargetForm());
+    setProxyTargetForm({
+      ...emptyProxyTargetForm(),
+      enabled: !proxyTargetEnabledLimitReached
+    });
     navigateToView("Proxy targets");
     setProxyTargetModalOpen(true);
   }
@@ -1672,7 +1687,8 @@ export default function App() {
       if (handleUnauthorized(response)) return;
 
       if (!response.ok) {
-        setMessage("Could not save proxy target.");
+        const error = await readErrorResponse(response);
+        setMessage(error === "proxy_target_limit_exceeded" ? `A charger can have at most ${MAX_ENABLED_PROXY_TARGETS_PER_CHARGER} enabled proxy targets.` : "Could not save proxy target.");
         return;
       }
 
@@ -1686,6 +1702,11 @@ export default function App() {
   }
 
   async function toggleProxyTarget(target: ProxyTarget) {
+    if (!target.enabled && proxyTargetEnabledLimitReached) {
+      setMessage(`A charger can have at most ${MAX_ENABLED_PROXY_TARGETS_PER_CHARGER} enabled proxy targets.`);
+      return;
+    }
+
     setBusy(true);
     try {
       const response = await fetch(`/api/proxy-targets/${target.id}`, {
@@ -1698,7 +1719,8 @@ export default function App() {
       if (handleUnauthorized(response)) return;
 
       if (!response.ok) {
-        setMessage("Could not update proxy target.");
+        const error = await readErrorResponse(response);
+        setMessage(error === "proxy_target_limit_exceeded" ? `A charger can have at most ${MAX_ENABLED_PROXY_TARGETS_PER_CHARGER} enabled proxy targets.` : "Could not update proxy target.");
         return;
       }
 
@@ -1967,7 +1989,9 @@ export default function App() {
                   <div>
                   <p className="eyebrow">Routing</p>
                   <h2>Configured targets</h2>
-                  <p className="status-copy">Targets are listed for the selected charger context.</p>
+                  <p className="status-copy">
+                    Targets are listed for the selected charger context. {enabledProxyTargetCount}/{MAX_ENABLED_PROXY_TARGETS_PER_CHARGER} enabled.
+                  </p>
                   </div>
                   <Button
                     type="button"
@@ -2031,7 +2055,7 @@ export default function App() {
                                   type="button"
                                   className="icon-button"
                                   onClick={() => void toggleProxyTarget(target)}
-                                  disabled={busy}
+                                  disabled={busy || (!target.enabled && proxyTargetEnabledLimitReached)}
                                   title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
                                   aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
                                 >
@@ -2182,6 +2206,10 @@ export default function App() {
                           <input
                             checked={proxyTargetForm.enabled}
                             onChange={(event) => setProxyTargetForm((current) => ({ ...current, enabled: event.target.checked }))}
+                            disabled={
+                              proxyTargetEnabledLimitReached &&
+                              (!isEditingProxyTarget || proxyTargets.find((target) => target.id === proxyTargetForm.id)?.enabled !== true)
+                            }
                             type="checkbox"
                           />
                           Enabled

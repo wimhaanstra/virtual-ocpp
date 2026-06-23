@@ -670,6 +670,7 @@ export class ProxyAuthorizationService {
       )
       .all();
 
+    targets.sort(compareProxyTargetsForPolicy);
     this.closeStaleConnections(chargerId, new Set(targets.map((target) => this.connectionKey(chargerId, target.id))));
     return targets;
   }
@@ -1103,6 +1104,16 @@ function getProxyHealthDetail(state: string) {
     default:
       return 'No runtime proxy activity yet.';
   }
+}
+
+function compareProxyTargetsForPolicy(left: ProxyTarget, right: ProxyTarget) {
+  const createdDiff = left.createdAt.getTime() - right.createdAt.getTime();
+  if (createdDiff !== 0) return createdDiff;
+
+  const nameDiff = left.name.localeCompare(right.name);
+  if (nameDiff !== 0) return nameDiff;
+
+  return left.id.localeCompare(right.id);
 }
 
 function parseConnectionKey(key: string) {
