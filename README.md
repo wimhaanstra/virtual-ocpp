@@ -93,7 +93,8 @@ Use `npm run docker:publish` to update the package version to a date-stamped pre
 - `GET /api/proxy-health?chargerId=...` returns runtime upstream proxy socket health for a charger. Requires admin session.
 - `GET /api/dashboard-config` returns secret-free charger connection config for the dashboard. Requires admin session.
 - `GET /api/communication-journal` lists redacted charger/server/proxy OCPP communication rows with source/target filters. Requires admin session.
-- `POST /api/communication-journal/purge` deletes communication journal rows older than `COMMUNICATION_LOG_RETENTION_HOURS`. Requires admin session.
+- `GET /api/communication-journal/export` downloads the current redacted journal scope as CSV. Requires admin session.
+- `POST /api/communication-journal/purge` deletes expired communication journal rows, or rows matching an explicit filter scope when confirmed with `PURGE`. Requires admin session.
 - `GET /api/chargers` lists recent charger connections. Requires admin session.
 - `GET /api/charger-connections` is an alias for charger connection history. Requires admin session.
 - `GET /api/sessions` lists recent charging sessions. Requires admin session.
@@ -211,7 +212,7 @@ The current frontend includes global tag management, selected-charger tag access
 - Request a real OCPP remote stop for active sessions when the charger is connected.
 - Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
 - Recover an orphaned upstream proxy session by previewing and sending a manual proxy `StopTransaction` for an already-stopped local session. The recovery modal shows a predicted upstream transaction id when it can infer one from the latest stored mapping for that proxy target.
-- View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, and manually trigger retention purge.
+- View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, export filtered CSV, and manually purge expired or explicitly filtered rows.
 
 Tag access and proxy target changes affect OCPP behavior immediately because the server reads current SQLite state during authorization and proxied calls. Proxy target edits and deletes are rejected while that charger/target has an active mirrored transaction mapping, so in-flight upstream sessions are not silently orphaned.
 

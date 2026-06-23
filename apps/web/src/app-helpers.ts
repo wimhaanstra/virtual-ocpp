@@ -294,9 +294,17 @@ export function buildCommunicationSummary(item: CommunicationJournalItem) {
 }
 
 export function buildCommunicationJournalQuery(filters: CommunicationJournalFilters, chargerId: string) {
+  return buildCommunicationJournalUrl("/api/communication-journal", filters, chargerId, "200");
+}
+
+export function buildCommunicationJournalExportQuery(filters: CommunicationJournalFilters, chargerId: string) {
+  return buildCommunicationJournalUrl("/api/communication-journal/export", filters, chargerId, "5000");
+}
+
+function buildCommunicationJournalUrl(path: string, filters: CommunicationJournalFilters, chargerId: string, limit: string) {
   const params = new URLSearchParams();
 
-  params.set("limit", "200");
+  params.set("limit", limit);
 
   if (chargerId) {
     params.set("chargerId", chargerId);
@@ -310,7 +318,7 @@ export function buildCommunicationJournalQuery(filters: CommunicationJournalFilt
   }
 
   const query = params.toString();
-  return query ? `/api/communication-journal?${query}` : "/api/communication-journal";
+  return query ? `${path}?${query}` : path;
 }
 
 export function getProxyTargetUpstreamIdentity(target: ProxyTarget, chargerId: string) {

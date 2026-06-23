@@ -11,6 +11,7 @@ import { Button } from "./components/ui/button";
 import { AppChrome } from "./components/AppChrome";
 import { AuthPage } from "./components/AuthPage";
 import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
+import { CommunicationPurgeModal } from "./components/CommunicationPurgeModal";
 import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
@@ -59,6 +60,7 @@ import type {
 } from "./types";
 import {
   buildCommunicationJournalQuery,
+  buildCommunicationJournalExportQuery,
   buildProxyTargetConnectionUrl,
   buildViewUrl,
   emptyCommunicationJournalFilters,
@@ -142,6 +144,9 @@ export default function App() {
   const [communicationRetentionHours, setCommunicationRetentionHours] = useState<number | null>(null);
   const [communicationFilters, setCommunicationFilters] = useState<CommunicationJournalFilters>(() => emptyCommunicationJournalFilters());
   const [expandedCommunicationJournalId, setExpandedCommunicationJournalId] = useState<string | null>(null);
+  const [communicationPurgeOpen, setCommunicationPurgeOpen] = useState(false);
+  const [communicationPurgeScope, setCommunicationPurgeScope] = useState<"retention" | "filters">("retention");
+  const [communicationPurgeConfirmation, setCommunicationPurgeConfirmation] = useState("");
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig | null>(null);
   const [onboardingSettings, setOnboardingSettings] = useState<OnboardingSettings | null>(null);
   const [onboardingSettingsStatus, setOnboardingSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
@@ -406,6 +411,9 @@ export default function App() {
     setActiveSessionAudit(null);
     setCommunicationFilters(emptyCommunicationJournalFilters());
     setExpandedCommunicationJournalId(null);
+    setCommunicationPurgeOpen(false);
+    setCommunicationPurgeScope("retention");
+    setCommunicationPurgeConfirmation("");
     setChargerLabelTarget(null);
     setChargerLabelValue("");
     setChargerDeleteTarget(null);
@@ -1300,12 +1308,38 @@ export default function App() {
     setExpandedCommunicationJournalId(null);
   }
 
+  function exportCommunicationJournal() {
+    const href = buildCommunicationJournalExportQuery(communicationFilters, selectedChargerId);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = "communication-journal.csv";
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }
+
+  function openCommunicationPurge() {
+    setCommunicationPurgeScope("retention");
+    setCommunicationPurgeConfirmation("");
+    setCommunicationPurgeOpen(true);
+  }
+
   async function purgeCommunicationJournal() {
     setBusy(true);
     setMessage("Purging communication journal...");
     try {
+      const body =
+        communicationPurgeScope === "filters"
+          ? JSON.stringify({
+              scope: "filters",
+              confirm: communicationPurgeConfirmation.trim(),
+              filters: buildCommunicationPurgeFilters(communicationFilters, selectedChargerId)
+            })
+          : JSON.stringify({ scope: "retention" });
       const response = await fetch("/api/communication-journal/purge", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
         credentials: "include"
       });
 
@@ -1316,14 +1350,16 @@ export default function App() {
         return;
       }
 
-      const result = (await response.json().catch(() => null)) as { deletedCount?: number; retentionHours?: number } | null;
+      const result = (await response.json().catch(() => null)) as { deletedCount?: number; retentionHours?: number; scope?: string } | null;
       if (typeof result?.retentionHours === "number") {
         setCommunicationRetentionHours(result.retentionHours);
       }
 
+      setCommunicationPurgeOpen(false);
+      setCommunicationPurgeConfirmation("");
       setMessage(
         typeof result?.deletedCount === "number"
-          ? `Purged ${result.deletedCount} communication row${result.deletedCount === 1 ? "" : "s"}.`
+          ? `Purged ${result.deletedCount} communication row${result.deletedCount === 1 ? "" : "s"}${result.scope === "filters" ? " matching current filters" : ""}.`
           : "Communication journal purged."
       );
       await loadCommunicationJournal(selectedChargerId);
@@ -1882,8 +1918,9 @@ export default function App() {
             selectedChargerLabel={selectedChargerLabel}
             onApplyFilters={applyCommunicationFilters}
             onCommunicationFiltersChange={setCommunicationFilters}
+            onExport={exportCommunicationJournal}
             onExpandedCommunicationJournalIdChange={setExpandedCommunicationJournalId}
-            onPurge={() => void purgeCommunicationJournal()}
+            onPurge={openCommunicationPurge}
             onRefresh={() => void loadScopedData(selectedChargerId)}
             onRenderEndpoint={renderCommunicationEndpoint}
             onResetFilters={() => void resetCommunicationFilters()}
@@ -2480,6 +2517,23 @@ export default function App() {
         onConfirmationChange={setChargerDeleteConfirmation}
         onSubmit={() => void submitChargerDelete()}
       />
+      {communicationPurgeOpen ? (
+        <CommunicationPurgeModal
+          busy={busy}
+          confirmation={communicationPurgeConfirmation}
+          filters={communicationFilters}
+          retentionHours={communicationRetentionHours}
+          scope={communicationPurgeScope}
+          selectedChargerLabel={selectedChargerLabel}
+          onCancel={() => setCommunicationPurgeOpen(false)}
+          onConfirmationChange={setCommunicationPurgeConfirmation}
+          onConfirm={() => void purgeCommunicationJournal()}
+          onScopeChange={(scope) => {
+            setCommunicationPurgeScope(scope);
+            setCommunicationPurgeConfirmation("");
+          }}
+        />
+      ) : null}
       {chargerWizardOpen ? (
         <ChargerOnboardingModal
           busy={busy}
@@ -2511,4 +2565,21 @@ export default function App() {
       ) : null}
     </AppChrome>
   );
+}
+
+function buildCommunicationPurgeFilters(filters: CommunicationJournalFilters, chargerId: string) {
+  const output: Partial<CommunicationJournalFilters> = {};
+
+  if (chargerId.trim()) {
+    output.chargerId = chargerId.trim();
+  }
+
+  for (const [key, value] of Object.entries(filters) as Array<[keyof CommunicationJournalFilters, string]>) {
+    const trimmed = value.trim();
+    if (trimmed) {
+      output[key] = trimmed;
+    }
+  }
+
+  return output;
 }

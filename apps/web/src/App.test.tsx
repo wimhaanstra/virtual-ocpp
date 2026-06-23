@@ -2103,7 +2103,7 @@ describe("App", () => {
 
       if (url === "/api/communication-journal/purge" && method === "POST") {
         journalRows = [];
-        return new Response(JSON.stringify({ deletedCount: 1, retentionHours: 24 }), { status: 200 });
+        return new Response(JSON.stringify({ deletedCount: 1, retentionHours: 24, scope: "filters" }), { status: 200 });
       }
 
       const fallbackResponse = emptyVisibilityResponses(url, method);
@@ -2120,14 +2120,38 @@ describe("App", () => {
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
     expect(await screen.findByText("BootNotification")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("OCPP method"), { target: { value: "BootNotification" } });
+
+    let clickedExportHref = "";
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      clickedExportHref = this.getAttribute("href") ?? "";
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    expect(anchorClick).toHaveBeenCalled();
+    expect(clickedExportHref).toContain("/api/communication-journal/export?");
+    expect(clickedExportHref).toContain("limit=5000");
+    anchorClick.mockRestore();
 
     fireEvent.click(screen.getByRole("button", { name: "Purge" }));
+    expect(await screen.findByRole("heading", { name: "Purge journal rows" })).toBeInTheDocument();
+    expect(screen.getByText(/Automatic retention stays configured at 24 hours/)).toBeInTheDocument();
+    const purgeDialog = screen.getByRole("dialog", { name: "Purge journal rows" });
+    fireEvent.click(within(purgeDialog).getByLabelText("Purge rows matching current filters"));
+    fireEvent.change(within(purgeDialog).getByLabelText("Type PURGE"), { target: { value: "PURGE" } });
+    fireEvent.click(within(purgeDialog).getByRole("button", { name: "Purge" }));
 
-    expect(await screen.findByText("Purged 1 communication row.")).toBeInTheDocument();
+    expect(await screen.findByText("Purged 1 communication row matching current filters.")).toBeInTheDocument();
     expect(await screen.findByText("No communication rows match these filters.")).toBeInTheDocument();
 
     const purgeCall = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/communication-journal/purge" && init?.method === "POST");
     expect(purgeCall).toBeDefined();
+    expect(JSON.parse(String(purgeCall?.[1]?.body))).toEqual({
+      scope: "filters",
+      confirm: "PURGE",
+      filters: {
+        ocppMethod: "BootNotification"
+      }
+    });
   });
 
   it("shows edit state for tags and submits tag updates", async () => {

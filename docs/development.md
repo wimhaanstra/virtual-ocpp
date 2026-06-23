@@ -110,9 +110,10 @@ The frontend opens `GET /api/live-updates` with `EventSource` after login. The s
 The protected communication journal stores redacted protocol traces for charger, proxy, and server traffic.
 
 - `GET /api/communication-journal` returns filtered rows.
-- `POST /api/communication-journal/purge` deletes rows older than the configured retention window.
+- `GET /api/communication-journal/export` downloads the filtered redacted rows as CSV.
+- `POST /api/communication-journal/purge` deletes rows older than the configured retention window, or rows matching an explicit filter scope when the operator confirms with `PURGE`.
 
-Secret-like fields are redacted before storage. The journal is meant for operator troubleshooting, not for raw payload export.
+Secret-like fields are redacted before storage. Exports use the same redacted public journal rows and are meant for operator troubleshooting, not for raw payload archives.
 
 ## Simulator
 

@@ -290,9 +290,130 @@ describe('communication journal', () => {
     expect(purgeResponse.json()).toEqual({
       ok: true,
       deletedCount: 1,
-      retentionHours: 24
+      retentionHours: 24,
+      scope: 'retention'
     });
     expect(tempDb.db.select().from(communicationJournal).all()).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it('exports filtered redacted journal rows as CSV', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const createdAt = new Date(Date.now() - 60_000);
+
+    journal.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: 'CHARGER-1',
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'call',
+      chargerId: 'CHARGER-1',
+      ocppMethod: 'Authorize',
+      payload: { password: 'secret-password', idTag: 'TAG-1' },
+      createdAt
+    });
+    journal.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: 'CHARGER-2',
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'call',
+      chargerId: 'CHARGER-2',
+      ocppMethod: 'Heartbeat',
+      payload: {},
+      createdAt
+    });
+
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/communication-journal/export?chargerId=CHARGER-1&ocppMethod=Authorize',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/csv');
+    expect(response.headers['content-disposition']).toContain('communication-journal-');
+    expect(response.body).toContain('createdAt,direction,sourceType');
+    expect(response.body).toContain('CHARGER-1');
+    expect(response.body).toContain('[redacted]');
+    expect(response.body).not.toContain('secret-password');
+    expect(response.body).not.toContain('CHARGER-2');
+
+    await app.close();
+  });
+
+  it('requires confirmation and explicit scope for filtered journal purge', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const createdAt = new Date(Date.now() - 60_000);
+
+    journal.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: 'CHARGER-1',
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'call',
+      chargerId: 'CHARGER-1',
+      ocppMethod: 'Authorize',
+      payload: {},
+      createdAt
+    });
+    journal.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: 'CHARGER-2',
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'call',
+      chargerId: 'CHARGER-2',
+      ocppMethod: 'Heartbeat',
+      payload: {},
+      createdAt
+    });
+
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+    const missingConfirmation = await app.inject({
+      method: 'POST',
+      url: '/api/communication-journal/purge',
+      headers: { cookie },
+      payload: { scope: 'filters', filters: { chargerId: 'CHARGER-1' } }
+    });
+    const emptyScope = await app.inject({
+      method: 'POST',
+      url: '/api/communication-journal/purge',
+      headers: { cookie },
+      payload: { scope: 'filters', confirm: 'PURGE', filters: {} }
+    });
+    const purgeResponse = await app.inject({
+      method: 'POST',
+      url: '/api/communication-journal/purge',
+      headers: { cookie },
+      payload: { scope: 'filters', confirm: 'PURGE', filters: { chargerId: 'CHARGER-1' } }
+    });
+
+    expect(missingConfirmation.statusCode).toBe(400);
+    expect(missingConfirmation.json()).toEqual({ error: 'purge_confirmation_required' });
+    expect(emptyScope.statusCode).toBe(400);
+    expect(emptyScope.json()).toEqual({ error: 'invalid_communication_journal_purge' });
+    expect(purgeResponse.statusCode).toBe(200);
+    expect(purgeResponse.json()).toEqual({
+      ok: true,
+      deletedCount: 1,
+      retentionHours: 24,
+      scope: 'filters'
+    });
+    expect(tempDb.db.select().from(communicationJournal).all()).toHaveLength(1);
+    expect(tempDb.db.select().from(communicationJournal).all()[0]?.chargerId).toBe('CHARGER-2');
 
     await app.close();
   });

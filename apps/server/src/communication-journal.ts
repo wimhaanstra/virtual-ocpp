@@ -48,6 +48,8 @@ export type CommunicationJournalListFilters = {
   limit?: number;
 };
 
+export type CommunicationJournalPurgeFilters = Omit<CommunicationJournalListFilters, 'limit'>;
+
 export type CommunicationJournalItem = {
   id: string;
   createdAt: string;
@@ -274,22 +276,29 @@ export class CommunicationJournalService {
     return deletedCount;
   }
 
+  purgeMatching(filters: CommunicationJournalPurgeFilters) {
+    const conditions = buildFilterConditions(filters);
+    if (conditions.length === 0) {
+      return { deletedCount: 0, skipped: true };
+    }
+
+    const result = this.db.delete(communicationJournal).where(and(...conditions)).run();
+    const deletedCount = toChanges(result);
+    if (deletedCount > 0) {
+      this.liveUpdates?.publish({
+        type: 'journal.purged',
+        retentionHours: this.retentionHours,
+        deletedCount
+      });
+    }
+    return { deletedCount, skipped: false };
+  }
+
   list(filters: CommunicationJournalListFilters = {}) {
     const from = filters.from ?? new Date(Date.now() - DEFAULT_LIST_WINDOW_HOURS * 60 * 60 * 1000);
     const to = filters.to ?? new Date();
-    const limit = Math.max(1, Math.min(filters.limit ?? 200, 1000));
-
-    const conditions = [gte(communicationJournal.createdAt, from), lte(communicationJournal.createdAt, to)];
-
-    if (filters.sourceType) conditions.push(eq(communicationJournal.sourceType, filters.sourceType));
-    if (filters.sourceId) conditions.push(eq(communicationJournal.sourceId, filters.sourceId));
-    if (filters.targetType) conditions.push(eq(communicationJournal.targetType, filters.targetType));
-    if (filters.targetId) conditions.push(eq(communicationJournal.targetId, filters.targetId));
-    if (filters.chargerId) conditions.push(eq(communicationJournal.chargerId, filters.chargerId));
-    if (filters.proxyTargetId) conditions.push(eq(communicationJournal.proxyTargetId, filters.proxyTargetId));
-    if (filters.ocppMethod) conditions.push(eq(communicationJournal.ocppMethod, filters.ocppMethod));
-    if (filters.messageType) conditions.push(eq(communicationJournal.messageType, filters.messageType));
-    if (typeof filters.transactionId === 'number') conditions.push(eq(communicationJournal.transactionId, filters.transactionId));
+    const limit = Math.max(1, Math.min(filters.limit ?? 200, 5000));
+    const conditions = buildFilterConditions({ ...filters, from, to });
 
     const rows = this.db
       .select()
@@ -311,6 +320,24 @@ export class CommunicationJournalService {
     }
     this.purgeExpired(now);
   }
+}
+
+function buildFilterConditions(filters: CommunicationJournalPurgeFilters) {
+  const conditions = [];
+
+  if (filters.from) conditions.push(gte(communicationJournal.createdAt, filters.from));
+  if (filters.to) conditions.push(lte(communicationJournal.createdAt, filters.to));
+  if (filters.sourceType) conditions.push(eq(communicationJournal.sourceType, filters.sourceType));
+  if (filters.sourceId) conditions.push(eq(communicationJournal.sourceId, filters.sourceId));
+  if (filters.targetType) conditions.push(eq(communicationJournal.targetType, filters.targetType));
+  if (filters.targetId) conditions.push(eq(communicationJournal.targetId, filters.targetId));
+  if (filters.chargerId) conditions.push(eq(communicationJournal.chargerId, filters.chargerId));
+  if (filters.proxyTargetId) conditions.push(eq(communicationJournal.proxyTargetId, filters.proxyTargetId));
+  if (filters.ocppMethod) conditions.push(eq(communicationJournal.ocppMethod, filters.ocppMethod));
+  if (filters.messageType) conditions.push(eq(communicationJournal.messageType, filters.messageType));
+  if (typeof filters.transactionId === 'number') conditions.push(eq(communicationJournal.transactionId, filters.transactionId));
+
+  return conditions;
 }
 
 export function redactCommunicationPayload(payload: unknown): unknown {

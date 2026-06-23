@@ -1,5 +1,5 @@
 import { Fragment, type FormEvent, type ReactNode } from "react";
-import { ChevronDown, Eye, EyeOff, RefreshCcw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, Download, Eye, EyeOff, RefreshCcw, SlidersHorizontal, Trash2 } from "lucide-react";
 import type { CommunicationJournalFilters, CommunicationJournalItem, ProxyTarget } from "../types";
 import { buildCommunicationSummary, formatDateTime, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -15,6 +15,7 @@ type CommunicationViewProps = {
   selectedChargerLabel: string;
   onApplyFilters: (event: FormEvent<HTMLFormElement>) => void;
   onCommunicationFiltersChange: (filters: CommunicationJournalFilters) => void;
+  onExport: () => void;
   onExpandedCommunicationJournalIdChange: (id: string | null) => void;
   onPurge: () => void;
   onRefresh: () => void;
@@ -33,6 +34,7 @@ export function CommunicationView({
   selectedChargerLabel,
   onApplyFilters,
   onCommunicationFiltersChange,
+  onExport,
   onExpandedCommunicationJournalIdChange,
   onPurge,
   onRefresh,
@@ -235,6 +237,9 @@ export function CommunicationView({
           <div className="action-row compact-action-row">
             <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
               <RefreshCcw aria-hidden="true" />
+            </Button>
+            <Button type="button" className="button-secondary icon-button" onClick={onExport} disabled={busy} title="Export CSV" aria-label="Export CSV">
+              <Download aria-hidden="true" />
             </Button>
             <Button type="button" className="button-ghost button-danger icon-button" onClick={onPurge} disabled={busy} title="Purge journal" aria-label="Purge">
               <Trash2 aria-hidden="true" />
