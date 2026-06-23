@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, Power, PowerOff, RefreshCcw } from "lucide-react";
+import { ChevronDown, ChevronRight, Power, PowerOff, RefreshCcw, Send } from "lucide-react";
 import type { ActiveSessionAuditResponse, ChargingSession, ChargingStats } from "../types";
 import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -11,6 +11,7 @@ type SessionsViewProps = {
   chargingStats: ChargingStats[];
   selectedChargerLabel: string;
   onForceClose: (session: ChargingSession) => void;
+  onProxyStopRecovery: (session: ChargingSession) => void;
   onRefresh: () => void;
   onRemoteStop: (session: ChargingSession) => void;
 };
@@ -22,6 +23,7 @@ export function SessionsView({
   chargingStats,
   selectedChargerLabel,
   onForceClose,
+  onProxyStopRecovery,
   onRefresh,
   onRemoteStop
 }: SessionsViewProps) {
@@ -115,32 +117,43 @@ export function SessionsView({
                             </div>
                           </td>
                           <td className="table-actions-cell" onClick={(event) => event.stopPropagation()}>
-                            {session.active ? (
-                              <div className="action-row compact-action-row">
+                            <div className="action-row compact-action-row">
+                              {session.active ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    className="button-secondary icon-button"
+                                    onClick={() => onRemoteStop(session)}
+                                    disabled={busy}
+                                    title="Remote stop transaction"
+                                    aria-label={`Remote stop session ${session.transactionId}`}
+                                  >
+                                    <Power aria-hidden="true" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    className="button-secondary icon-button"
+                                    onClick={() => onForceClose(session)}
+                                    disabled={busy}
+                                    title="Force close with preview"
+                                    aria-label={`Force close session ${session.transactionId}`}
+                                  >
+                                    <PowerOff aria-hidden="true" />
+                                  </Button>
+                                </>
+                              ) : (
                                 <Button
                                   type="button"
                                   className="button-secondary icon-button"
-                                  onClick={() => onRemoteStop(session)}
+                                  onClick={() => onProxyStopRecovery(session)}
                                   disabled={busy}
-                                  title="Remote stop transaction"
-                                  aria-label={`Remote stop session ${session.transactionId}`}
+                                  title="Recover proxy stop"
+                                  aria-label={`Recover proxy stop for session ${session.transactionId}`}
                                 >
-                                  <Power aria-hidden="true" />
+                                  <Send aria-hidden="true" />
                                 </Button>
-                                <Button
-                                  type="button"
-                                  className="button-secondary icon-button"
-                                  onClick={() => onForceClose(session)}
-                                  disabled={busy}
-                                  title="Force close with preview"
-                                  aria-label={`Force close session ${session.transactionId}`}
-                                >
-                                  <PowerOff aria-hidden="true" />
-                                </Button>
-                              </div>
-                            ) : (
-                              "-"
-                            )}
+                              )}
+                            </div>
                           </td>
                         </tr>
                         {expanded ? (

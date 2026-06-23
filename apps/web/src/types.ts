@@ -298,6 +298,34 @@ export type ForceClosePreview = {
   }>;
 };
 
+export type ProxyStopRecoveryPreview = {
+  session: ChargingSession;
+  proxyTarget: {
+    id: string;
+    name: string;
+    enabled: boolean;
+  };
+  externalTransactionId: number;
+  payload: Record<string, unknown>;
+  meterSource: "session-stop-meter" | "latest-meter-sample" | "start-meter" | "unknown";
+  latestMeterSample: {
+    sampledAt: string;
+    value: string;
+    meterWh: number;
+    measurand: string | null;
+    unit: string | null;
+    transactionId: number | null;
+  } | null;
+  warnings: string[];
+  result?: {
+    proxyTargetId: string;
+    proxyTargetName: string;
+    externalTransactionId: number;
+    attempted: boolean;
+    ok: boolean;
+  };
+};
+
 export type LogEntry = {
   id: string;
   level: string;

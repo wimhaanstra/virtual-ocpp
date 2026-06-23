@@ -1258,6 +1258,103 @@ describe('app', () => {
     await app.close();
   });
 
+  it('recovers an orphaned proxy stop transaction with an operator supplied upstream id', async () => {
+    const proxy = await startRecordingProxyServer();
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = () => {
+      proxy.close();
+      tempDb.close();
+    };
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-orphaned-proxy',
+      chargerId: 'SMART-EVSE-ORPHANED',
+      connectorId: 1,
+      transactionId: 900,
+      idTag: 'TAG-ORPHAN',
+      startedAt: new Date('2026-06-22T10:42:39.000Z'),
+      stoppedAt: new Date('2026-06-23T05:39:03.000Z'),
+      startMeterWh: 472632,
+      stopMeterWh: 480341,
+      stopReason: 'EVDisconnected',
+      status: 'stopped'
+    }).run();
+    tempDb.db.insert(proxyTargets).values({
+      id: 'proxy-orphaned-stop',
+      chargerId: 'SMART-EVSE-ORPHANED',
+      name: 'TapElectric',
+      url: proxy.endpoint,
+      stationId: '8881',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      createdAt: new Date('2026-06-22T10:00:00.000Z'),
+      updatedAt: new Date('2026-06-22T10:00:00.000Z')
+    }).run();
+
+    const previewResponse = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-orphaned-proxy/proxy-stop-recovery-preview',
+      headers: { cookie },
+      payload: {
+        proxyTargetId: 'proxy-orphaned-stop',
+        externalTransactionId: 10084
+      }
+    });
+
+    expect(previewResponse.statusCode).toBe(200);
+    expect(previewResponse.json()).toMatchObject({
+      externalTransactionId: 10084,
+      payload: {
+        transactionId: 10084,
+        idTag: 'TAG-ORPHAN',
+        meterStop: 480341,
+        timestamp: '2026-06-23T05:39:03.000Z',
+        reason: 'EVDisconnected'
+      },
+      proxyTarget: {
+        id: 'proxy-orphaned-stop',
+        name: 'TapElectric',
+        enabled: true
+      }
+    });
+
+    const submitResponse = await app.inject({
+      method: 'POST',
+      url: '/api/sessions/session-orphaned-proxy/proxy-stop-recovery',
+      headers: { cookie },
+      payload: {
+        proxyTargetId: 'proxy-orphaned-stop',
+        externalTransactionId: 10084
+      }
+    });
+
+    expect(submitResponse.statusCode).toBe(200);
+    expect(proxy.calls.find((call) => call.method === 'StopTransaction')?.params).toMatchObject({
+      transactionId: 10084,
+      idTag: 'TAG-ORPHAN',
+      meterStop: 480341,
+      timestamp: '2026-06-23T05:39:03.000Z',
+      reason: 'EVDisconnected'
+    });
+    expect(tempDb.db.select().from(proxySessionMappings).where(eq(proxySessionMappings.localTransactionId, 900)).get()).toMatchObject({
+      proxyTargetId: 'proxy-orphaned-stop',
+      externalTransactionId: 10084
+    });
+    expect(
+      tempDb.db
+        .select()
+        .from(logs)
+        .where(eq(logs.message, 'proxy stop transaction recovered'))
+        .get()
+    ).toMatchObject({ chargerId: 'SMART-EVSE-ORPHANED', transactionId: 900 });
+
+    await app.close();
+  });
+
   it('returns active session audit warnings and proxy mapping context', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();

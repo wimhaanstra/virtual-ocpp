@@ -97,6 +97,7 @@ The charger dashboard and sessions page show:
 - active-session audit warnings for likely missing `StopTransaction`
 - meter-gap review and recovery previews
 - `StopTransaction` recovery for Smart EVSE `transactionId = -1` when the replay can be matched unambiguously
+- manual proxy `StopTransaction` recovery for already-stopped local sessions when an upstream transaction id was created but never mapped locally
 
 If the charger has not sent a `MeterValues` yet, the UI keeps the active card in `Charging` and shows the session as waiting for the first sample.
 

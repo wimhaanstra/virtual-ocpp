@@ -24,6 +24,10 @@ const MeterGapSubmitSchema = z.object({
   startAt: z.string().datetime().optional(),
   stopAt: z.string().datetime().optional()
 });
+const ProxyStopRecoverySchema = z.object({
+  proxyTargetId: z.string().trim().min(1),
+  externalTransactionId: z.coerce.number().int().positive()
+});
 
 export function registerVisibilityRoutes(
   app: FastifyInstance,
@@ -302,6 +306,83 @@ export function registerVisibilityRoutes(
         status: 'stopped'
       }),
       proxyResults
+    };
+  });
+
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/proxy-stop-recovery-preview', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = ProxyStopRecoverySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_proxy_stop_recovery', details: parsed.error.flatten() });
+    }
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    const preview = buildProxyStopRecoveryPreview(db, session, parsed.data.proxyTargetId, parsed.data.externalTransactionId);
+    if (!preview) {
+      return reply.code(404).send({ error: 'proxy_target_not_found' });
+    }
+
+    return preview;
+  });
+
+  app.post<{ Params: { id: string } }>('/api/sessions/:id/proxy-stop-recovery', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    if (!proxyAuthorization) {
+      return reply.code(503).send({ error: 'proxy_recovery_unavailable' });
+    }
+
+    const parsed = ProxyStopRecoverySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_proxy_stop_recovery', details: parsed.error.flatten() });
+    }
+
+    const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+
+    if (session.status === 'active') {
+      return reply.code(409).send({ error: 'session_still_active' });
+    }
+
+    const preview = buildProxyStopRecoveryPreview(db, session, parsed.data.proxyTargetId, parsed.data.externalTransactionId);
+    if (!preview) {
+      return reply.code(404).send({ error: 'proxy_target_not_found' });
+    }
+
+    const result = await proxyAuthorization.manualStopTransaction(
+      session.chargerId,
+      parsed.data.proxyTargetId,
+      session.transactionId,
+      preview.payload
+    );
+
+    recordSessionLog(db, liveUpdates, {
+      level: result.ok ? 'info' : 'warn',
+      message: result.ok ? 'proxy stop transaction recovered' : 'proxy stop transaction recovery failed',
+      chargerId: session.chargerId,
+      transactionId: session.transactionId,
+      metadata: {
+        proxyTargetId: result.proxyTargetId,
+        proxyTargetName: result.proxyTargetName,
+        externalTransactionId: result.externalTransactionId,
+        attempted: result.attempted,
+        ok: result.ok,
+        payload: preview.payload
+      },
+      createdAt: new Date()
+    });
+    liveUpdates?.publish('sessions', session.chargerId);
+
+    return {
+      ...preview,
+      result
     };
   });
 
@@ -656,6 +737,98 @@ function buildForceClosePreview(db: Database, session: typeof chargingSessions.$
         }
       : null,
     proxyPayloads,
+    warnings
+  };
+}
+
+function buildProxyStopRecoveryPreview(
+  db: Database,
+  session: typeof chargingSessions.$inferSelect,
+  proxyTargetId: string,
+  externalTransactionId: number
+) {
+  const target = db
+    .select()
+    .from(proxyTargets)
+    .where(and(eq(proxyTargets.id, proxyTargetId), eq(proxyTargets.chargerId, session.chargerId)))
+    .limit(1)
+    .get();
+  if (!target) return null;
+
+  const latestEnergy = findLatestEnergySampleForSession(db, session);
+  const meterStop = session.stopMeterWh ?? latestEnergy?.meterWh ?? session.startMeterWh ?? undefined;
+  const timestamp = (session.stoppedAt ?? latestEnergy?.sampledAt ?? new Date()).toISOString();
+  const reason = session.stopReason ?? 'Local';
+  const payload: StopTransactionRequest = {
+    transactionId: externalTransactionId,
+    timestamp,
+    reason
+  };
+
+  if (typeof session.idTag === 'string' && session.idTag.trim()) {
+    payload.idTag = session.idTag;
+  }
+  if (typeof meterStop === 'number') {
+    payload.meterStop = Math.round(meterStop);
+  }
+
+  const warnings: string[] = [];
+  if (session.status === 'active') {
+    warnings.push('This local session is still active. Use force close or remote stop before submitting proxy stop recovery.');
+  }
+  if (!target.enabled) {
+    warnings.push('The selected proxy target is disabled. Submission will not be attempted until it is enabled.');
+  }
+  if (session.stopMeterWh === null && !latestEnergy) {
+    warnings.push(
+      typeof session.startMeterWh === 'number'
+        ? 'No stop meter or stored energy meter sample was found; preview falls back to the start meter.'
+        : 'No stop meter, stored energy meter sample, or start meter was found; StopTransaction will omit meterStop.'
+    );
+  }
+  const existingMapping = db
+    .select()
+    .from(proxySessionMappings)
+    .where(
+      and(
+        eq(proxySessionMappings.chargerId, session.chargerId),
+        eq(proxySessionMappings.proxyTargetId, proxyTargetId),
+        eq(proxySessionMappings.localTransactionId, session.transactionId)
+      )
+    )
+    .limit(1)
+    .get();
+  if (existingMapping) {
+    warnings.push('A proxy mapping already exists for this local session. Review the external transaction id before submitting.');
+  }
+
+  return {
+    session: toPublicChargingSession(session),
+    proxyTarget: {
+      id: target.id,
+      name: target.name,
+      enabled: target.enabled
+    },
+    externalTransactionId,
+    payload,
+    meterSource:
+      session.stopMeterWh !== null
+        ? 'session-stop-meter'
+        : latestEnergy
+          ? 'latest-meter-sample'
+          : typeof session.startMeterWh === 'number'
+            ? 'start-meter'
+            : 'unknown',
+    latestMeterSample: latestEnergy
+      ? {
+          sampledAt: latestEnergy.sampledAt.toISOString(),
+          value: latestEnergy.value,
+          meterWh: Math.round(latestEnergy.meterWh),
+          measurand: latestEnergy.measurand,
+          unit: latestEnergy.unit,
+          transactionId: latestEnergy.transactionId
+        }
+      : null,
     warnings
   };
 }

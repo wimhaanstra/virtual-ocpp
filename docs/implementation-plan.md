@@ -37,6 +37,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Deployment hardening: production placeholder secrets are rejected, SQLite startup failures include the resolved database path, `/ready` verifies database access, the Docker healthcheck uses readiness, and deployment docs explain health versus readiness.
 - Simulator smoke flow: `--smoke` simulator mode and `npm run smoke:simulator` provide a fast repeatable charger session that ensures tag access, sends meter samples, stops the transaction, and prints a success marker.
 - OCPP version compatibility research: documented why OCPP 1.6j to newer OCPP support should be an explicit upstream adapter layer, with OCPP 2.0.1 as the first future target and unsupported mappings visible to operators.
+- Manual proxy stop recovery: stopped local sessions can preview and send a one-off `StopTransaction` to a selected proxy target using an operator-supplied upstream transaction id, then record the recovered mapping for auditability.
 
 ## Next Candidate Slices
 

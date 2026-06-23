@@ -40,6 +40,13 @@ type RecoverySubmitResult = {
   reason?: string;
   externalTransactionId?: number;
 };
+type ManualStopResult = {
+  proxyTargetId: string;
+  proxyTargetName: string;
+  externalTransactionId: number;
+  attempted: boolean;
+  ok: boolean;
+};
 type UpstreamConnection = {
   client: InstanceType<typeof RPCClient> | null;
   signature: string;
@@ -120,6 +127,48 @@ export class ProxyAuthorizationService {
     if (typeof params.transactionId !== 'number') return [];
 
     return this.stopTransactionForMappings(chargerId, params);
+  }
+
+  async manualStopTransaction(
+    chargerId: string,
+    proxyTargetId: string,
+    localTransactionId: number,
+    params: StopTransactionRequest
+  ): Promise<ManualStopResult> {
+    if (typeof params.transactionId !== 'number') {
+      return {
+        proxyTargetId,
+        proxyTargetName: proxyTargetId,
+        externalTransactionId: 0,
+        attempted: false,
+        ok: false
+      };
+    }
+
+    const externalTransactionId = params.transactionId;
+    const target = this.getEnabledTarget(chargerId, proxyTargetId);
+    if (!target) {
+      return {
+        proxyTargetId,
+        proxyTargetName: proxyTargetId,
+        externalTransactionId,
+        attempted: false,
+        ok: false
+      };
+    }
+
+    const response = await this.callTarget(chargerId, target, 'StopTransaction', this.applyTagMapping(target.id, 'StopTransaction', params));
+    if (response.ok) {
+      this.upsertManualStoppedMapping(chargerId, target.id, localTransactionId, externalTransactionId);
+    }
+
+    return {
+      proxyTargetId: target.id,
+      proxyTargetName: target.name,
+      externalTransactionId,
+      attempted: true,
+      ok: response.ok
+    };
   }
 
   getRecoverySubmissionTargets(
@@ -669,6 +718,37 @@ export class ProxyAuthorizationService {
         .limit(1)
         .get()
     );
+  }
+
+  private upsertManualStoppedMapping(chargerId: string, proxyTargetId: string, localTransactionId: number, externalTransactionId: number) {
+    const stoppedAt = new Date();
+    const existing = this.db
+      .select()
+      .from(proxySessionMappings)
+      .where(
+        and(
+          eq(proxySessionMappings.chargerId, chargerId),
+          eq(proxySessionMappings.proxyTargetId, proxyTargetId),
+          eq(proxySessionMappings.localTransactionId, localTransactionId)
+        )
+      )
+      .limit(1)
+      .get();
+
+    if (existing) {
+      this.db.update(proxySessionMappings).set({ externalTransactionId, stoppedAt }).where(eq(proxySessionMappings.id, existing.id)).run();
+      return;
+    }
+
+    this.db.insert(proxySessionMappings).values({
+      id: randomUUID(),
+      chargerId,
+      proxyTargetId,
+      localTransactionId,
+      externalTransactionId,
+      createdAt: stoppedAt,
+      stoppedAt
+    }).run();
   }
 
   private hasActiveChargerConnection(chargerId: string) {

@@ -15,6 +15,7 @@ import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
 import { GlobalDashboardView } from "./components/GlobalDashboardView";
+import { ProxyStopRecoveryModal } from "./components/ProxyStopRecoveryModal";
 import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
 import { SettingsView } from "./components/SettingsView";
 import { TagAccessView } from "./components/TagAccessView";
@@ -46,6 +47,7 @@ import type {
   OnboardingSettings,
   OnboardingSettingsStatus,
   ProxyHealthResponse,
+  ProxyStopRecoveryPreview,
   ProxyTagMapping,
   ProxyTarget,
   ProxyTargetFormState,
@@ -116,6 +118,11 @@ export default function App() {
   const [chargingStatsStatus, setChargingStatsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [forceClosePreview, setForceClosePreview] = useState<ForceClosePreview | null>(null);
   const [forceCloseLoading, setForceCloseLoading] = useState(false);
+  const [proxyStopRecoverySession, setProxyStopRecoverySession] = useState<ChargingSession | null>(null);
+  const [proxyStopRecoveryTargetId, setProxyStopRecoveryTargetId] = useState("");
+  const [proxyStopRecoveryExternalId, setProxyStopRecoveryExternalId] = useState("");
+  const [proxyStopRecoveryPreview, setProxyStopRecoveryPreview] = useState<ProxyStopRecoveryPreview | null>(null);
+  const [proxyStopRecoveryLoading, setProxyStopRecoveryLoading] = useState(false);
   const [meterGapSubmitPreview, setMeterGapSubmitPreview] = useState<MeterGapRecoveryPreview | null>(null);
   const [meterGapSubmitStartAt, setMeterGapSubmitStartAt] = useState("");
   const [meterGapSubmitStopAt, setMeterGapSubmitStopAt] = useState("");
@@ -1108,6 +1115,89 @@ export default function App() {
     setForceCloseLoading(false);
   }
 
+  function startProxyStopRecovery(session: ChargingSession) {
+    const firstEnabledTarget = proxyTargets.find((target) => target.enabled) ?? proxyTargets[0] ?? null;
+    setProxyStopRecoverySession(session);
+    setProxyStopRecoveryTargetId(firstEnabledTarget?.id ?? "");
+    setProxyStopRecoveryExternalId("");
+    setProxyStopRecoveryPreview(null);
+  }
+
+  function cancelProxyStopRecovery() {
+    setProxyStopRecoverySession(null);
+    setProxyStopRecoveryTargetId("");
+    setProxyStopRecoveryExternalId("");
+    setProxyStopRecoveryPreview(null);
+    setProxyStopRecoveryLoading(false);
+  }
+
+  async function previewProxyStopRecovery() {
+    if (!proxyStopRecoverySession) return;
+
+    setBusy(true);
+    setProxyStopRecoveryLoading(true);
+    setMessage(`Preparing proxy stop recovery for session ${proxyStopRecoverySession.transactionId}...`);
+    try {
+      const response = await fetch(`/api/sessions/${proxyStopRecoverySession.id}/proxy-stop-recovery-preview`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proxyTargetId: proxyStopRecoveryTargetId,
+          externalTransactionId: Number(proxyStopRecoveryExternalId)
+        })
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        setMessage("Could not prepare proxy stop recovery preview.");
+        return;
+      }
+
+      const preview = (await response.json()) as ProxyStopRecoveryPreview;
+      setProxyStopRecoveryPreview(preview);
+      setMessage(`Review proxy StopTransaction for external transaction ${preview.externalTransactionId}.`);
+    } finally {
+      setProxyStopRecoveryLoading(false);
+      setBusy(false);
+    }
+  }
+
+  async function submitProxyStopRecovery() {
+    if (!proxyStopRecoverySession || !proxyStopRecoveryPreview) return;
+
+    setBusy(true);
+    setProxyStopRecoveryLoading(true);
+    setMessage(`Sending proxy StopTransaction ${proxyStopRecoveryPreview.externalTransactionId}...`);
+    try {
+      const response = await fetch(`/api/sessions/${proxyStopRecoverySession.id}/proxy-stop-recovery`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proxyTargetId: proxyStopRecoveryPreview.proxyTarget.id,
+          externalTransactionId: proxyStopRecoveryPreview.externalTransactionId
+        })
+      });
+
+      if (handleUnauthorized(response)) return;
+
+      if (!response.ok) {
+        setMessage(response.status === 409 ? "Session is still active; use force close first." : "Could not send proxy stop recovery.");
+        return;
+      }
+
+      const result = (await response.json()) as ProxyStopRecoveryPreview;
+      cancelProxyStopRecovery();
+      setMessage(result.result?.ok ? `Proxy stop sent for external transaction ${result.externalTransactionId}.` : `Proxy stop recovery failed for external transaction ${result.externalTransactionId}.`);
+      await Promise.all([loadChargingSessions(selectedChargerId), loadLogs(selectedChargerId), loadCommunicationJournal(selectedChargerId)]);
+    } finally {
+      setProxyStopRecoveryLoading(false);
+      setBusy(false);
+    }
+  }
+
   function startRemoteStopChargingSession(session: ChargingSession) {
     setRemoteStopTarget(session);
   }
@@ -1720,6 +1810,7 @@ export default function App() {
               chargingStats={chargingStats}
               selectedChargerLabel={selectedChargerLabel}
               onForceClose={(session) => void previewForceCloseChargingSession(session)}
+              onProxyStopRecovery={startProxyStopRecovery}
               onRefresh={() => void loadScopedData(selectedChargerId)}
               onRemoteStop={startRemoteStopChargingSession}
             />
@@ -2163,6 +2254,26 @@ export default function App() {
         forceClosePreview={forceClosePreview}
         onCancel={cancelForceClosePreview}
         onExecute={() => void executeForceCloseChargingSession()}
+      />
+      <ProxyStopRecoveryModal
+        busy={busy}
+        externalTransactionId={proxyStopRecoveryExternalId}
+        loading={proxyStopRecoveryLoading}
+        preview={proxyStopRecoveryPreview}
+        proxyTargetId={proxyStopRecoveryTargetId}
+        proxyTargets={proxyTargets}
+        session={proxyStopRecoverySession}
+        onCancel={cancelProxyStopRecovery}
+        onExternalTransactionIdChange={(value) => {
+          setProxyStopRecoveryExternalId(value);
+          setProxyStopRecoveryPreview(null);
+        }}
+        onPreview={() => void previewProxyStopRecovery()}
+        onProxyTargetChange={(proxyTargetId) => {
+          setProxyStopRecoveryTargetId(proxyTargetId);
+          setProxyStopRecoveryPreview(null);
+        }}
+        onSubmit={() => void submitProxyStopRecovery()}
       />
       {meterGapSubmitPreview ? (
         <div className="modal-backdrop" role="presentation">
