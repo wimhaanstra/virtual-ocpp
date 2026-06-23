@@ -101,6 +101,8 @@ The charger dashboard and sessions page show:
 
 If the charger has not sent a `MeterValues` yet, the UI keeps the active card in `Charging` and shows the session as waiting for the first sample.
 
+Stopped sessions use the final `StopTransaction` meter value as the exact energy total when available. Active sessions and recovery previews label latest-sample or start-meter fallbacks so operators can tell estimated values from exact stopped-session totals.
+
 The frontend opens `GET /api/live-updates` with `EventSource` after login. The stream uses the signed admin session cookie, replays missed events after reconnect, and tells the UI which REST slices to refresh.
 
 ## Communication Journal

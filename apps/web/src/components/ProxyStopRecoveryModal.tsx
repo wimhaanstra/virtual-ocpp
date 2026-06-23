@@ -1,6 +1,6 @@
 import { Send, X } from "lucide-react";
 import type { ChargingSession, ProxyStopRecoveryPreview, ProxyStopRecoverySuggestion, ProxyTarget } from "../types";
-import { formatDateTime, stringifyPayload } from "../app-helpers";
+import { formatDateTime, getMeterSourceLabel, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type ProxyStopRecoveryModalProps = {
@@ -92,7 +92,7 @@ export function ProxyStopRecoveryModal({
             <div className="force-close-summary">
               <div>
                 <span>Meter source</span>
-                <strong>{preview.meterSource}</strong>
+                <strong>{getMeterSourceLabel(preview.meterSource)}</strong>
               </div>
               <div>
                 <span>Stop meter</span>

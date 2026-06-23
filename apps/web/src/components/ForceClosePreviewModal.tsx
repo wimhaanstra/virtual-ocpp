@@ -1,6 +1,6 @@
 import { PowerOff, X } from "lucide-react";
 import type { ForceClosePreview } from "../types";
-import { formatDateTime, stringifyPayload } from "../app-helpers";
+import { formatDateTime, getMeterSourceLabel, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type ForceClosePreviewModalProps = {
@@ -36,7 +36,7 @@ export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePrev
         <div className="force-close-summary">
           <div>
             <span>Meter source</span>
-            <strong>{forceClosePreview.meterSource}</strong>
+            <strong>{getMeterSourceLabel(forceClosePreview.meterSource)}</strong>
           </div>
           <div>
             <span>Stop meter</span>

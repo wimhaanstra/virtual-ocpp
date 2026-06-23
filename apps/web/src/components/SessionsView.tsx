@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Power, PowerOff, RefreshCcw, Send } from "lucide-react";
 import type { ActiveSessionAuditResponse, ChargingSession, ChargingStats } from "../types";
-import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW } from "../app-helpers";
+import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW, getMeterSourceLabel } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type SessionsViewProps = {
@@ -68,6 +68,7 @@ export function SessionsView({
                     const audit = findAuditForSession(activeSessionAudit, session);
                     const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
                     const energyUsedWh = getSessionEnergyUsedWh(session, liveStats);
+                    const meterSource = getSessionMeterSource(session, liveStats);
                     const expanded = expandedSessionId === session.id;
                     return (
                       <Fragment key={session.id}>
@@ -98,7 +99,7 @@ export function SessionsView({
                           </td>
                           <td>{formatSessionTime(session.startedAt)}</td>
                           <td>{session.stoppedAt ? formatSessionTime(session.stoppedAt) : "Active"}</td>
-                          <td>{formatEnergyWh(energyUsedWh)}</td>
+                          <td title={getMeterSourceLabel(meterSource)}>{formatEnergyWh(energyUsedWh)}</td>
                           <td>
                             {session.active && liveStats ? (
                               <span className="session-live-value">
@@ -185,6 +186,10 @@ export function SessionsView({
                                   <strong>{session.startMeterWh ?? "-"} / {session.stopMeterWh ?? "-"}</strong>
                                 </span>
                                 <span className="session-detail-item">
+                                  <span>Energy source</span>
+                                  <strong>{getMeterSourceLabel(meterSource)}</strong>
+                                </span>
+                                <span className="session-detail-item">
                                   <span>Started</span>
                                   <strong>{formatDateTime(session.startedAt)}</strong>
                                 </span>
@@ -258,16 +263,24 @@ function formatSessionTime(value: string) {
 }
 
 function getSessionEnergyUsedWh(session: ChargingSession, liveStats: ChargingStats | null) {
-  if (typeof liveStats?.energyUsedWh === "number") return liveStats.energyUsedWh;
   if (typeof session.startMeterWh !== "number") return null;
 
   if (typeof session.stopMeterWh === "number") {
     return Math.max(0, session.stopMeterWh - session.startMeterWh);
   }
 
+  if (typeof liveStats?.energyUsedWh === "number") return liveStats.energyUsedWh;
+
   if (typeof liveStats?.latestMeterWh === "number") {
     return Math.max(0, liveStats.latestMeterWh - session.startMeterWh);
   }
 
   return null;
+}
+
+function getSessionMeterSource(session: ChargingSession, liveStats: ChargingStats | null) {
+  if (typeof session.stopMeterWh === "number" && typeof session.startMeterWh === "number") return "session-stop-meter";
+  if (typeof liveStats?.energyUsedWh === "number" || typeof liveStats?.latestMeterWh === "number") return "latest-meter-sample";
+  if (typeof session.startMeterWh === "number") return "start-meter";
+  return "unknown";
 }

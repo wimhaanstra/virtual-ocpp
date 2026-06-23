@@ -41,6 +41,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Session lifecycle hardening increment 1: duplicate `StartTransaction` retries reuse the existing active local transaction, duplicate `StopTransaction` calls preserve original stop data, and unmatched positive transaction stops are logged without creating or mutating sessions.
 - Multi-upstream policy increment 1: each charger can have at most three enabled proxy targets, disabled targets remain configurable, runtime forwarding uses deterministic oldest-first target order, and the proxy target UI shows and enforces the enabled-target cap.
 - Proxy resilience polish increment 1: proxy health now exposes reconnect failure counts alongside retry timing and latest error context, and the charger dashboard renders repeated upstream failure attempts.
+- Meter gap polish increment 1: session rows prefer exact stopped-session meter totals over live-sample estimates, and session details plus force-close/recovery previews show readable meter-source labels so operators can tell exact stop values from latest-sample fallbacks.
 
 ## Next Candidate Slices
 

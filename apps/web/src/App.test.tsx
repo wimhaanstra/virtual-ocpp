@@ -3063,6 +3063,8 @@ describe("App", () => {
     expect((await screen.findAllByText("SMART-EVSE-1")).length).toBeGreaterThan(0);
     expect(screen.getByText("Connector")).toBeInTheDocument();
     expect(await screen.findByText("TAG-1")).toBeInTheDocument();
+    expect(screen.getByText("Energy source")).toBeInTheDocument();
+    expect(screen.getByText("Latest meter sample")).toBeInTheDocument();
     expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
     expect(screen.getByText("Latest meter: 1.55 kWh")).toBeInTheDocument();
     expect(screen.getByText("Status: Available")).toBeInTheDocument();
@@ -3074,6 +3076,8 @@ describe("App", () => {
     expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/remote-stop" && init?.method === "POST")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Force close session 42" }));
     expect(await screen.findByRole("heading", { name: "Review StopTransaction" })).toBeInTheDocument();
+    const forceCloseDialog = screen.getByRole("dialog", { name: "Review StopTransaction" });
+    expect(within(forceCloseDialog).getByText("Latest meter sample")).toBeInTheDocument();
     expect(screen.getByText("TapElectric")).toBeInTheDocument();
     expect(screen.getByText("What will be sent")).toBeInTheDocument();
     expect(screen.getByText(/enabled proxy target/)).toBeInTheDocument();

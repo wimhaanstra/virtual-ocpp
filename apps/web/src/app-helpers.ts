@@ -219,6 +219,13 @@ export function formatEnergyWh(value: number | null) {
   return `${Math.round(value)} Wh`;
 }
 
+export function getMeterSourceLabel(source: string | null | undefined) {
+  if (source === "session-stop-meter") return "Exact stop meter";
+  if (source === "latest-meter-sample") return "Latest meter sample";
+  if (source === "start-meter") return "Start meter only";
+  return "Unknown meter";
+}
+
 export function formatPowerW(value: number | null) {
   if (value === null) return "-";
   if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)} kW`;
