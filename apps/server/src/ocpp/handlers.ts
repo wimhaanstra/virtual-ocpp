@@ -106,6 +106,36 @@ export class OcppHandlers {
 
   async startTransaction(context: OcppHandlerContext, params: StartTransactionRequest) {
     let idTagStatus = this.repository.isTagAllowed(context.chargerId, params.idTag) ? 'Accepted' : 'Invalid';
+    const startedAt = parseOcppDate(params.timestamp);
+
+    if (idTagStatus === 'Accepted') {
+      const duplicate = this.repository.findDuplicateActiveStartCandidate({
+        chargerId: context.chargerId,
+        connectorId: params.connectorId ?? 0,
+        idTag: params.idTag,
+        startedAt,
+        meterStart: params.meterStart
+      });
+      if (duplicate) {
+        this.repository.recordLog({
+          level: 'warn',
+          category: 'session',
+          message: 'duplicate start transaction reused',
+          chargerId: context.chargerId,
+          transactionId: duplicate.transactionId,
+          metadata: {
+            connectorId: params.connectorId ?? 0
+          }
+        });
+        return {
+          transactionId: duplicate.transactionId,
+          idTagInfo: {
+            status: idTagStatus
+          }
+        };
+      }
+    }
+
     const transactionId = nextTransactionId++;
 
     if (idTagStatus === 'Accepted') {
@@ -126,7 +156,6 @@ export class OcppHandlers {
     }
 
     if (idTagStatus === 'Accepted') {
-      const startedAt = parseOcppDate(params.timestamp);
       const replacedSessions = this.repository.getActiveSessionsForConnector(context.chargerId, params.connectorId ?? 0);
       for (const session of replacedSessions) {
         const stopTransaction = this.repository.buildReplacementStopTransaction(session, startedAt);
@@ -239,7 +268,7 @@ export class OcppHandlers {
         transactionId: recoveredTransactionId
       };
 
-      this.repository.stopSession({
+      const stopResult = this.repository.stopSession({
         chargerId: context.chargerId,
         transactionId: recoveredTransactionId,
         stoppedAt,
@@ -247,7 +276,9 @@ export class OcppHandlers {
         reason: params.reason
       });
 
-      await this.proxyAuthorization.stopTransaction(context.chargerId, recoveredParams);
+      if (stopResult.status === 'stopped') {
+        await this.proxyAuthorization.stopTransaction(context.chargerId, recoveredParams);
+      }
 
       return {
         idTagInfo: {
@@ -256,7 +287,7 @@ export class OcppHandlers {
       };
     }
 
-    this.repository.stopSession({
+    const stopResult = this.repository.stopSession({
       chargerId: context.chargerId,
       transactionId: params.transactionId,
       stoppedAt: parseOcppDate(params.timestamp),
@@ -264,7 +295,9 @@ export class OcppHandlers {
       reason: params.reason
     });
 
-    await this.proxyAuthorization.stopTransaction(context.chargerId, params);
+    if (stopResult.status === 'stopped') {
+      await this.proxyAuthorization.stopTransaction(context.chargerId, params);
+    }
 
     return {
       idTagInfo: {

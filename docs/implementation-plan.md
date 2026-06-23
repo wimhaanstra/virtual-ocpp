@@ -38,6 +38,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Simulator smoke flow: `--smoke` simulator mode and `npm run smoke:simulator` provide a fast repeatable charger session that ensures tag access, sends meter samples, stops the transaction, and prints a success marker.
 - OCPP version compatibility research: documented why OCPP 1.6j to newer OCPP support should be an explicit upstream adapter layer, with OCPP 2.0.1 as the first future target and unsupported mappings visible to operators.
 - Manual proxy stop recovery: stopped local sessions can preview and send a one-off `StopTransaction` to a selected proxy target using an operator-supplied upstream transaction id, show a predicted next upstream id from the latest stored mapping, then record the recovered mapping for auditability.
+- Session lifecycle hardening increment 1: duplicate `StartTransaction` retries reuse the existing active local transaction, duplicate `StopTransaction` calls preserve original stop data, and unmatched positive transaction stops are logged without creating or mutating sessions.
 
 ## Next Candidate Slices
 

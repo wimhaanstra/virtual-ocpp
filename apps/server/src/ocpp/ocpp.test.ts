@@ -992,6 +992,126 @@ describe('OCPP 1.6 local primary', () => {
     ).toBe(false);
   });
 
+  it('ignores duplicate StopTransaction calls without changing the original stopped session', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'DUPLICATE-STOP-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-DUPLICATE-STOP' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-duplicate-stop',
+      chargerId: 'SMART-EVSE-DUPLICATE-STOP',
+      name: 'Duplicate stop CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-DUPLICATE-STOP',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-DUPLICATE-STOP');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const start = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'DUPLICATE-STOP-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { transactionId: number; idTagInfo: { status: string } };
+
+    await charger.call('StopTransaction', {
+      transactionId: start.transactionId,
+      idTag: 'DUPLICATE-STOP-TAG',
+      meterStop: 1500,
+      timestamp: '2026-06-19T10:10:00.000Z',
+      reason: 'Local'
+    });
+    await charger.call('StopTransaction', {
+      transactionId: start.transactionId,
+      idTag: 'DUPLICATE-STOP-TAG',
+      meterStop: 9999,
+      timestamp: '2026-06-19T10:30:00.000Z',
+      reason: 'Other'
+    });
+
+    expect(server.db.select().from(chargingSessions).where(eq(chargingSessions.transactionId, start.transactionId)).get()).toMatchObject({
+      status: 'stopped',
+      stopMeterWh: 1500,
+      stopReason: 'Local',
+      stoppedAt: new Date('2026-06-19T10:10:00.000Z')
+    });
+    expect(proxy.calls.filter((call) => call.method === 'StopTransaction')).toHaveLength(1);
+    expect(server.db.select().from(logs).where(eq(logs.message, 'duplicate stop transaction ignored')).get()).toMatchObject({
+      chargerId: 'SMART-EVSE-DUPLICATE-STOP',
+      transactionId: start.transactionId
+    });
+  });
+
+  it('reuses an active transaction for duplicate StartTransaction retries', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'DUPLICATE-START-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-DUPLICATE-START' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-duplicate-start',
+      chargerId: 'SMART-EVSE-DUPLICATE-START',
+      name: 'Duplicate start CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-DUPLICATE-START',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-DUPLICATE-START');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const payload = {
+      connectorId: 1,
+      idTag: 'DUPLICATE-START-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    };
+    const first = (await charger.call('StartTransaction', payload)) as { transactionId: number; idTagInfo: { status: string } };
+    const retry = (await charger.call('StartTransaction', payload)) as { transactionId: number; idTagInfo: { status: string } };
+
+    expect(retry).toEqual(first);
+    expect(server.db.select().from(chargingSessions).where(eq(chargingSessions.chargerId, 'SMART-EVSE-DUPLICATE-START')).all()).toHaveLength(1);
+    expect(server.db.select().from(proxySessionMappings).where(eq(proxySessionMappings.chargerId, 'SMART-EVSE-DUPLICATE-START')).all()).toHaveLength(1);
+    expect(proxy.calls.filter((call) => call.method === 'StartTransaction')).toHaveLength(1);
+    expect(server.db.select().from(logs).where(eq(logs.message, 'duplicate start transaction reused')).get()).toMatchObject({
+      chargerId: 'SMART-EVSE-DUPLICATE-START',
+      transactionId: first.transactionId
+    });
+  });
+
+  it('logs unmatched StopTransaction calls without creating or mutating sessions', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-UNKNOWN-STOP');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const stop = await charger.call('StopTransaction', {
+      transactionId: 123456,
+      meterStop: 1500,
+      timestamp: '2026-06-19T10:10:00.000Z',
+      reason: 'Local'
+    });
+
+    expect(stop).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(server.db.select().from(chargingSessions).all()).toHaveLength(0);
+    expect(server.db.select().from(logs).where(eq(logs.message, 'unmatched stop transaction ignored')).get()).toMatchObject({
+      chargerId: 'SMART-EVSE-UNKNOWN-STOP',
+      transactionId: 123456
+    });
+  });
+
   it('detects meter gaps when a new transaction starts above the previous stop meter threshold', async () => {
     const server = await startTestServer({ meterGapThresholdWh: 500 });
     cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });

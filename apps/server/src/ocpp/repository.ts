@@ -316,6 +316,21 @@ export class OcppRepository {
       .all();
   }
 
+  findDuplicateActiveStartCandidate(input: {
+    chargerId: string;
+    connectorId: number;
+    idTag?: string;
+    startedAt: Date;
+    meterStart?: number;
+  }) {
+    const candidates = this.getActiveSessionsForConnector(input.chargerId, input.connectorId);
+    return candidates.find((session) => (
+      session.startedAt.getTime() === input.startedAt.getTime() &&
+      (session.idTag ?? null) === (input.idTag ?? null) &&
+      (session.startMeterWh ?? null) === (input.meterStart ?? null)
+    )) ?? null;
+  }
+
   findRecoverableStopTransactionSession(input: {
     chargerId: string;
     stoppedAt: Date;
@@ -367,6 +382,41 @@ export class OcppRepository {
       .limit(1)
       .get();
 
+    if (!session) {
+      this.recordLog({
+        level: 'warn',
+        category: 'session',
+        message: 'unmatched stop transaction ignored',
+        chargerId: input.chargerId,
+        transactionId: input.transactionId,
+        metadata: {
+          reason: input.reason ?? null,
+          meterStop: input.meterStop ?? null,
+          stoppedAt: input.stoppedAt.toISOString()
+        }
+      });
+      return { status: 'not_found' as const, session: null };
+    }
+
+    if (session.status === 'stopped') {
+      this.recordLog({
+        level: 'warn',
+        category: 'session',
+        message: 'duplicate stop transaction ignored',
+        chargerId: input.chargerId,
+        transactionId: input.transactionId,
+        metadata: {
+          existingStoppedAt: session.stoppedAt?.toISOString() ?? null,
+          existingMeterStop: session.stopMeterWh ?? null,
+          existingReason: session.stopReason ?? null,
+          duplicateStoppedAt: input.stoppedAt.toISOString(),
+          duplicateMeterStop: input.meterStop ?? null,
+          duplicateReason: input.reason ?? null
+        }
+      });
+      return { status: 'duplicate' as const, session };
+    }
+
     this.db
       .update(chargingSessions)
       .set({
@@ -396,6 +446,7 @@ export class OcppRepository {
       stoppedAt: input.stoppedAt.toISOString(),
       reason: input.reason ?? null
     });
+    return { status: 'stopped' as const, session };
   }
 
   recordMeterSample(input: {
