@@ -399,6 +399,10 @@ function buildProxyHealthDetail(health: ProxyHealthTarget) {
     details.push(`retry ${formatDateTime(health.nextReconnectAt)}`);
   }
 
+  if (health.reconnectFailureCount > 0) {
+    details.push(`${health.reconnectFailureCount} failed ${health.reconnectFailureCount === 1 ? "attempt" : "attempts"}`);
+  }
+
   if (health.lastErrorCode) {
     details.push(health.lastErrorCode);
   }

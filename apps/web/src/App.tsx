@@ -199,7 +199,8 @@ export default function App() {
         lastSuccessAt: null,
         lastFailureAt: null,
         nextReconnectAt: null,
-        lastErrorCode: null
+        lastErrorCode: null,
+        reconnectFailureCount: 0
       }))).map((health) => {
         const target = proxyTargets.find((entry) => entry.id === health.proxyTargetId);
         return {

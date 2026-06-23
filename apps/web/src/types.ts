@@ -226,6 +226,7 @@ export type ProxyHealthTarget = {
   lastFailureAt: string | null;
   nextReconnectAt: string | null;
   lastErrorCode: string | null;
+  reconnectFailureCount: number;
 };
 
 export type ActiveSessionAuditResponse = {

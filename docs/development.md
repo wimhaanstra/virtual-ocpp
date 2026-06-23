@@ -83,7 +83,7 @@ Current proxy behavior:
 - mirrored calls go to `BootNotification`, `Heartbeat`, `Authorize`, `StartTransaction`, `StatusNotification`, `MeterValues`, and `StopTransaction` in deterministic oldest-first target order
 - outbound tag mappings only affect the mirrored `Authorize` and `StartTransaction` payloads
 - one outbound websocket connection is kept per charger/target pair and is warmed when a charger connects
-- connection failures trigger in-memory reconnect backoff and are reflected in proxy health
+- connection failures trigger in-memory reconnect backoff and are reflected in proxy health with retry timing, latest error code, and reconnect failure count
 
 `DELETE /api/chargers/:id` is implemented. It requires the admin password plus exact charger id confirmation and removes charger-owned runtime state and linked proxy data.
 

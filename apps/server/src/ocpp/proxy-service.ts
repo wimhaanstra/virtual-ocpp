@@ -472,7 +472,8 @@ export class ProxyAuthorizationService {
         lastSuccessAt: runtime?.lastSuccessAt?.toISOString() ?? null,
         lastFailureAt: runtime?.lastFailureAt?.toISOString() ?? null,
         nextReconnectAt: nextReconnectAt?.toISOString() ?? null,
-        lastErrorCode: runtime?.lastErrorCode ?? null
+        lastErrorCode: runtime?.lastErrorCode ?? null,
+        reconnectFailureCount: backoff?.failures ?? 0
       };
     });
 

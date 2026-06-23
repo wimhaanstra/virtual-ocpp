@@ -801,6 +801,18 @@ describe('OCPP 1.6 local primary', () => {
 
     expect(response).toEqual({ idTagInfo: { status: 'Accepted' } });
     expect(server.db.select().from(logs).all().some((row) => row.message === 'proxy target unavailable, failing open')).toBe(true);
+    const cookie = await loginAdmin(server.app);
+    const health = await server.app.inject({
+      method: 'GET',
+      url: '/api/proxy-health?chargerId=SMART-EVSE-FAIL-OPEN',
+      headers: { cookie }
+    });
+    expect(health.statusCode).toBe(200);
+    expect(health.json().targets[0]).toMatchObject({
+      state: 'backoff',
+      reconnectFailureCount: 1
+    });
+    expect(health.json().targets[0].nextReconnectAt).toEqual(expect.any(String));
   });
 
   it('fails closed when an established deny-capable proxy connection is unavailable', async () => {

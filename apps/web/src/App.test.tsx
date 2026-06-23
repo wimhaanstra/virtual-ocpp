@@ -256,7 +256,8 @@ describe("App", () => {
                 lastSuccessAt: "2026-06-19T10:01:00.000Z",
                 lastFailureAt: null,
                 nextReconnectAt: null,
-                lastErrorCode: null
+                lastErrorCode: null,
+                reconnectFailureCount: 0
               }
             ]
           }),
@@ -789,7 +790,8 @@ describe("App", () => {
                 lastSuccessAt: "2026-06-19T10:01:00.000Z",
                 lastFailureAt: "2026-06-19T09:50:00.000Z",
                 nextReconnectAt: "2026-06-19T10:05:00.000Z",
-                lastErrorCode: null
+                lastErrorCode: null,
+                reconnectFailureCount: 2
               }
             ]
           }),
@@ -837,6 +839,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
     expect(screen.getByText(/last failure/i)).toBeInTheDocument();
     expect(screen.getByText(/retry/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 failed attempts/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show communication for Tap Electric" }));
 
