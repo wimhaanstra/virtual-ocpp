@@ -56,6 +56,7 @@ import type {
   SessionSummary,
   Tag,
   TagFormState,
+  TimeFormatPreference,
   ThemeMode
 } from "./types";
 import {
@@ -71,11 +72,13 @@ import {
   getChargerDisplayLabel,
   getInitialSidebarCollapsed,
   getInitialTheme,
+  getInitialTimeFormat,
   getSearchParam,
   getTagAccessForCharger,
   getViewFromPath,
   getProxyTargetUpstreamIdentity,
   proxyUrlIncludesStationId,
+  setTimeFormatPreference,
   setStoredPreference,
   withChargerContext
 } from "./app-helpers";
@@ -167,6 +170,7 @@ export default function App() {
   const [onboardingProxyDraft, setOnboardingProxyDraft] = useState<OnboardingProxyDraft>(() => emptyOnboardingProxyDraft());
   const [selectedChargerId, setSelectedChargerId] = useState(() => getSearchParam("chargerId"));
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
+  const [timeFormat, setTimeFormat] = useState<TimeFormatPreference>(() => getInitialTimeFormat());
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => getInitialSidebarCollapsed());
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("connecting");
   const [message, setMessage] = useState("Sign in to manage proxy targets.");
@@ -1462,6 +1466,11 @@ export default function App() {
     });
   }
 
+  function updateTimeFormat(value: TimeFormatPreference) {
+    setTimeFormat(value);
+    setTimeFormatPreference(value);
+  }
+
   function cancelTagEdit() {
     setTagForm(emptyTagForm());
     setTagModalOpen(false);
@@ -1881,8 +1890,10 @@ export default function App() {
             busy={busy}
             onboardingSettings={onboardingSettings}
             onboardingSettingsStatus={onboardingSettingsStatus}
+            timeFormat={timeFormat}
             onRefreshOnboarding={() => void loadOnboardingSettings()}
             onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
+            onTimeFormatChange={updateTimeFormat}
           />
         ) : activeView === "Sessions" ? (
           <>

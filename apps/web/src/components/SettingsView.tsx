@@ -1,5 +1,5 @@
 import { RefreshCcw, Sparkles } from "lucide-react";
-import type { OnboardingSettings, OnboardingSettingsStatus } from "../types";
+import type { OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
 import { formatDateTime, getOnboardingState, getOnboardingStateLabel, getOnboardingStateTone } from "../app-helpers";
 import { Button } from "./ui/button";
 
@@ -7,16 +7,20 @@ type SettingsViewProps = {
   busy: boolean;
   onboardingSettings: OnboardingSettings | null;
   onboardingSettingsStatus: OnboardingSettingsStatus;
+  timeFormat: TimeFormatPreference;
   onRefreshOnboarding: () => void;
   onRunOnboarding: () => void;
+  onTimeFormatChange: (value: TimeFormatPreference) => void;
 };
 
 export function SettingsView({
   busy,
   onboardingSettings,
   onboardingSettingsStatus,
+  timeFormat,
   onRefreshOnboarding,
-  onRunOnboarding
+  onRunOnboarding,
+  onTimeFormatChange
 }: SettingsViewProps) {
   const onboardingState = getOnboardingState(onboardingSettings);
   const onboardingStateLabel = getOnboardingStateLabel(onboardingState);
@@ -62,6 +66,37 @@ export function SettingsView({
             <dd>{onboardingSettings?.skippedAt ? formatDateTime(onboardingSettings.skippedAt) : "-"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="topbar-actions page-section-header">
+          <div>
+            <p className="eyebrow">Display</p>
+            <h2>Time format</h2>
+            <p className="status-copy">Choose how timestamps are shown across dashboards, sessions, and communication rows.</p>
+          </div>
+        </div>
+
+        <div className="segmented-control" role="radiogroup" aria-label="Time format">
+          <button
+            type="button"
+            className={timeFormat === "24h" ? "active" : ""}
+            role="radio"
+            aria-checked={timeFormat === "24h"}
+            onClick={() => onTimeFormatChange("24h")}
+          >
+            24 hour
+          </button>
+          <button
+            type="button"
+            className={timeFormat === "12h" ? "active" : ""}
+            role="radio"
+            aria-checked={timeFormat === "12h"}
+            onClick={() => onTimeFormatChange("12h")}
+          >
+            12 hour
+          </button>
+        </div>
       </section>
 
       <section className="panel settings-panel">

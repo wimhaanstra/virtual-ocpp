@@ -1339,6 +1339,10 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Completed", { selector: ".pill" })).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "24 hour" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "12 hour" }));
+    expect(screen.getByRole("radio", { name: "12 hour" })).toHaveAttribute("aria-checked", "true");
+    expect(window.localStorage.getItem("virtual-ocpp-time-format")).toBe("12h");
 
     fireEvent.click(screen.getByRole("button", { name: "Run onboarding" }));
 

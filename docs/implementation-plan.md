@@ -43,6 +43,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Proxy resilience polish increment 1: proxy health now exposes reconnect failure counts alongside retry timing and latest error context, and the charger dashboard renders repeated upstream failure attempts.
 - Meter gap polish increment 1: session rows prefer exact stopped-session meter totals over live-sample estimates, and session details plus force-close/recovery previews show readable meter-source labels so operators can tell exact stop values from latest-sample fallbacks.
 - Communication export and purge increment 1: operators can export the currently filtered redacted communication journal as CSV, retention purge is explicit, and destructive filtered purge requires a constrained scope plus `PURGE` confirmation.
+- Settings display preferences increment 1: Settings now exposes a browser-persisted 12-hour/24-hour timestamp preference that applies to dashboard, session, settings, and communication timestamp rendering.
 
 ## Next Candidate Slices
 

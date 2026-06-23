@@ -397,6 +397,7 @@ export type OnboardingSettingsStatus = "idle" | "loading" | "ready" | "unavailab
 
 export type ActiveView = "Home" | "Settings" | "Charger dashboard" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
 export type ThemeMode = "dark" | "light";
+export type TimeFormatPreference = "24h" | "12h";
 
 export type CommunicationJournalFilters = {
   from: string;

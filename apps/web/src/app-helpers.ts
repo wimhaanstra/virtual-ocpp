@@ -12,6 +12,7 @@ import type {
   OnboardingState,
   Tag,
   TagFormState,
+  TimeFormatPreference,
   ThemeMode
 } from "./types";
 
@@ -144,6 +145,15 @@ export function getInitialTheme(): ThemeMode {
   return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
+export function getInitialTimeFormat(): TimeFormatPreference {
+  const storedTimeFormat = getStoredPreference("virtual-ocpp-time-format");
+  return storedTimeFormat === "12h" ? "12h" : "24h";
+}
+
+export function setTimeFormatPreference(value: TimeFormatPreference) {
+  setStoredPreference("virtual-ocpp-time-format", value);
+}
+
 export function getInitialSidebarCollapsed() {
   return getStoredPreference("virtual-ocpp-sidebar-collapsed") === "true";
 }
@@ -209,7 +219,15 @@ export function formatDateTime(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: false
+    hour12: getInitialTimeFormat() === "12h"
+  });
+}
+
+export function formatTime(value: string) {
+  return new Date(value).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: getInitialTimeFormat() === "12h"
   });
 }
 

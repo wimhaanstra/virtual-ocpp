@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Power, PowerOff, RefreshCcw, Send } from "lucide-react";
 import type { ActiveSessionAuditResponse, ChargingSession, ChargingStats } from "../types";
-import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW, getMeterSourceLabel } from "../app-helpers";
+import { findAuditForSession, formatDateTime, formatEnergyWh, formatPowerW, formatTime, getMeterSourceLabel } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type SessionsViewProps = {
@@ -97,8 +97,8 @@ export function SessionsView({
                               {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
                             </Button>
                           </td>
-                          <td>{formatSessionTime(session.startedAt)}</td>
-                          <td>{session.stoppedAt ? formatSessionTime(session.stoppedAt) : "Active"}</td>
+                          <td>{formatTime(session.startedAt)}</td>
+                          <td>{session.stoppedAt ? formatTime(session.stoppedAt) : "Active"}</td>
                           <td title={getMeterSourceLabel(meterSource)}>{formatEnergyWh(energyUsedWh)}</td>
                           <td>
                             {session.active && liveStats ? (
@@ -252,14 +252,6 @@ function groupSessionsByDate(sessions: ChargingSession[]) {
   }
 
   return Array.from(groups.values());
-}
-
-function formatSessionTime(value: string) {
-  return new Date(value).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  });
 }
 
 function getSessionEnergyUsedWh(session: ChargingSession, liveStats: ChargingStats | null) {

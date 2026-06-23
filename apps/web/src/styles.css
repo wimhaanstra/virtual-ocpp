@@ -1052,6 +1052,34 @@ a {
   justify-content: flex-start;
 }
 
+.segmented-control {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(100px, 1fr));
+  width: fit-content;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+  padding: 3px;
+  gap: 3px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  border: 0;
+  border-radius: calc(var(--radius) - 1px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.segmented-control button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
 .global-active-sessions {
   align-content: start;
 }

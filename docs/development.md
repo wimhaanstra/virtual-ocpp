@@ -105,6 +105,8 @@ Stopped sessions use the final `StopTransaction` meter value as the exact energy
 
 The frontend opens `GET /api/live-updates` with `EventSource` after login. The stream uses the signed admin session cookie, replays missed events after reconnect, and tells the UI which REST slices to refresh.
 
+Display preferences such as 12-hour versus 24-hour timestamp formatting are stored locally in the browser and apply to dashboards, sessions, settings, and communication rows after the Settings control is changed.
+
 ## Communication Journal
 
 The protected communication journal stores redacted protocol traces for charger, proxy, and server traffic.
