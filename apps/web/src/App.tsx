@@ -1531,7 +1531,7 @@ export default function App() {
           ? `Purged ${result.deletedCount} communication row${result.deletedCount === 1 ? "" : "s"}${result.scope === "filters" ? " matching current filters" : ""}.`
           : "Communication journal purged."
       );
-      await loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" });
+      await Promise.all([loadCommunicationSettings(), loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" })]);
     } finally {
       setBusy(false);
     }

@@ -119,7 +119,8 @@ function getCommunicationSettings(db: Database, journal?: CommunicationJournalSe
   return {
     retentionHours: getCommunicationRetentionHours(db),
     defaultRetentionHours: DefaultCommunicationRetentionHours,
-    storage: journal?.getStorageSummary() ?? null
+    storage: journal?.getStorageSummary() ?? null,
+    lastPurge: journal?.getLastPurgeSummary() ?? null
   };
 }
 

@@ -419,6 +419,14 @@ export type CommunicationSettings = {
   retentionHours: number;
   defaultRetentionHours: number;
   storage: CommunicationJournalStorageSummary | null;
+  lastPurge: CommunicationJournalLastPurgeSummary | null;
+};
+
+export type CommunicationJournalLastPurgeSummary = {
+  purgedAt: string;
+  deletedCount: number;
+  retentionHours: number;
+  scope: "retention" | "filters";
 };
 
 export type OnboardingState = "unknown" | "pending" | "completed" | "skipped";

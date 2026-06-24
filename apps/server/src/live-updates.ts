@@ -85,6 +85,7 @@ export type LiveUpdateEvent =
       type: 'journal.purged';
       retentionHours: number;
       deletedCount: number;
+      scope?: 'retention' | 'filters';
     }
   | {
       type: 'refresh';

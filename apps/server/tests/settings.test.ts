@@ -197,6 +197,12 @@ describe('onboarding settings api', () => {
         oldestCreatedAt: journalCreatedAt.toISOString(),
         newestCreatedAt: journalCreatedAt.toISOString(),
         retentionHours: 24
+      },
+      lastPurge: {
+        purgedAt: expect.any(String),
+        deletedCount: 0,
+        retentionHours: 24,
+        scope: 'retention'
       }
     });
 
@@ -215,15 +221,26 @@ describe('onboarding settings api', () => {
         oldestCreatedAt: journalCreatedAt.toISOString(),
         newestCreatedAt: journalCreatedAt.toISOString(),
         retentionHours: 72
+      },
+      lastPurge: {
+        purgedAt: expect.any(String),
+        deletedCount: 0,
+        retentionHours: 24,
+        scope: 'retention'
       }
     });
-    expect(tempDb.db.select().from(appSettings).all()).toEqual([
+    expect(tempDb.db.select().from(appSettings).all()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        key: 'communication.lastPurge',
+        value: expect.stringContaining('"deletedCount":0'),
+        updatedAt: expect.any(Date)
+      }),
       expect.objectContaining({
         key: 'communication.retentionHours',
         value: '72',
         updatedAt: expect.any(Date)
       })
-    ]);
+    ]));
 
     const invalid = await app.inject({
       method: 'PATCH',

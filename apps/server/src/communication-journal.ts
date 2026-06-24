@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
 import type { Database } from './db/client.js';
-import { communicationJournal } from './db/schema.js';
+import { appSettings, communicationJournal } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
 
 const PURGE_THROTTLE_MS = 10 * 60 * 1000;
 const DEFAULT_LIST_WINDOW_HOURS = 24;
 const REDACTED_VALUE = '[redacted]';
 const SENSITIVE_KEY_PARTS = ['password', 'secret', 'token', 'authorization', 'cookie', 'credential'];
+const LastPurgeSettingKey = 'communication.lastPurge';
 
 export type CommunicationDirection = 'inbound' | 'outbound';
 export type CommunicationSourceType = 'charger' | 'server' | 'proxy';
@@ -76,6 +77,13 @@ export type CommunicationJournalStorageSummary = {
   oldestCreatedAt: string | null;
   newestCreatedAt: string | null;
   retentionHours: number;
+};
+
+export type CommunicationJournalLastPurgeSummary = {
+  purgedAt: string;
+  deletedCount: number;
+  retentionHours: number;
+  scope: 'retention' | 'filters';
 };
 
 export type CommunicationJournalCursor = {
@@ -287,11 +295,13 @@ export class CommunicationJournalService {
     const cutoff = new Date(now.getTime() - retentionHours * 60 * 60 * 1000);
     const result = this.db.delete(communicationJournal).where(lt(communicationJournal.createdAt, cutoff)).run();
     const deletedCount = toChanges(result);
+    this.recordLastPurge({ scope: 'retention', deletedCount, retentionHours, purgedAt: now });
     if (deletedCount > 0) {
       this.liveUpdates?.publish({
         type: 'journal.purged',
         retentionHours,
-        deletedCount
+        deletedCount,
+        scope: 'retention'
       });
     }
     return deletedCount;
@@ -305,11 +315,14 @@ export class CommunicationJournalService {
 
     const result = this.db.delete(communicationJournal).where(and(...conditions)).run();
     const deletedCount = toChanges(result);
+    const retentionHours = this.getRetentionHours();
+    this.recordLastPurge({ scope: 'filters', deletedCount, retentionHours, purgedAt: new Date() });
     if (deletedCount > 0) {
       this.liveUpdates?.publish({
         type: 'journal.purged',
-        retentionHours: this.getRetentionHours(),
-        deletedCount
+        retentionHours,
+        deletedCount,
+        scope: 'filters'
       });
     }
     return { deletedCount, skipped: false };
@@ -363,6 +376,47 @@ export class CommunicationJournalService {
       newestCreatedAt: toIsoDate(row?.newestCreatedAt ?? null),
       retentionHours: this.getRetentionHours()
     };
+  }
+
+  getLastPurgeSummary(): CommunicationJournalLastPurgeSummary | null {
+    const row = this.db.select().from(appSettings).where(eq(appSettings.key, LastPurgeSettingKey)).limit(1).get();
+    if (!row) return null;
+
+    try {
+      const parsed = JSON.parse(row.value) as Partial<CommunicationJournalLastPurgeSummary>;
+      if (
+        typeof parsed.purgedAt !== 'string' ||
+        typeof parsed.deletedCount !== 'number' ||
+        typeof parsed.retentionHours !== 'number' ||
+        (parsed.scope !== 'retention' && parsed.scope !== 'filters')
+      ) {
+        return null;
+      }
+
+      return {
+        purgedAt: parsed.purgedAt,
+        deletedCount: parsed.deletedCount,
+        retentionHours: parsed.retentionHours,
+        scope: parsed.scope
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private recordLastPurge(input: { scope: 'retention' | 'filters'; deletedCount: number; retentionHours: number; purgedAt: Date }) {
+    const value = JSON.stringify({
+      purgedAt: input.purgedAt.toISOString(),
+      deletedCount: input.deletedCount,
+      retentionHours: input.retentionHours,
+      scope: input.scope
+    } satisfies CommunicationJournalLastPurgeSummary);
+    const existing = this.db.select().from(appSettings).where(eq(appSettings.key, LastPurgeSettingKey)).limit(1).get();
+    if (existing) {
+      this.db.update(appSettings).set({ value, updatedAt: input.purgedAt }).where(eq(appSettings.key, LastPurgeSettingKey)).run();
+    } else {
+      this.db.insert(appSettings).values({ key: LastPurgeSettingKey, value, updatedAt: input.purgedAt }).run();
+    }
   }
 
   private purgeIfDue(now: Date) {

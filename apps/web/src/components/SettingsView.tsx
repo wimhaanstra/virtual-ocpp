@@ -61,6 +61,7 @@ export function SettingsView({
   const parsedRetention = Number(retentionDraft);
   const canSaveRetention = Number.isInteger(parsedRetention) && parsedRetention >= 1 && parsedRetention <= 8760 && parsedRetention !== communicationSettings?.retentionHours;
   const storage = communicationSettings?.storage ?? null;
+  const lastPurge = communicationSettings?.lastPurge ?? null;
   const canPurgeExpired = purgeConfirmation.trim() === "PURGE";
 
   useEffect(() => {
@@ -131,6 +132,22 @@ export function SettingsView({
           <div>
             <dt>Newest row</dt>
             <dd>{storage?.newestCreatedAt ? formatDateTime(storage.newestCreatedAt) : "-"}</dd>
+          </div>
+          <div>
+            <dt>Last purge</dt>
+            <dd>{lastPurge ? formatDateTime(lastPurge.purgedAt) : "-"}</dd>
+          </div>
+          <div>
+            <dt>Deleted last purge</dt>
+            <dd>{lastPurge ? lastPurge.deletedCount : "-"}</dd>
+          </div>
+          <div>
+            <dt>Purge scope</dt>
+            <dd>{lastPurge ? formatPurgeScope(lastPurge.scope) : "-"}</dd>
+          </div>
+          <div>
+            <dt>Purge retention</dt>
+            <dd>{lastPurge ? `${lastPurge.retentionHours} hours` : "-"}</dd>
           </div>
         </dl>
 
@@ -240,4 +257,8 @@ export function SettingsView({
       </section>
     </section>
   );
+}
+
+function formatPurgeScope(scope: "retention" | "filters") {
+  return scope === "retention" ? "Expired rows" : "Filtered rows";
 }

@@ -119,7 +119,7 @@ The protected communication journal stores redacted protocol traces for charger,
 - `GET /api/communication-journal/export` downloads the filtered redacted rows as CSV.
 - `POST /api/communication-journal/purge` deletes rows older than the configured retention window, or rows matching an explicit filter scope when the operator confirms with `PURGE`.
 
-The Settings page shows the same retention value with storage summary details and exposes a guarded purge action for expired rows. Filtered purges stay on the Communication page where the active filter scope is visible.
+The Settings page shows the same retention value with storage summary details, the last purge time/result, and a guarded purge action for expired rows. Filtered purges stay on the Communication page where the active filter scope is visible.
 
 Secret-like fields are redacted before storage. Exports use the same redacted public journal rows and are meant for operator troubleshooting, not for raw payload archives.
 

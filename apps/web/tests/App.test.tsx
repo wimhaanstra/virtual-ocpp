@@ -182,6 +182,12 @@ function buildCommunicationSettingsResponse(retentionHours = 24, rowCount = 0) {
       oldestCreatedAt: rowCount > 0 ? "2026-06-19T08:30:00.000Z" : null,
       newestCreatedAt: rowCount > 0 ? "2026-06-19T09:00:00.000Z" : null,
       retentionHours
+    },
+    lastPurge: {
+      purgedAt: "2026-06-19T10:00:00.000Z",
+      deletedCount: 2,
+      retentionHours,
+      scope: "retention"
     }
   };
 }
