@@ -1,5 +1,5 @@
-import { Fragment, type FormEvent, type ReactNode } from "react";
-import { ChevronDown, Download, Eye, EyeOff, RefreshCcw, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Download, Eye, EyeOff, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { CommunicationJournalFilters, CommunicationJournalItem, ProxyTarget } from "../types";
 import { buildCommunicationSummary, formatDateTime, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -8,15 +8,17 @@ type CommunicationViewProps = {
   busy: boolean;
   communicationFilters: CommunicationJournalFilters;
   communicationJournal: CommunicationJournalItem[];
+  hasMore: boolean;
+  loadingMore: boolean;
   communicationRetentionHours: number | null;
   expandedCommunicationJournalId: string | null;
   proxyTargets: ProxyTarget[];
   selectedChargerId: string;
   selectedChargerLabel: string;
-  onApplyFilters: (event: FormEvent<HTMLFormElement>) => void;
   onCommunicationFiltersChange: (filters: CommunicationJournalFilters) => void;
   onExport: () => void;
   onExpandedCommunicationJournalIdChange: (id: string | null) => void;
+  onLoadMore: () => void;
   onPurge: () => void;
   onRefresh: () => void;
   onRenderEndpoint: (type: string, id: string) => ReactNode;
@@ -27,39 +29,86 @@ export function CommunicationView({
   busy,
   communicationFilters,
   communicationJournal,
+  hasMore,
+  loadingMore,
   communicationRetentionHours,
   expandedCommunicationJournalId,
   proxyTargets,
   selectedChargerId,
   selectedChargerLabel,
-  onApplyFilters,
   onCommunicationFiltersChange,
   onExport,
   onExpandedCommunicationJournalIdChange,
+  onLoadMore,
   onPurge,
   onRefresh,
   onRenderEndpoint,
   onResetFilters
 }: CommunicationViewProps) {
+  const [draftFilters, setDraftFilters] = useState(communicationFilters);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const validationError = useMemo(() => validateCommunicationFilters(draftFilters), [draftFilters]);
   const scopeChip = selectedChargerLabel ? `Scope: ${selectedChargerLabel}` : null;
   const activeFilterChips = buildActiveFilterChips(communicationFilters);
   const hasAdvancedFilters = Boolean(
-    communicationFilters.from ||
-      communicationFilters.to ||
-      communicationFilters.sourceType ||
-      communicationFilters.sourceId ||
-      communicationFilters.targetType ||
-      communicationFilters.targetId ||
-      communicationFilters.chargerId ||
-      communicationFilters.proxyTargetId
+    draftFilters.from ||
+      draftFilters.to ||
+      draftFilters.sourceType ||
+      draftFilters.sourceId ||
+      draftFilters.targetType ||
+      draftFilters.targetId ||
+      draftFilters.chargerId ||
+      draftFilters.proxyTargetId
   );
 
+  useEffect(() => {
+    setDraftFilters(communicationFilters);
+  }, [communicationFilters]);
+
+  useEffect(() => {
+    if (validationError) return;
+    const timeout = window.setTimeout(() => {
+      if (!areCommunicationFiltersEqual(draftFilters, communicationFilters)) {
+        onCommunicationFiltersChange(draftFilters);
+      }
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [communicationFilters, draftFilters, onCommunicationFiltersChange, validationError]);
+
+  useEffect(() => {
+    const element = loadMoreRef.current;
+    if (!element || !hasMore || loadingMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        onLoadMore();
+      }
+    }, { rootMargin: "320px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, onLoadMore]);
+
   function updateFilters(patch: Partial<CommunicationJournalFilters>) {
-    onCommunicationFiltersChange({ ...communicationFilters, ...patch });
+    setDraftFilters((current) => applyCommunicationFilterPatch(current, patch));
+  }
+
+  function updateFiltersNow(patch: Partial<CommunicationJournalFilters>) {
+    const next = applyCommunicationFilterPatch(draftFilters, patch);
+    setDraftFilters(next);
+    if (!validateCommunicationFilters(next)) {
+      onCommunicationFiltersChange(next);
+    }
   }
 
   function formatProxyTargetLabel(proxyTargetId: string) {
     return proxyTargets.find((target) => target.id === proxyTargetId)?.name ?? proxyTargetId;
+  }
+
+  function removeFilterChip(key: keyof CommunicationJournalFilters) {
+    if (key === "preset" || key === "from" || key === "to") {
+      updateFiltersNow({ preset: "24h", from: "", to: "" });
+      return;
+    }
+    updateFiltersNow({ [key]: "" });
   }
 
   return (
@@ -70,7 +119,7 @@ export function CommunicationView({
             <p className="eyebrow">Journal</p>
             <h2>Filters</h2>
             <p className="status-copy">
-              Showing the last 24 hours by default, newest first, limit 200. Retention is {communicationRetentionHours ?? 24} hours.
+              Showing the last 24 hours by default, newest first, 100 rows per page. Retention is {communicationRetentionHours ?? 24} hours.
             </p>
           </div>
           <SlidersHorizontal aria-hidden="true" />
@@ -88,8 +137,16 @@ export function CommunicationView({
           <div className="filter-chip-row" aria-label="Active communication filters">
             {activeFilterChips.length > 0 ? (
               activeFilterChips.map((chip) => (
-                <span className="filter-chip" key={chip}>
-                  {chip}
+                <span className="filter-chip removable-filter-chip" key={chip.key}>
+                  {chip.label}
+                  <button
+                    type="button"
+                    onClick={() => removeFilterChip(chip.key)}
+                    aria-label={`Remove ${chip.label} filter`}
+                    title={`Remove ${chip.label} filter`}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
                 </span>
               ))
             ) : (
@@ -97,12 +154,22 @@ export function CommunicationView({
             )}
           </div>
         </div>
-        <form className="communication-filter-form" onSubmit={onApplyFilters}>
+        <div className="communication-filter-form">
           <div className="communication-filter-primary">
+            <label className="field">
+              <span>Time</span>
+              <select value={draftFilters.preset} onChange={(event) => updateFiltersNow({ preset: event.target.value })}>
+                <option value="15m">Last 15m</option>
+                <option value="1h">Last hour</option>
+                <option value="6h">Last 6h</option>
+                <option value="24h">Last 24h</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
             <label className="field">
               <span>OCPP method</span>
               <input
-                value={communicationFilters.ocppMethod}
+                value={draftFilters.ocppMethod}
                 onChange={(event) => updateFilters({ ocppMethod: event.target.value })}
                 placeholder="BootNotification"
               />
@@ -110,8 +177,8 @@ export function CommunicationView({
             <label className="field">
               <span>Message type</span>
               <select
-                value={communicationFilters.messageType}
-                onChange={(event) => updateFilters({ messageType: event.target.value })}
+                value={draftFilters.messageType}
+                onChange={(event) => updateFiltersNow({ messageType: event.target.value })}
               >
                 <option value="">Any</option>
                 <option value="call">Call</option>
@@ -124,21 +191,19 @@ export function CommunicationView({
             <label className="field">
               <span>Transaction</span>
               <input
-                value={communicationFilters.transactionId}
+                value={draftFilters.transactionId}
                 onChange={(event) => updateFilters({ transactionId: event.target.value })}
                 inputMode="numeric"
                 placeholder="1781932670376"
               />
             </label>
             <div className="action-row communication-filter-actions">
-              <Button type="submit" className="compact-text-button" disabled={busy} aria-label="Apply filters">
-                Apply
-              </Button>
               <Button type="button" className="button-secondary compact-text-button" onClick={onResetFilters} disabled={busy}>
                 Reset
               </Button>
             </div>
           </div>
+          {validationError ? <p className="field-error">{validationError}</p> : null}
 
           <details className="advanced-filters" open={hasAdvancedFilters || undefined}>
             <summary>
@@ -149,24 +214,26 @@ export function CommunicationView({
               <label className="field">
                 <span>From</span>
                 <input
-                  value={communicationFilters.from}
+                  value={draftFilters.from}
                   onChange={(event) => updateFilters({ from: event.target.value })}
                   type="datetime-local"
+                  disabled={draftFilters.preset !== "custom"}
                 />
               </label>
               <label className="field">
                 <span>To</span>
                 <input
-                  value={communicationFilters.to}
+                  value={draftFilters.to}
                   onChange={(event) => updateFilters({ to: event.target.value })}
                   type="datetime-local"
+                  disabled={draftFilters.preset !== "custom"}
                 />
               </label>
               <label className="field">
                 <span>Source type</span>
                 <select
-                  value={communicationFilters.sourceType}
-                  onChange={(event) => updateFilters({ sourceType: event.target.value })}
+                  value={draftFilters.sourceType}
+                  onChange={(event) => updateFiltersNow({ sourceType: event.target.value })}
                 >
                   <option value="">Any</option>
                   <option value="charger">Charger</option>
@@ -177,7 +244,7 @@ export function CommunicationView({
               <label className="field">
                 <span>Source id</span>
                 <input
-                  value={communicationFilters.sourceId}
+                  value={draftFilters.sourceId}
                   onChange={(event) => updateFilters({ sourceId: event.target.value })}
                   placeholder="SMART-EVSE-1"
                 />
@@ -185,8 +252,8 @@ export function CommunicationView({
               <label className="field">
                 <span>Target type</span>
                 <select
-                  value={communicationFilters.targetType}
-                  onChange={(event) => updateFilters({ targetType: event.target.value })}
+                  value={draftFilters.targetType}
+                  onChange={(event) => updateFiltersNow({ targetType: event.target.value })}
                 >
                   <option value="">Any</option>
                   <option value="charger">Charger</option>
@@ -197,7 +264,7 @@ export function CommunicationView({
               <label className="field">
                 <span>Target id</span>
                 <input
-                  value={communicationFilters.targetId}
+                  value={draftFilters.targetId}
                   onChange={(event) => updateFilters({ targetId: event.target.value })}
                   placeholder="server"
                 />
@@ -205,10 +272,10 @@ export function CommunicationView({
               <label className="field">
                 <span>Charger id</span>
                 {selectedChargerId ? (
-                  <input value={communicationFilters.chargerId} disabled />
+                  <input value={selectedChargerId} disabled />
                 ) : (
                   <input
-                    value={communicationFilters.chargerId}
+                    value={draftFilters.chargerId}
                     onChange={(event) => updateFilters({ chargerId: event.target.value })}
                     placeholder="SMART-EVSE-1"
                   />
@@ -217,14 +284,14 @@ export function CommunicationView({
               <label className="field">
                 <span>Proxy target id</span>
                 <input
-                  value={communicationFilters.proxyTargetId}
+                  value={draftFilters.proxyTargetId}
                   onChange={(event) => updateFilters({ proxyTargetId: event.target.value })}
                   placeholder="proxy-1"
                 />
               </label>
             </div>
           </details>
-        </form>
+        </div>
       </section>
 
       <section className="panel table-panel communication-table-panel">
@@ -352,14 +419,62 @@ export function CommunicationView({
             </table>
           </div>
         )}
+        <div ref={loadMoreRef} className="communication-load-more">
+          {hasMore ? (
+            <Button type="button" className="button-secondary compact-text-button" onClick={onLoadMore} disabled={busy || loadingMore}>
+              {loadingMore ? "Loading..." : "Load older rows"}
+            </Button>
+          ) : communicationJournal.length > 0 ? (
+            <span className="status-copy">No older rows in this filter window.</span>
+          ) : null}
+        </div>
       </section>
     </section>
 
   );
 }
 
+function validateCommunicationFilters(filters: CommunicationJournalFilters) {
+  const transactionId = filters.transactionId.trim();
+  if (transactionId && !/^\d+$/.test(transactionId)) {
+    return "Transaction must be a whole number.";
+  }
+
+  const from = parseLocalDateTime(filters.from);
+  const to = parseLocalDateTime(filters.to);
+  if (filters.from.trim() && !from) return "From date is invalid.";
+  if (filters.to.trim() && !to) return "To date is invalid.";
+  if (from && to && from.getTime() > to.getTime()) return "From must be before To.";
+  return "";
+}
+
+function applyCommunicationFilterPatch(filters: CommunicationJournalFilters, patch: Partial<CommunicationJournalFilters>) {
+  const next = { ...filters, ...patch };
+  if (patch.preset && patch.preset !== "custom") {
+    next.from = "";
+    next.to = "";
+  }
+  if ((patch.from !== undefined || patch.to !== undefined) && next.preset !== "custom") {
+    next.preset = "custom";
+  }
+  return next;
+}
+
+function parseLocalDateTime(value: string) {
+  if (!value.trim()) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function areCommunicationFiltersEqual(left: CommunicationJournalFilters, right: CommunicationJournalFilters) {
+  return (Object.keys(left) as Array<keyof CommunicationJournalFilters>).every((key) => left[key] === right[key]);
+}
+
 function buildActiveFilterChips(filters: CommunicationJournalFilters) {
-  const chips: string[] = [];
+  const chips: Array<{ key: keyof CommunicationJournalFilters; label: string }> = [];
+  if (filters.preset.trim() && filters.preset !== "24h" && filters.preset !== "custom") {
+    chips.push({ key: "preset", label: `Time: ${formatPreset(filters.preset)}` });
+  }
   const labels: Array<[keyof CommunicationJournalFilters, string]> = [
     ["ocppMethod", "Method"],
     ["messageType", "Message type"],
@@ -377,11 +492,18 @@ function buildActiveFilterChips(filters: CommunicationJournalFilters) {
     const value = filters[key].trim();
     if (!value) continue;
     if (key === "from" || key === "to") {
-      chips.push(`${label}: ${value.replace("T", " ")}`);
+      chips.push({ key, label: `${label}: ${value.replace("T", " ")}` });
       continue;
     }
-    chips.push(`${label}: ${value}`);
+    chips.push({ key, label: `${label}: ${value}` });
   }
 
   return chips;
+}
+
+function formatPreset(value: string) {
+  if (value === "15m") return "Last 15m";
+  if (value === "1h") return "Last hour";
+  if (value === "6h") return "Last 6h";
+  return value;
 }

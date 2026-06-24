@@ -69,10 +69,17 @@ export type LiveUpdateEvent =
   | {
       type: 'journal.recorded';
       journalId: string;
+      createdAt: string;
+      direction: string;
+      sourceType: string;
+      sourceId: string;
+      targetType: string;
+      targetId: string;
       chargerId: string | null | undefined;
       proxyTargetId: string | null | undefined;
       messageType: string;
       ocppMethod: string | null | undefined;
+      transactionId: number | null | undefined;
     }
   | {
       type: 'journal.purged';

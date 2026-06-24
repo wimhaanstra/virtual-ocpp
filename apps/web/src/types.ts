@@ -27,6 +27,17 @@ export type LiveUpdateEvent = {
   type: string;
   topic?: LiveUpdateTopic;
   chargerId?: string | null;
+  journalId?: string;
+  createdAt?: string;
+  direction?: string;
+  sourceType?: string;
+  sourceId?: string;
+  targetType?: string;
+  targetId?: string;
+  proxyTargetId?: string | null;
+  messageType?: string;
+  ocppMethod?: string | null;
+  transactionId?: number | null;
 };
 
 export type LiveUpdateEnvelope = {
@@ -378,6 +389,8 @@ export type CommunicationJournalItem = {
 export type CommunicationJournalResponse = {
   items: CommunicationJournalItem[];
   retentionHours: number;
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 export type DashboardConfig = {
@@ -405,6 +418,7 @@ export type TimeFormatPreference = "24h" | "12h";
 export type CommunicationJournalFilters = {
   from: string;
   to: string;
+  preset: string;
   sourceType: string;
   sourceId: string;
   targetType: string;

@@ -145,10 +145,89 @@ describe('communication journal', () => {
           correlationId: null
         }
       ],
-      retentionHours: 24
+      retentionHours: 24,
+      nextCursor: null,
+      hasMore: false
     });
     expect(response.body).not.toContain('secret-token');
     expect(response.body).not.toContain('super-secret');
+
+    await app.close();
+  });
+
+  it('rejects invalid journal dates', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+
+    const invalidDate = await app.inject({
+      method: 'GET',
+      url: '/api/communication-journal?from=not-a-date',
+      headers: { cookie }
+    });
+    const invertedRange = await app.inject({
+      method: 'GET',
+      url: `/api/communication-journal?from=${encodeURIComponent(new Date('2026-01-02T00:00:00Z').toISOString())}&to=${encodeURIComponent(new Date('2026-01-01T00:00:00Z').toISOString())}`,
+      headers: { cookie }
+    });
+
+    expect(invalidDate.statusCode).toBe(400);
+    expect(invalidDate.json()).toEqual({ error: 'invalid_communication_journal_query' });
+    expect(invertedRange.statusCode).toBe(400);
+    expect(invertedRange.json()).toEqual({ error: 'invalid_communication_journal_query' });
+
+    await app.close();
+  });
+
+  it('paginates journal rows with a stable cursor', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const createdAt = new Date(Date.now() - 60_000);
+
+    for (let index = 0; index < 3; index += 1) {
+      journal.recordEntry({
+        direction: 'inbound',
+        sourceType: 'charger',
+        sourceId: 'CHARGER-1',
+        targetType: 'server',
+        targetId: 'server',
+        messageType: 'call',
+        chargerId: 'CHARGER-1',
+        ocppMethod: `Method${index}`,
+        payload: {},
+        createdAt: new Date(createdAt.getTime() + index * 1_000)
+      });
+    }
+
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: '/api/communication-journal?chargerId=CHARGER-1&limit=2',
+      headers: { cookie }
+    });
+
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json()).toMatchObject({
+      hasMore: true,
+      nextCursor: expect.any(String)
+    });
+    expect(firstPage.json().items.map((item: { ocppMethod: string }) => item.ocppMethod)).toEqual(['Method2', 'Method1']);
+
+    const secondPage = await app.inject({
+      method: 'GET',
+      url: `/api/communication-journal?chargerId=CHARGER-1&limit=2&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: { cookie }
+    });
+
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json()).toMatchObject({
+      hasMore: false,
+      nextCursor: null
+    });
+    expect(secondPage.json().items.map((item: { ocppMethod: string }) => item.ocppMethod)).toEqual(['Method0']);
 
     await app.close();
   });

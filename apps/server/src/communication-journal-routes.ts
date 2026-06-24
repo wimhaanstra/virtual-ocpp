@@ -1,32 +1,50 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
-import { CommunicationJournalService } from './communication-journal.js';
+import {
+  CommunicationJournalService,
+  decodeCommunicationJournalCursor,
+  type CommunicationJournalListFilters,
+  type CommunicationMessageType,
+  type CommunicationSourceType,
+  type CommunicationTargetType
+} from './communication-journal.js';
 import type { Database } from './db/client.js';
 
 const QuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
-  sourceType: z.enum(['charger', 'server', 'proxy']).optional(),
-  sourceId: z.string().trim().min(1).optional(),
-  targetType: z.enum(['charger', 'server', 'proxy']).optional(),
-  targetId: z.string().trim().min(1).optional(),
-  chargerId: z.string().trim().min(1).optional(),
-  proxyTargetId: z.string().trim().min(1).optional(),
-  ocppMethod: z.string().trim().min(1).optional(),
-  messageType: z.enum(['call', 'callResult', 'callError', 'connection', 'disconnect']).optional(),
-  transactionId: z.coerce.number().int().optional(),
-  limit: z.coerce.number().int().positive().max(1000).default(200)
+  preset: z.string().optional(),
+  sourceType: z.string().optional(),
+  sourceId: z.string().optional(),
+  targetType: z.string().optional(),
+  targetId: z.string().optional(),
+  chargerId: z.string().optional(),
+  proxyTargetId: z.string().optional(),
+  ocppMethod: z.string().optional(),
+  method: z.string().optional(),
+  messageType: z.string().optional(),
+  type: z.string().optional(),
+  transactionId: z.string().optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(500).default(100)
 });
 const ExportQuerySchema = QuerySchema.extend({
+  cursor: z.undefined().optional(),
   limit: z.coerce.number().int().positive().max(5000).default(5000)
 });
 const PurgeBodySchema = z.object({
   scope: z.enum(['retention', 'filters']).default('retention'),
   confirm: z.string().optional(),
-  filters: QuerySchema.omit({ limit: true }).partial().optional()
+  filters: QuerySchema.omit({ limit: true, cursor: true }).partial().optional()
 });
 const DEFAULT_LIST_WINDOW_HOURS = 24;
+const PRESET_MS = {
+  '15m': 15 * 60 * 1000,
+  '1h': 60 * 60 * 1000,
+  '6h': 6 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000
+} as const;
 
 export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Database, journal: CommunicationJournalService) {
   app.get('/api/communication-journal', async (request, reply) => {
@@ -37,30 +55,12 @@ export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Dat
       return reply.code(400).send({ error: 'invalid_communication_journal_query', details: parsed.error.flatten() });
     }
 
-    const from = parseDate(parsed.data.from, new Date(Date.now() - DEFAULT_LIST_WINDOW_HOURS * 60 * 60 * 1000));
-    const to = parseDate(parsed.data.to, new Date());
-    if (!from || !to) {
+    const filters = normalizeCommunicationFilters(parsed.data, { defaultWindow: true, allowCursor: true });
+    if (!filters) {
       return reply.code(400).send({ error: 'invalid_communication_journal_query' });
     }
 
-    if (from.getTime() > to.getTime()) {
-      return reply.code(400).send({ error: 'invalid_communication_journal_query' });
-    }
-
-    return journal.list({
-      from,
-      to,
-      sourceType: parsed.data.sourceType,
-      sourceId: parsed.data.sourceId,
-      targetType: parsed.data.targetType,
-      targetId: parsed.data.targetId,
-      chargerId: parsed.data.chargerId,
-      proxyTargetId: parsed.data.proxyTargetId,
-      ocppMethod: parsed.data.ocppMethod,
-      messageType: parsed.data.messageType,
-      transactionId: parsed.data.transactionId,
-      limit: parsed.data.limit
-    });
+    return journal.list(filters);
   });
 
   app.get('/api/communication-journal/export', async (request, reply) => {
@@ -71,7 +71,7 @@ export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Dat
       return reply.code(400).send({ error: 'invalid_communication_journal_query', details: parsed.error.flatten() });
     }
 
-    const filters = parseFilters(parsed.data);
+    const filters = normalizeCommunicationFilters(parsed.data, { defaultWindow: true });
     if (!filters) {
       return reply.code(400).send({ error: 'invalid_communication_journal_query' });
     }
@@ -97,7 +97,7 @@ export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Dat
         return reply.code(400).send({ error: 'purge_confirmation_required' });
       }
 
-      const filters = parseFilters({ ...parsed.data.filters, limit: 1 }, { requireExplicitFilter: true });
+      const filters = normalizeCommunicationFilters({ ...parsed.data.filters, limit: 1 }, { requireExplicitFilter: true });
       if (!filters) {
         return reply.code(400).send({ error: 'invalid_communication_journal_purge' });
       }
@@ -121,44 +121,97 @@ export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Dat
   });
 }
 
-type ParsedQuery = z.infer<typeof ExportQuerySchema>;
+type ParsedQuery = z.infer<typeof QuerySchema>;
 
-function parseFilters(
+function normalizeCommunicationFilters(
   data: Partial<ParsedQuery>,
-  options: { requireExplicitFilter?: boolean } = {}
-) {
-  const from = parseDate(data.from, options.requireExplicitFilter ? undefined : new Date(Date.now() - DEFAULT_LIST_WINDOW_HOURS * 60 * 60 * 1000));
-  const to = parseDate(data.to, options.requireExplicitFilter ? undefined : new Date());
+  options: { requireExplicitFilter?: boolean; defaultWindow?: boolean; allowCursor?: boolean } = {}
+): CommunicationJournalListFilters | null {
+  const preset = trimOptional(data.preset);
+  const explicitFrom = trimOptional(data.from);
+  const explicitTo = trimOptional(data.to);
+  const now = new Date();
+  let from = parseDate(explicitFrom);
+  let to = parseDate(explicitTo);
   if (from === null || to === null) return null;
+
+  if (!from && !to && preset && preset !== 'custom') {
+    if (!isPreset(preset)) return null;
+    to = now;
+    from = new Date(now.getTime() - PRESET_MS[preset]);
+  } else if (preset && preset !== 'custom' && !isPreset(preset)) {
+    return null;
+  }
+
+  if (options.defaultWindow && !from && !to) {
+    from = new Date(now.getTime() - DEFAULT_LIST_WINDOW_HOURS * 60 * 60 * 1000);
+    to = now;
+  }
+
   if (from && to && from.getTime() > to.getTime()) return null;
+  const cursor = trimOptional(data.cursor);
+  const parsedCursor = cursor && options.allowCursor ? decodeCommunicationJournalCursor(cursor) : undefined;
+  if (cursor && options.allowCursor && !parsedCursor) return null;
+  if (cursor && !options.allowCursor) return null;
+  const transactionIdValue = trimOptional(data.transactionId);
+  let transactionId: number | undefined;
+  if (transactionIdValue) {
+    const parsedTransactionId = Number(transactionIdValue);
+    if (!Number.isInteger(parsedTransactionId) || parsedTransactionId < 0) return null;
+    transactionId = parsedTransactionId;
+  }
+  const sourceType = trimOptional(data.sourceType);
+  const targetType = trimOptional(data.targetType);
+  const messageType = trimOptional(data.messageType ?? data.type);
+  if (sourceType && !isEndpointType(sourceType)) return null;
+  if (targetType && !isEndpointType(targetType)) return null;
+  if (messageType && !isMessageType(messageType)) return null;
 
   const filters = {
     from: from ?? undefined,
     to: to ?? undefined,
-    sourceType: data.sourceType,
-    sourceId: data.sourceId,
-    targetType: data.targetType,
-    targetId: data.targetId,
-    chargerId: data.chargerId,
-    proxyTargetId: data.proxyTargetId,
-    ocppMethod: data.ocppMethod,
-    messageType: data.messageType,
-    transactionId: data.transactionId,
-    limit: data.limit
+    sourceType: sourceType as CommunicationSourceType | undefined,
+    sourceId: trimOptional(data.sourceId),
+    targetType: targetType as CommunicationTargetType | undefined,
+    targetId: trimOptional(data.targetId),
+    chargerId: trimOptional(data.chargerId),
+    proxyTargetId: trimOptional(data.proxyTargetId),
+    ocppMethod: trimOptional(data.ocppMethod ?? data.method),
+    messageType: messageType as CommunicationMessageType | undefined,
+    transactionId,
+    limit: data.limit,
+    cursor: parsedCursor ?? undefined
   };
 
   if (options.requireExplicitFilter) {
-    const hasExplicitFilter = Object.entries(filters).some(([key, value]) => key !== 'limit' && value !== undefined);
+    const hasExplicitFilter = Object.entries(filters).some(([key, value]) => !['limit', 'cursor'].includes(key) && value !== undefined);
     if (!hasExplicitFilter) return null;
   }
 
   return filters;
 }
 
-function parseDate(value: string | undefined, fallback?: Date) {
-  if (!value) return fallback;
+function trimOptional(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function parseDate(value: string | undefined) {
+  if (!value) return undefined;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isPreset(value: string): value is keyof typeof PRESET_MS {
+  return value in PRESET_MS;
+}
+
+function isEndpointType(value: string): value is CommunicationSourceType {
+  return value === 'charger' || value === 'server' || value === 'proxy';
+}
+
+function isMessageType(value: string): value is CommunicationMessageType {
+  return value === 'call' || value === 'callResult' || value === 'callError' || value === 'connection' || value === 'disconnect';
 }
 
 function toCommunicationCsv(items: ReturnType<CommunicationJournalService['list']>['items']) {

@@ -431,9 +431,11 @@ describe("App", () => {
     expect(screen.queryByText("Global / admin")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show communication for SMART-EVSE-1" }));
     await screen.findByRole("heading", { name: "Recent journal rows" });
-    expect(
-      fetchMock.mock.calls.some(([input]) => String(input).includes("/api/communication-journal?") && String(input).includes("sourceId=SMART-EVSE-1"))
-    ).toBe(true);
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).includes("/api/communication-journal?") && String(input).includes("sourceId=SMART-EVSE-1"))
+      ).toBe(true);
+    });
 
     fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
@@ -1937,7 +1939,7 @@ describe("App", () => {
       }
 
       if (url.startsWith("/api/communication-journal") && method === "GET") {
-        return new Response(JSON.stringify({ items: journalRows, retentionHours: 24 }), { status: 200 });
+        return new Response(JSON.stringify({ items: journalRows, retentionHours: 24, nextCursor: null, hasMore: false }), { status: 200 });
       }
 
       const fallbackResponse = emptyVisibilityResponses(url, method);
@@ -1955,8 +1957,8 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
 
     expect(await screen.findByRole("heading", { name: "Communication" })).toBeInTheDocument();
-    expect(screen.getByText(/Showing the last 24 hours by default, newest first, limit 200\./)).toBeInTheDocument();
-    expect(screen.getByText("BootNotification")).toBeInTheDocument();
+    expect(screen.getByText(/Showing the last 24 hours by default, newest first, 100 rows per page\./)).toBeInTheDocument();
+    expect(await screen.findByText("BootNotification")).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
   });
 
@@ -1994,7 +1996,7 @@ describe("App", () => {
       }
 
       if (url.startsWith("/api/communication-journal") && method === "GET") {
-        return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
+        return new Response(JSON.stringify({ items: [], retentionHours: 24, nextCursor: null, hasMore: false }), { status: 200 });
       }
 
       const fallbackResponse = emptyVisibilityResponses(url, method);
@@ -2012,6 +2014,7 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
 
     fireEvent.change(screen.getByLabelText("Source type"), { target: { value: "charger" } });
+    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "custom" } });
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-06-19T08:00" } });
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-06-19T12:00" } });
     fireEvent.change(screen.getByLabelText("Source id"), { target: { value: "SMART-EVSE-1" } });
@@ -2022,14 +2025,13 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("OCPP method"), { target: { value: "BootNotification" } });
     fireEvent.change(screen.getByLabelText("Message type"), { target: { value: "call" } });
 
-    expect(screen.getByText("Method: BootNotification")).toBeInTheDocument();
+    expect(await screen.findByText("Method: BootNotification")).toBeInTheDocument();
     expect(screen.getByText("Message type: call")).toBeInTheDocument();
     expect(screen.getByText("Source type: charger")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
-
     await waitFor(() => {
-      expect(fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/communication-journal?")).length).toBeGreaterThan(1);
+      const calls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/communication-journal?"));
+      const lastCall = calls[calls.length - 1];
+      expect(String(lastCall?.[0])).toContain("ocppMethod=BootNotification");
     });
 
     const filteredCalls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/communication-journal?"));
@@ -2037,7 +2039,7 @@ describe("App", () => {
     expect(filteredCall).toBeDefined();
 
     const filteredUrl = new URL(String(filteredCall?.[0]), "http://localhost");
-    expect(filteredUrl.searchParams.get("limit")).toBe("200");
+    expect(filteredUrl.searchParams.get("limit")).toBe("100");
     expect(filteredUrl.searchParams.get("from")).toBe("2026-06-19T08:00");
     expect(filteredUrl.searchParams.get("to")).toBe("2026-06-19T12:00");
     expect(filteredUrl.searchParams.get("sourceType")).toBe("charger");
@@ -2048,6 +2050,13 @@ describe("App", () => {
     expect(filteredUrl.searchParams.get("proxyTargetId")).toBe("proxy-1");
     expect(filteredUrl.searchParams.get("ocppMethod")).toBe("BootNotification");
     expect(filteredUrl.searchParams.get("messageType")).toBe("call");
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove Method: BootNotification filter" }));
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/communication-journal?"));
+      const lastCall = calls[calls.length - 1];
+      expect(new URL(String(lastCall?.[0]), "http://localhost").searchParams.get("ocppMethod")).toBeNull();
+    });
   });
 
   it("expands redacted communication payloads", async () => {
@@ -2215,7 +2224,7 @@ describe("App", () => {
       }
 
       if (url.startsWith("/api/communication-journal") && method === "GET") {
-        return new Response(JSON.stringify({ items: journalRows, retentionHours: 24 }), { status: 200 });
+        return new Response(JSON.stringify({ items: journalRows, retentionHours: 24, nextCursor: null, hasMore: false }), { status: 200 });
       }
 
       if (url === "/api/communication-journal/purge" && method === "POST") {
@@ -2238,6 +2247,7 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
     expect(await screen.findByText("BootNotification")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("OCPP method"), { target: { value: "BootNotification" } });
+    expect(await screen.findByText("Method: BootNotification")).toBeInTheDocument();
 
     let clickedExportHref = "";
     const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {

@@ -19,6 +19,7 @@ import type {
 export const emptyCommunicationJournalFilters = (): CommunicationJournalFilters => ({
   from: "",
   to: "",
+  preset: "24h",
   sourceType: "",
   sourceId: "",
   targetType: "",
@@ -86,6 +87,31 @@ export function buildViewUrl(view: ActiveView, chargerId: string) {
 
   const query = params.toString();
   return `${viewPaths[view]}${query ? `?${query}` : ""}`;
+}
+
+export function getCommunicationFiltersFromSearch(search = window.location.search): CommunicationJournalFilters {
+  const params = new URLSearchParams(search);
+  return {
+    ...emptyCommunicationJournalFilters(),
+    from: params.get("from") ?? "",
+    to: params.get("to") ?? "",
+    preset: params.get("preset") ?? "24h",
+    sourceType: params.get("sourceType") ?? "",
+    sourceId: params.get("sourceId") ?? "",
+    targetType: params.get("targetType") ?? "",
+    targetId: params.get("targetId") ?? "",
+    chargerId: params.get("chargerId") ?? "",
+    proxyTargetId: params.get("proxyTargetId") ?? "",
+    ocppMethod: params.get("method") ?? params.get("ocppMethod") ?? "",
+    transactionId: params.get("transactionId") ?? "",
+    messageType: params.get("type") ?? params.get("messageType") ?? ""
+  };
+}
+
+export function buildCommunicationViewUrl(chargerId: string, filters: CommunicationJournalFilters) {
+  const params = buildCommunicationFilterParams(filters, chargerId, "url");
+  const query = params.toString();
+  return `${viewPaths.Communication}${query ? `?${query}` : ""}`;
 }
 
 export function withChargerContext(url: string, chargerId: string) {
@@ -311,32 +337,49 @@ export function buildCommunicationSummary(item: CommunicationJournalItem) {
   return parts.join(" • ");
 }
 
-export function buildCommunicationJournalQuery(filters: CommunicationJournalFilters, chargerId: string) {
-  return buildCommunicationJournalUrl("/api/communication-journal", filters, chargerId, "200");
+export function buildCommunicationJournalQuery(filters: CommunicationJournalFilters, chargerId: string, cursor = "") {
+  return buildCommunicationJournalUrl("/api/communication-journal", filters, chargerId, "100", cursor);
 }
 
 export function buildCommunicationJournalExportQuery(filters: CommunicationJournalFilters, chargerId: string) {
   return buildCommunicationJournalUrl("/api/communication-journal/export", filters, chargerId, "5000");
 }
 
-function buildCommunicationJournalUrl(path: string, filters: CommunicationJournalFilters, chargerId: string, limit: string) {
-  const params = new URLSearchParams();
-
+function buildCommunicationJournalUrl(path: string, filters: CommunicationJournalFilters, chargerId: string, limit: string, cursor = "") {
+  const params = buildCommunicationFilterParams(filters, chargerId, "api");
   params.set("limit", limit);
-
-  if (chargerId) {
-    params.set("chargerId", chargerId);
-  }
-
-  for (const [key, value] of Object.entries(filters)) {
-    const trimmed = value.trim();
-    if (trimmed) {
-      params.set(key, trimmed);
-    }
+  if (cursor) {
+    params.set("cursor", cursor);
   }
 
   const query = params.toString();
   return query ? `${path}?${query}` : path;
+}
+
+function buildCommunicationFilterParams(filters: CommunicationJournalFilters, chargerId: string, mode: "api" | "url") {
+  const params = new URLSearchParams();
+  const scopedChargerId = chargerId.trim() || filters.chargerId.trim();
+  if (scopedChargerId) {
+    params.set("chargerId", scopedChargerId);
+  }
+
+  for (const [key, value] of Object.entries(filters)) {
+    const trimmed = value.trim();
+    if (!trimmed || key === "chargerId") {
+      continue;
+    }
+    if (key === "ocppMethod") {
+      params.set(mode === "url" ? "method" : "ocppMethod", trimmed);
+    } else if (key === "messageType") {
+      params.set(mode === "url" ? "type" : "messageType", trimmed);
+    } else if (key === "preset" && trimmed === "24h" && mode === "api") {
+      params.set("preset", trimmed);
+    } else {
+      params.set(key, trimmed);
+    }
+  }
+
+  return params;
 }
 
 export function getProxyTargetUpstreamIdentity(target: ProxyTarget, chargerId: string) {

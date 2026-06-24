@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, gte, lt, lte } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte, or } from 'drizzle-orm';
 import type { Database } from './db/client.js';
 import { communicationJournal } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
@@ -46,6 +46,7 @@ export type CommunicationJournalListFilters = {
   messageType?: CommunicationMessageType;
   transactionId?: number;
   limit?: number;
+  cursor?: CommunicationJournalCursor;
 };
 
 export type CommunicationJournalPurgeFilters = Omit<CommunicationJournalListFilters, 'limit'>;
@@ -68,6 +69,11 @@ export type CommunicationJournalItem = {
   errorCode: string | null;
   errorDescription: string | null;
   correlationId: string | null;
+};
+
+export type CommunicationJournalCursor = {
+  createdAt: Date;
+  id: string;
 };
 
 export class CommunicationJournalService {
@@ -254,10 +260,17 @@ export class CommunicationJournalService {
     this.liveUpdates?.publish({
       type: 'journal.recorded',
       journalId: id,
+      createdAt: createdAt.toISOString(),
+      direction: input.direction,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      targetType: input.targetType,
+      targetId: input.targetId,
       chargerId: input.chargerId ?? null,
       proxyTargetId: input.proxyTargetId ?? null,
       messageType: input.messageType,
-      ocppMethod: input.ocppMethod ?? null
+      ocppMethod: input.ocppMethod ?? null,
+      transactionId: input.transactionId ?? null
     });
   }
 
@@ -297,20 +310,31 @@ export class CommunicationJournalService {
   list(filters: CommunicationJournalListFilters = {}) {
     const from = filters.from ?? new Date(Date.now() - DEFAULT_LIST_WINDOW_HOURS * 60 * 60 * 1000);
     const to = filters.to ?? new Date();
-    const limit = Math.max(1, Math.min(filters.limit ?? 200, 5000));
+    const limit = Math.max(1, Math.min(filters.limit ?? 100, 5000));
     const conditions = buildFilterConditions({ ...filters, from, to });
+    if (filters.cursor) {
+      const cursorCondition = or(
+        lt(communicationJournal.createdAt, filters.cursor.createdAt),
+        and(eq(communicationJournal.createdAt, filters.cursor.createdAt), lt(communicationJournal.id, filters.cursor.id))
+      );
+      if (cursorCondition) conditions.push(cursorCondition);
+    }
 
     const rows = this.db
       .select()
       .from(communicationJournal)
       .where(and(...conditions))
-      .orderBy(desc(communicationJournal.createdAt))
-      .limit(limit)
+      .orderBy(desc(communicationJournal.createdAt), desc(communicationJournal.id))
+      .limit(limit + 1)
       .all();
+    const pageRows = rows.slice(0, limit);
+    const lastRow = pageRows.at(-1);
 
     return {
-      items: rows.map(toPublicItem),
-      retentionHours: this.retentionHours
+      items: pageRows.map(toPublicItem),
+      retentionHours: this.retentionHours,
+      nextCursor: rows.length > limit && lastRow ? encodeCommunicationJournalCursor({ createdAt: lastRow.createdAt, id: lastRow.id }) : null,
+      hasMore: rows.length > limit
     };
   }
 
@@ -319,6 +343,28 @@ export class CommunicationJournalService {
       return;
     }
     this.purgeExpired(now);
+  }
+}
+
+export function encodeCommunicationJournalCursor(cursor: CommunicationJournalCursor) {
+  return Buffer.from(JSON.stringify({ createdAt: cursor.createdAt.toISOString(), id: cursor.id }), 'utf8').toString('base64url');
+}
+
+export function decodeCommunicationJournalCursor(value: string): CommunicationJournalCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { createdAt?: unknown; id?: unknown };
+    if (typeof parsed.createdAt !== 'string' || typeof parsed.id !== 'string' || parsed.id.trim() === '') {
+      return null;
+    }
+
+    const createdAt = new Date(parsed.createdAt);
+    if (Number.isNaN(createdAt.getTime())) {
+      return null;
+    }
+
+    return { createdAt, id: parsed.id };
+  } catch {
+    return null;
   }
 }
 

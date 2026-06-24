@@ -68,6 +68,7 @@ import type {
 import {
   buildCommunicationJournalQuery,
   buildCommunicationJournalExportQuery,
+  buildCommunicationViewUrl,
   buildProxyTargetConnectionUrl,
   buildViewUrl,
   emptyCommunicationJournalFilters,
@@ -79,6 +80,7 @@ import {
   getInitialSidebarCollapsed,
   getInitialTheme,
   getInitialTimeFormat,
+  getCommunicationFiltersFromSearch,
   getSearchParam,
   getTagAccessForCharger,
   getViewFromPath,
@@ -151,7 +153,10 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [communicationJournal, setCommunicationJournal] = useState<CommunicationJournalItem[]>([]);
   const [communicationRetentionHours, setCommunicationRetentionHours] = useState<number | null>(null);
-  const [communicationFilters, setCommunicationFilters] = useState<CommunicationJournalFilters>(() => emptyCommunicationJournalFilters());
+  const [communicationFilters, setCommunicationFilters] = useState<CommunicationJournalFilters>(() => getCommunicationFiltersFromSearch());
+  const [communicationNextCursor, setCommunicationNextCursor] = useState<string | null>(null);
+  const [communicationHasMore, setCommunicationHasMore] = useState(false);
+  const [communicationLoadingMore, setCommunicationLoadingMore] = useState(false);
   const [expandedCommunicationJournalId, setExpandedCommunicationJournalId] = useState<string | null>(null);
   const [communicationPurgeOpen, setCommunicationPurgeOpen] = useState(false);
   const [communicationPurgeScope, setCommunicationPurgeScope] = useState<"retention" | "filters">("retention");
@@ -293,8 +298,12 @@ export default function App() {
 
   useEffect(() => {
     function handlePopState() {
-      setActiveView(getViewFromPath());
+      const nextView = getViewFromPath();
+      setActiveView(nextView);
       setSelectedChargerId(getSearchParam("chargerId"));
+      if (nextView === "Communication") {
+        setCommunicationFilters(getCommunicationFiltersFromSearch());
+      }
       setTagModalOpen(false);
       setProxyTargetModalOpen(false);
       setChargerWizardOpen(false);
@@ -313,9 +322,17 @@ export default function App() {
   useEffect(() => {
     if (!authenticated) return;
 
-    const nextUrl = buildViewUrl(activeView, selectedChargerId);
+    const nextUrl = activeView === "Communication" ? buildCommunicationViewUrl(selectedChargerId, communicationFilters) : buildViewUrl(activeView, selectedChargerId);
     window.history.replaceState({}, "", nextUrl);
-  }, [activeView, selectedChargerId, authenticated]);
+  }, [activeView, selectedChargerId, communicationFilters, authenticated]);
+
+  useEffect(() => {
+    if (!authenticated || activeView !== "Communication") return;
+    const timeout = window.setTimeout(() => {
+      void loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" });
+    }, 150);
+    return () => window.clearTimeout(timeout);
+  }, [activeView, authenticated, selectedChargerId, communicationFilters]);
 
   useEffect(() => {
     if (!authenticated || !message) return;
@@ -326,7 +343,6 @@ export default function App() {
 
   useEffect(() => {
     if (!authenticated) return;
-    setCommunicationFilters((current) => (current.chargerId === selectedChargerId ? current : { ...current, chargerId: selectedChargerId }));
     void loadScopedData(selectedChargerId);
   }, [authenticated, selectedChargerId]);
 
@@ -417,6 +433,9 @@ export default function App() {
     resetOnboardingSetupState();
     setCommunicationJournal([]);
     setCommunicationRetentionHours(null);
+    setCommunicationNextCursor(null);
+    setCommunicationHasMore(false);
+    setCommunicationLoadingMore(false);
     setProxyHealth(null);
     setActiveSessionAudit(null);
     setCommunicationFilters(emptyCommunicationJournalFilters());
@@ -453,6 +472,13 @@ export default function App() {
   }
 
   function handleLiveUpdate(event: LiveUpdateEvent) {
+    if (event.type === "journal.recorded" && activeView === "Communication") {
+      if (communicationEventMatchesFilters(event, communicationFilters, selectedChargerId)) {
+        void loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "prepend" });
+      }
+      return;
+    }
+
     if (!eventAppliesToSelectedCharger(event)) {
       void loadChargers();
       return;
@@ -476,8 +502,7 @@ export default function App() {
       loadChargingSessions(chargerId),
       loadSessionSummary(chargerId),
       loadChargingStats(chargerId),
-      loadLogs(chargerId),
-      loadCommunicationJournal(chargerId)
+      loadLogs(chargerId)
     ]);
   }
 
@@ -1321,16 +1346,43 @@ export default function App() {
     setLogs(data);
   }
 
-  async function loadCommunicationJournal(chargerId = selectedChargerId, filters = communicationFilters) {
-    const data = await fetchAdminJson<CommunicationJournalResponse>(buildCommunicationJournalQuery(filters, chargerId));
+  async function loadCommunicationJournal(
+    chargerId = selectedChargerId,
+    filters = communicationFilters,
+    options: { mode?: "replace" | "append" | "prepend"; cursor?: string } = {}
+  ) {
+    const mode = options.mode ?? "replace";
+    const data = await fetchAdminJson<CommunicationJournalResponse>(buildCommunicationJournalQuery(filters, chargerId, options.cursor ?? ""));
     if (data === null) return;
     if (data === undefined) {
       setMessage("Could not load communication journal.");
       return;
     }
-    setCommunicationJournal(data.items);
+    setCommunicationJournal((current) => {
+      if (mode === "append") {
+        return mergeCommunicationRows(current, data.items);
+      }
+      if (mode === "prepend") {
+        return mergeCommunicationRows(data.items, current);
+      }
+      return data.items;
+    });
     setCommunicationRetentionHours(data.retentionHours);
-    setExpandedCommunicationJournalId(null);
+    setCommunicationNextCursor(data.nextCursor);
+    setCommunicationHasMore(data.hasMore);
+    if (mode === "replace") {
+      setExpandedCommunicationJournalId(null);
+    }
+  }
+
+  async function loadMoreCommunicationJournal() {
+    if (!communicationNextCursor || communicationLoadingMore) return;
+    setCommunicationLoadingMore(true);
+    try {
+      await loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "append", cursor: communicationNextCursor });
+    } finally {
+      setCommunicationLoadingMore(false);
+    }
   }
 
   function exportCommunicationJournal() {
@@ -1387,17 +1439,7 @@ export default function App() {
           ? `Purged ${result.deletedCount} communication row${result.deletedCount === 1 ? "" : "s"}${result.scope === "filters" ? " matching current filters" : ""}.`
           : "Communication journal purged."
       );
-      await loadCommunicationJournal(selectedChargerId);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function applyCommunicationFilters(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      await loadCommunicationJournal(selectedChargerId, communicationFilters);
+      await loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" });
     } finally {
       setBusy(false);
     }
@@ -1405,12 +1447,13 @@ export default function App() {
 
   async function resetCommunicationFilters() {
     const nextFilters = emptyCommunicationJournalFilters();
+    updateCommunicationFilters(nextFilters);
+  }
+
+  function updateCommunicationFilters(nextFilters: CommunicationJournalFilters) {
     setCommunicationFilters(nextFilters);
-    setBusy(true);
-    try {
-      await loadCommunicationJournal(selectedChargerId, nextFilters);
-    } finally {
-      setBusy(false);
+    if (activeView === "Communication") {
+      window.history.pushState({}, "", buildCommunicationViewUrl(selectedChargerId, nextFilters));
     }
   }
 
@@ -1419,8 +1462,7 @@ export default function App() {
     setCommunicationFilters(nextFilters);
     setSelectedChargerId(chargerId);
     setActiveView("Communication");
-    window.history.pushState({}, "", buildViewUrl("Communication", chargerId));
-    void loadCommunicationJournal(chargerId, nextFilters);
+    window.history.pushState({}, "", buildCommunicationViewUrl(chargerId, nextFilters));
   }
 
   function openSessionsForCharger(chargerId = selectedChargerId) {
@@ -1946,19 +1988,21 @@ export default function App() {
             busy={busy}
             communicationFilters={communicationFilters}
             communicationJournal={communicationJournal}
+            hasMore={communicationHasMore}
+            loadingMore={communicationLoadingMore}
             communicationRetentionHours={communicationRetentionHours}
             expandedCommunicationJournalId={expandedCommunicationJournalId}
             proxyTargets={proxyTargets}
             selectedChargerId={selectedChargerId}
             selectedChargerLabel={selectedChargerLabel}
-            onApplyFilters={applyCommunicationFilters}
-            onCommunicationFiltersChange={setCommunicationFilters}
             onExport={exportCommunicationJournal}
             onExpandedCommunicationJournalIdChange={setExpandedCommunicationJournalId}
+            onLoadMore={() => void loadMoreCommunicationJournal()}
             onPurge={openCommunicationPurge}
-            onRefresh={() => void loadScopedData(selectedChargerId)}
+            onRefresh={() => void loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" })}
             onRenderEndpoint={renderCommunicationEndpoint}
             onResetFilters={() => void resetCommunicationFilters()}
+            onCommunicationFiltersChange={updateCommunicationFilters}
           />
         ) : activeView === "Tags" ? (
           <>
@@ -2611,10 +2655,72 @@ function buildCommunicationPurgeFilters(filters: CommunicationJournalFilters, ch
 
   for (const [key, value] of Object.entries(filters) as Array<[keyof CommunicationJournalFilters, string]>) {
     const trimmed = value.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (key === "preset" && trimmed === "24h" && !filters.from.trim() && !filters.to.trim()) {
+      continue;
+    }
     if (trimmed) {
       output[key] = trimmed;
     }
   }
 
   return output;
+}
+
+function mergeCommunicationRows(primary: CommunicationJournalItem[], secondary: CommunicationJournalItem[]) {
+  const seen = new Set<string>();
+  const merged: CommunicationJournalItem[] = [];
+  for (const item of [...primary, ...secondary]) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    merged.push(item);
+  }
+  return merged;
+}
+
+function communicationEventMatchesFilters(event: LiveUpdateEvent, filters: CommunicationJournalFilters, selectedChargerId: string) {
+  if (event.type !== "journal.recorded") return false;
+  const scopedChargerId = selectedChargerId.trim() || filters.chargerId.trim();
+  if (scopedChargerId && event.chargerId !== scopedChargerId) return false;
+  if (filters.sourceType.trim() && event.sourceType !== filters.sourceType.trim()) return false;
+  if (filters.sourceId.trim() && event.sourceId !== filters.sourceId.trim()) return false;
+  if (filters.targetType.trim() && event.targetType !== filters.targetType.trim()) return false;
+  if (filters.targetId.trim() && event.targetId !== filters.targetId.trim()) return false;
+  if (filters.proxyTargetId.trim() && event.proxyTargetId !== filters.proxyTargetId.trim()) return false;
+  if (filters.messageType.trim() && event.messageType !== filters.messageType.trim()) return false;
+  if (filters.ocppMethod.trim() && event.ocppMethod !== filters.ocppMethod.trim()) return false;
+  if (filters.transactionId.trim() && String(event.transactionId ?? "") !== filters.transactionId.trim()) return false;
+  if (!event.createdAt) return true;
+
+  const createdAt = new Date(event.createdAt).getTime();
+  if (Number.isNaN(createdAt)) return true;
+  const range = getCommunicationTimeRange(filters);
+  if (range.from && createdAt < range.from.getTime()) return false;
+  if (range.to && createdAt > range.to.getTime()) return false;
+  return true;
+}
+
+function getCommunicationTimeRange(filters: CommunicationJournalFilters) {
+  const from = parseFilterDate(filters.from);
+  const to = parseFilterDate(filters.to);
+  if (from || to || filters.preset === "custom") {
+    return { from, to };
+  }
+
+  const presetMs: Record<string, number> = {
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "6h": 6 * 60 * 60 * 1000,
+    "24h": 24 * 60 * 60 * 1000
+  };
+  const windowMs = presetMs[filters.preset] ?? presetMs["24h"];
+  return { from: new Date(Date.now() - windowMs), to: new Date() };
+}
+
+function parseFilterDate(value: string) {
+  if (!value.trim()) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
