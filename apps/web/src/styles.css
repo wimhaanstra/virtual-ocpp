@@ -1637,11 +1637,7 @@ a {
 }
 
 .communication-filters-panel {
-  position: sticky;
-  top: 8px;
-  z-index: 5;
   gap: 9px;
-  backdrop-filter: blur(14px);
 }
 
 .compact-filter-heading {
