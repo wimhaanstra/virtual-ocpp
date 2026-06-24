@@ -36,6 +36,9 @@ It publishes both `wimhaanstra/virtual-ocpp:latest` and `wimhaanstra/virtual-ocp
 Set `DOCKER_IMAGE=yourname/virtual-ocpp` to build or publish a different repository name without editing the script.
 On Apple hardware, this is the publish command to use for Linux amd64 servers.
 
+Published images include OCI metadata labels for the source repository, documentation URL, package version, git revision, and build timestamp.
+The Docker Hub repository overview is maintained in `docs/docker-hub-readme.md`. To sync it from GitHub Actions, set the GitHub variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN`, then run the `Docker Hub Description` workflow or push a change to that overview file.
+
 The admin interface shows the same package version in the sidebar after login, so a running container can be matched to the Docker image tag.
 
 For a local amd64-only test image on Apple hardware, run:

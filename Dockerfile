@@ -16,6 +16,19 @@ RUN npm prune --omit=dev --workspaces --include-workspace-root
 
 FROM node:22-bookworm-slim AS runtime
 
+ARG APP_VERSION=unknown
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="Virtual OCPP" \
+      org.opencontainers.image.description="Self-hosted OCPP 1.6j gateway and proxy for Smart EVSE chargers." \
+      org.opencontainers.image.url="https://hub.docker.com/r/wimhaanstra/virtual-ocpp" \
+      org.opencontainers.image.source="https://github.com/wimhaanstra/virtual-ocpp" \
+      org.opencontainers.image.documentation="https://github.com/wimhaanstra/virtual-ocpp#deployment" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8797 \

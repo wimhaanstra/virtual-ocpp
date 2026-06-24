@@ -1,0 +1,20 @@
+name: Docker Hub Description
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-description:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Update Docker Hub description
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: wimhaanstra/virtual-ocpp
+          short-description: Self-hosted OCPP 1.6j gateway and proxy for Smart EVSE chargers.
+          readme-filepath: docs/docker-hub-readme.md
