@@ -18,13 +18,13 @@ docker run --rm \
   -e SESSION_SECRET="$SESSION_SECRET" \
   -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   -e OCPP_PUBLIC_URL=ws://localhost:8797/ocpp/:chargerId \
-  sortedbit/virtual-ocpp:latest
+  wimhaanstra/virtual-ocpp:latest
 ```
 
 The container serves the API, OCPP websocket endpoint, and built frontend from one Fastify process on port `8797`.
 Set `SESSION_SECRET` and `ADMIN_PASSWORD` to real values before starting the container. Production startup rejects the placeholders from `.env.example`.
 
-To publish the image to Docker Hub as `sortedbit/virtual-ocpp`, make sure `docker login` has an active Docker Hub session and run:
+To publish the image to Docker Hub as `wimhaanstra/virtual-ocpp`, make sure `docker login` has an active Docker Hub session and run:
 
 ```sh
 npm run docker:publish
@@ -32,7 +32,8 @@ npm run docker:publish
 
 This uses Docker Buildx to build and push a multi-platform image for `linux/amd64` and `linux/arm64`.
 Before building, the publish script updates the root and web `package.json` versions to a date-stamped semver prerelease such as `0.1.0-20260623`.
-It publishes both `sortedbit/virtual-ocpp:latest` and `sortedbit/virtual-ocpp:<package-version>` as multi-architecture manifest tags.
+It publishes both `wimhaanstra/virtual-ocpp:latest` and `wimhaanstra/virtual-ocpp:<package-version>` as multi-architecture manifest tags.
+Set `DOCKER_IMAGE=yourname/virtual-ocpp` to build or publish a different repository name without editing the script.
 On Apple hardware, this is the publish command to use for Linux amd64 servers.
 
 The admin interface shows the same package version in the sidebar after login, so a running container can be matched to the Docker image tag.
@@ -53,7 +54,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`docker-compose.yml` reads supported settings from `.env`, uses `sortedbit/virtual-ocpp:latest` by default, keeps the container internals fixed, and publishes the app on `http://localhost:8797`.
+`docker-compose.yml` reads supported settings from `.env`, uses `wimhaanstra/virtual-ocpp:latest` by default, keeps the container internals fixed, and publishes the app on `http://localhost:8797`.
 The container also listens on port `8797`, so Compose maps `8797:8797`.
 
 Inside the image, SQLite is stored at `/data/virtual-ocpp.sqlite` and the built frontend is served from `/app/apps/web/dist`.

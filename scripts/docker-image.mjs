@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 
 const command = process.argv[2];
 const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-const image = 'sortedbit/virtual-ocpp';
+const image = process.env.DOCKER_IMAGE ?? 'wimhaanstra/virtual-ocpp';
 const version = packageJson.version;
 
 if (!version) {

@@ -68,10 +68,42 @@ npm run docker:build
 docker run --rm -p 8797:8797 -v virtual-ocpp-data:/data \
   -e SESSION_SECRET=replace-with-at-least-32-random-characters \
   -e ADMIN_PASSWORD=replace-me \
-  sortedbit/virtual-ocpp:latest
+  wimhaanstra/virtual-ocpp:latest
 ```
 
-Use `npm run docker:publish` to update the package version to a date-stamped prerelease, then push multi-platform `linux/amd64` and `linux/arm64` tags for `sortedbit/virtual-ocpp:latest` and the current package-version tag to Docker Hub. See `docs/deployment.md` for Docker Compose, Traefik/reverse proxy, TLS, and smoke-test notes.
+Use `npm run docker:publish` to update the package version to a date-stamped prerelease, then push multi-platform `linux/amd64` and `linux/arm64` tags for `wimhaanstra/virtual-ocpp:latest` and the current package-version tag to Docker Hub. Set `DOCKER_IMAGE=yourname/virtual-ocpp` to publish a different image name.
+
+For a copy-paste Docker Compose deployment, create `.env` next to `docker-compose.yml` and replace the placeholder secrets:
+
+```env
+SESSION_SECRET=replace-with-at-least-32-random-characters
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=replace-me
+OCPP_PUBLIC_URL=ws://YOUR_HOST_OR_IP:8797/ocpp/:chargerId
+COMMUNICATION_LOG_RETENTION_HOURS=24
+CHARGER_SILENT_AFTER_SECONDS=300
+METER_GAP_THRESHOLD_WH=1000
+```
+
+Then use this compose file:
+
+```yaml
+services:
+  virtual-ocpp:
+    image: wimhaanstra/virtual-ocpp:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "8797:8797"
+    volumes:
+      - virtual-ocpp-data:/data
+
+volumes:
+  virtual-ocpp-data:
+```
+
+See `docs/deployment.md` for Traefik/reverse proxy, TLS, storage override, and smoke-test notes.
 
 ## Current Endpoints
 
