@@ -1,11 +1,11 @@
 import { RPCClient, RPCServer } from 'ocpp-rpc';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { CommunicationJournalService } from './communication-journal.js';
-import { createTestDatabase, testConfig } from './test-utils.js';
-import { LiveUpdateBus } from './live-updates.js';
-import { OcppRepository } from './ocpp/repository.js';
+import { buildApp } from '../src/app.js';
+import { CommunicationJournalService } from '../src/communication-journal.js';
+import { createTestDatabase, testConfig } from './support/test-utils.js';
+import { LiveUpdateBus } from '../src/live-updates.js';
+import { OcppRepository } from '../src/ocpp/repository.js';
 
 type Cleanup = () => Promise<void> | void;
 type LiveApp = Awaited<ReturnType<typeof buildApp>>;

@@ -3,8 +3,8 @@ import Database from 'better-sqlite3';
 import type { Server } from 'node:http';
 import { RPCServer } from 'ocpp-rpc';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { applyMigrations } from './db/client.js';
+import { buildApp } from '../src/app.js';
+import { applyMigrations } from '../src/db/client.js';
 import {
   chargerConnections,
   chargerProxyAssignments,
@@ -20,9 +20,9 @@ import {
   sessions,
   tagChargerAccess,
   tags
-} from './db/schema.js';
-import { OcppRepository } from './ocpp/repository.js';
-import { createTestDatabase, testConfig } from './test-utils.js';
+} from '../src/db/schema.js';
+import { OcppRepository } from '../src/ocpp/repository.js';
+import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 describe('app', () => {
   let closeDb: (() => void) | undefined;

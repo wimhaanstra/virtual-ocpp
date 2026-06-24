@@ -235,3 +235,7 @@ Remote stop requests send `RemoteStopTransaction` to the connected charger with 
 - Do not expose the service publicly without TLS and admin authentication.
 - Do not commit `.env`, SQLite data, logs, or credentials.
 - Proxy credentials and OCPP auth material must be masked in logs, UI, tests, and documentation.
+
+## AI-Assisted Development
+
+This project has been built with AI-assisted development workflows. Human maintainers remain responsible for reviewing code, validating behavior, running tests, and deciding what is released.

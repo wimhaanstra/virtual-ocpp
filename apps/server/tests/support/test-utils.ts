@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AppConfig } from './config.js';
-import * as schema from './db/schema.js';
+import type { AppConfig } from '../../src/config.js';
+import * as schema from '../../src/db/schema.js';
 
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {

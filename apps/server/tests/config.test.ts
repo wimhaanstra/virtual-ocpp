@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from './config.js';
+import { loadConfig } from '../src/config.js';
 
 const baseEnv = {
   SQLITE_PATH: './data/virtual-ocpp.sqlite',

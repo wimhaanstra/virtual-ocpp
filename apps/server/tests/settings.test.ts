@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
-import { onboardingSettings } from './db/schema.js';
-import { createTestDatabase, testConfig } from './test-utils.js';
+import { buildApp } from '../src/app.js';
+import { onboardingSettings } from '../src/db/schema.js';
+import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 describe('onboarding settings api', () => {
   let closeDb: (() => void) | undefined;

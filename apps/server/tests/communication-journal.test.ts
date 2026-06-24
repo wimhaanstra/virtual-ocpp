@@ -3,11 +3,11 @@ import RawDatabase from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildApp } from './app.js';
-import { communicationJournal } from './db/schema.js';
-import { createDatabase } from './db/client.js';
-import { CommunicationJournalService, redactCommunicationPayload } from './communication-journal.js';
-import { createTestDatabase, testConfig } from './test-utils.js';
+import { buildApp } from '../src/app.js';
+import { communicationJournal } from '../src/db/schema.js';
+import { createDatabase } from '../src/db/client.js';
+import { CommunicationJournalService, redactCommunicationPayload } from '../src/communication-journal.js';
+import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 describe('communication journal', () => {
   let closeDb: (() => void) | undefined;

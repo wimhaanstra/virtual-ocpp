@@ -2,7 +2,7 @@ import { RPCClient, RPCServer } from 'ocpp-rpc';
 import { and, eq } from 'drizzle-orm';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildApp } from './app.js';
+import { buildApp } from '../src/app.js';
 import {
   chargerConnections,
   chargerProxyAssignments,
@@ -16,8 +16,8 @@ import {
   proxyTargets,
   tagChargerAccess,
   tags
-} from './db/schema.js';
-import { createTestDatabase, testConfig } from './test-utils.js';
+} from '../src/db/schema.js';
+import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 type Cleanup = () => Promise<void> | void;
 

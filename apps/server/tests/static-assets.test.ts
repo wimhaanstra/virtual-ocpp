@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { registerStaticAssetRoutes } from './static-assets.js';
+import { registerStaticAssetRoutes } from '../src/static-assets.js';
 
 describe('static assets', () => {
   let tempDir: string | undefined;
