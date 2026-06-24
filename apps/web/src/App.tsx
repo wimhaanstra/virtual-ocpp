@@ -8,6 +8,12 @@ import {
   X
 } from "lucide-react";
 import { Button } from "./components/ui/button";
+import { fetchAdminJson as fetchAdminJsonRequest, readErrorResponse } from "./api/client";
+import {
+  changeChargerConfiguration as changeChargerConfigurationRequest,
+  getChargerConfiguration as getChargerConfigurationRequest,
+  triggerChargerMessage as triggerChargerMessageRequest
+} from "./api/charger-commands";
 import { AppChrome } from "./components/AppChrome";
 import { AuthPage } from "./components/AuthPage";
 import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
@@ -439,19 +445,7 @@ export default function App() {
   }
 
   async function fetchAdminJson<T>(url: string) {
-    const response = await fetch(url, { credentials: "include" });
-    if (handleUnauthorized(response)) return null;
-    if (!response.ok) return undefined;
-    return (await response.json()) as T;
-  }
-
-  async function readErrorResponse(response: Response) {
-    try {
-      const payload = (await response.json()) as { error?: unknown };
-      return typeof payload.error === "string" ? payload.error : null;
-    } catch {
-      return null;
-    }
+    return fetchAdminJsonRequest<T>(url, handleUnauthorized);
   }
 
   function eventAppliesToSelectedCharger(event: LiveUpdateEvent) {
@@ -497,54 +491,31 @@ export default function App() {
     setDashboardConfig(data);
   }
 
-  async function requestChargerCommand<T>(chargerId: string, action: string, body: Record<string, unknown>) {
+  async function getChargerConfiguration(chargerId: string, keys: string[]) {
     setBusy(true);
     try {
-      const response = await fetch(`/api/chargers/${encodeURIComponent(chargerId)}/commands/${action}`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-
-      if (handleUnauthorized(response)) return null;
-
-      if (response.status === 404) {
-        throw new Error("This OCPP command endpoint is not available yet.");
-      }
-
-      if (!response.ok) {
-        const error = await readErrorResponse(response);
-        if (response.status === 409) {
-          throw new Error(error === "charger_not_connected" ? "Charger is not connected." : "Charger rejected the command because it is not ready.");
-        }
-        if (response.status === 503) {
-          throw new Error("Command service is unavailable.");
-        }
-        throw new Error(error ?? "Could not send charger command.");
-      }
-
-      const payload = (await response.json().catch(() => null)) as T | null;
-      return payload;
+      return await getChargerConfigurationRequest(chargerId, keys, handleUnauthorized);
     } finally {
       setBusy(false);
     }
   }
 
-  async function getChargerConfiguration(chargerId: string, keys: string[]) {
-    return requestChargerCommand(chargerId, "get-configuration", { key: keys });
-  }
-
   async function changeChargerConfiguration(chargerId: string, key: string, value: string) {
-    return requestChargerCommand(chargerId, "change-configuration", { key, value });
+    setBusy(true);
+    try {
+      return await changeChargerConfigurationRequest(chargerId, key, value, handleUnauthorized);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function triggerChargerMessage(chargerId: string, requestedMessage: string, connectorId: number | null) {
-    return requestChargerCommand(
-      chargerId,
-      "trigger-message",
-      connectorId === null ? { requestedMessage } : { requestedMessage, connectorId }
-    );
+    setBusy(true);
+    try {
+      return await triggerChargerMessageRequest(chargerId, requestedMessage, connectorId, handleUnauthorized);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loadOnboardingSettings(options: { autoOpen?: boolean } = {}) {
