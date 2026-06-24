@@ -418,6 +418,7 @@ export type OnboardingSettings = {
 export type CommunicationSettings = {
   retentionHours: number;
   defaultRetentionHours: number;
+  storage: CommunicationJournalStorageSummary | null;
 };
 
 export type OnboardingState = "unknown" | "pending" | "completed" | "skipped";

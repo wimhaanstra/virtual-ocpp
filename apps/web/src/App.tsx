@@ -620,6 +620,7 @@ export default function App() {
 
     const data = (await response.json()) as CommunicationSettings;
     setCommunicationSettings(data);
+    setCommunicationStorage(data.storage ?? null);
     setCommunicationSettingsStatus("ready");
   }
 
@@ -644,7 +645,42 @@ export default function App() {
       setCommunicationSettings(data);
       setCommunicationSettingsStatus("ready");
       setCommunicationRetentionHours(data.retentionHours);
+      setCommunicationStorage(data.storage ?? null);
       setMessage(`Communication retention updated to ${data.retentionHours} hours.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function purgeExpiredCommunicationJournalFromSettings() {
+    setBusy(true);
+    setMessage("Purging expired communication rows...");
+    try {
+      const response = await fetch("/api/communication-journal/purge", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "retention" })
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        setMessage("Could not purge expired communication rows.");
+        return;
+      }
+
+      const result = (await response.json().catch(() => null)) as { deletedCount?: number; retentionHours?: number } | null;
+      if (typeof result?.retentionHours === "number") {
+        setCommunicationRetentionHours(result.retentionHours);
+      }
+      setMessage(
+        typeof result?.deletedCount === "number"
+          ? `Purged ${result.deletedCount} expired communication row${result.deletedCount === 1 ? "" : "s"}.`
+          : "Expired communication rows purged."
+      );
+      await Promise.all([
+        loadCommunicationSettings(),
+        activeView === "Communication" ? loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" }) : Promise.resolve()
+      ]);
     } finally {
       setBusy(false);
     }
@@ -2016,6 +2052,7 @@ export default function App() {
             onboardingSettingsStatus={onboardingSettingsStatus}
             timeFormat={timeFormat}
             onCommunicationRetentionChange={(value) => void updateCommunicationRetentionHours(value)}
+            onPurgeExpiredCommunication={() => void purgeExpiredCommunicationJournalFromSettings()}
             onRefreshCommunicationSettings={() => void loadCommunicationSettings()}
             onRefreshOnboarding={() => void loadOnboardingSettings()}
             onRunOnboarding={() => void openChargerWizard("manual-onboarding")}

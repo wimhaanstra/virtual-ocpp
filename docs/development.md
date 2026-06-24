@@ -51,6 +51,8 @@ The Settings page is the operator entry point for onboarding state:
 
 - `GET /api/settings/onboarding` returns `{ completed, completedAt, skippedAt }`.
 - `PATCH /api/settings/onboarding` accepts exactly one action: `{ "completed": true }`, `{ "skipped": true }`, or `{ "reset": true }`.
+- `GET /api/settings/communication` returns journal retention settings plus row-count and oldest/newest-row storage summary.
+- `PATCH /api/settings/communication` updates the communication journal retention window.
 
 Onboarding state is stored in SQLite. When neither `completedAt` nor `skippedAt` is set, the frontend automatically opens the onboarding wizard after admin login.
 
@@ -116,6 +118,8 @@ The protected communication journal stores redacted protocol traces for charger,
 - `GET /api/communication-journal` returns filtered rows.
 - `GET /api/communication-journal/export` downloads the filtered redacted rows as CSV.
 - `POST /api/communication-journal/purge` deletes rows older than the configured retention window, or rows matching an explicit filter scope when the operator confirms with `PURGE`.
+
+The Settings page shows the same retention value with storage summary details and exposes a guarded purge action for expired rows. Filtered purges stay on the Communication page where the active filter scope is visible.
 
 Secret-like fields are redacted before storage. Exports use the same redacted public journal rows and are meant for operator troubleshooting, not for raw payload archives.
 

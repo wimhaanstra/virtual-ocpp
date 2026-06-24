@@ -130,6 +130,8 @@ See `docs/deployment.md` for Traefik/reverse proxy, TLS, storage override, and s
 - `DELETE /api/proxy-targets/:id` deletes a proxy target. Requires admin session.
 - `GET /api/proxy-health?chargerId=...` returns runtime upstream proxy socket health for a charger. Requires admin session.
 - `GET /api/dashboard-config` returns secret-free charger connection config for the dashboard. Requires admin session.
+- `GET /api/settings/communication` returns communication journal retention settings plus row-count and oldest/newest-row storage summary. Requires admin session.
+- `PATCH /api/settings/communication` updates communication journal retention. Requires admin session.
 - `GET /api/communication-journal` lists redacted charger/server/proxy OCPP communication rows with source/target filters. Requires admin session.
 - `GET /api/communication-journal/export` downloads the current redacted journal scope as CSV. Requires admin session.
 - `POST /api/communication-journal/purge` deletes expired communication journal rows, or rows matching an explicit filter scope when confirmed with `PURGE`. Requires admin session.

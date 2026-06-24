@@ -1,4 +1,4 @@
-import { RefreshCcw, Save, Sparkles } from "lucide-react";
+import { RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
 import { formatDateTime, getOnboardingState, getOnboardingStateLabel, getOnboardingStateTone } from "../app-helpers";
@@ -12,6 +12,7 @@ type SettingsViewProps = {
   onboardingSettingsStatus: OnboardingSettingsStatus;
   timeFormat: TimeFormatPreference;
   onCommunicationRetentionChange: (value: number) => void;
+  onPurgeExpiredCommunication: () => void;
   onRefreshCommunicationSettings: () => void;
   onRefreshOnboarding: () => void;
   onRunOnboarding: () => void;
@@ -26,12 +27,14 @@ export function SettingsView({
   onboardingSettingsStatus,
   timeFormat,
   onCommunicationRetentionChange,
+  onPurgeExpiredCommunication,
   onRefreshCommunicationSettings,
   onRefreshOnboarding,
   onRunOnboarding,
   onTimeFormatChange
 }: SettingsViewProps) {
   const [retentionDraft, setRetentionDraft] = useState("24");
+  const [purgeConfirmation, setPurgeConfirmation] = useState("");
   const onboardingState = getOnboardingState(onboardingSettings);
   const onboardingStateLabel = getOnboardingStateLabel(onboardingState);
   const onboardingStateTone = getOnboardingStateTone(onboardingState);
@@ -57,6 +60,8 @@ export function SettingsView({
             : "Idle";
   const parsedRetention = Number(retentionDraft);
   const canSaveRetention = Number.isInteger(parsedRetention) && parsedRetention >= 1 && parsedRetention <= 8760 && parsedRetention !== communicationSettings?.retentionHours;
+  const storage = communicationSettings?.storage ?? null;
+  const canPurgeExpired = purgeConfirmation.trim() === "PURGE";
 
   useEffect(() => {
     if (communicationSettings) {
@@ -101,7 +106,7 @@ export function SettingsView({
           <div>
             <p className="eyebrow">Communication</p>
             <h2>Journal retention</h2>
-            <p className="status-copy">Choose how long redacted protocol communication rows are kept before automatic purge.</p>
+            <p className="status-copy">Choose how long redacted protocol communication rows are kept before automatic purge, and review current journal storage.</p>
           </div>
           <span className="pill pill-neutral">{communicationEndpointLabel}</span>
         </div>
@@ -114,6 +119,18 @@ export function SettingsView({
           <div>
             <dt>Default</dt>
             <dd>{communicationSettings?.defaultRetentionHours ?? 24} hours</dd>
+          </div>
+          <div>
+            <dt>Rows</dt>
+            <dd>{storage?.rowCount ?? 0}</dd>
+          </div>
+          <div>
+            <dt>Oldest row</dt>
+            <dd>{storage?.oldestCreatedAt ? formatDateTime(storage.oldestCreatedAt) : "-"}</dd>
+          </div>
+          <div>
+            <dt>Newest row</dt>
+            <dd>{storage?.newestCreatedAt ? formatDateTime(storage.newestCreatedAt) : "-"}</dd>
           </div>
         </dl>
 
@@ -140,6 +157,29 @@ export function SettingsView({
               Save
             </Button>
           </div>
+        </div>
+
+        <div className="settings-danger-zone">
+          <div>
+            <strong>Purge expired rows</strong>
+            <p className="status-copy">Deletes communication rows older than the current retention window. Filtered purges stay available on the Communication page.</p>
+          </div>
+          <label className="field">
+            <span>Type PURGE to confirm</span>
+            <input value={purgeConfirmation} onChange={(event) => setPurgeConfirmation(event.target.value)} disabled={busy} />
+          </label>
+          <Button
+            type="button"
+            className="button-danger"
+            onClick={() => {
+              onPurgeExpiredCommunication();
+              setPurgeConfirmation("");
+            }}
+            disabled={busy || !canPurgeExpired}
+          >
+            <Trash2 aria-hidden="true" />
+            Purge expired
+          </Button>
         </div>
       </section>
 

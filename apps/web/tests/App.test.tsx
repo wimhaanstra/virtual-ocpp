@@ -98,12 +98,12 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
   }
 
   if (path === "/api/settings/communication" && method === "GET") {
-    return new Response(JSON.stringify({ retentionHours: 24, defaultRetentionHours: 24 }), { status: 200 });
+    return new Response(JSON.stringify(buildCommunicationSettingsResponse()), { status: 200 });
   }
 
   if (path === "/api/settings/communication" && method === "PATCH") {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
-    return new Response(JSON.stringify({ retentionHours: body.retentionHours, defaultRetentionHours: 24 }), { status: 200 });
+    return new Response(JSON.stringify(buildCommunicationSettingsResponse(body.retentionHours)), { status: 200 });
   }
 
   if (
@@ -171,6 +171,19 @@ async function chooseChargerFromContextSwitcher(chargerId: string) {
   fireEvent.click(within(picker).getByRole("button", { name: new RegExp(chargerId) }));
 
   await waitFor(() => expect(screen.queryByRole("dialog", { name: "Select charger" })).not.toBeInTheDocument());
+}
+
+function buildCommunicationSettingsResponse(retentionHours = 24, rowCount = 0) {
+  return {
+    retentionHours,
+    defaultRetentionHours: 24,
+    storage: {
+      rowCount,
+      oldestCreatedAt: rowCount > 0 ? "2026-06-19T08:30:00.000Z" : null,
+      newestCreatedAt: rowCount > 0 ? "2026-06-19T09:00:00.000Z" : null,
+      retentionHours
+    }
+  };
 }
 
 describe("App", () => {
@@ -1411,12 +1424,12 @@ describe("App", () => {
       }
 
       if (path === "/api/settings/communication" && method === "GET") {
-        return new Response(JSON.stringify({ retentionHours: 24, defaultRetentionHours: 24 }), { status: 200 });
+        return new Response(JSON.stringify(buildCommunicationSettingsResponse(24, 3)), { status: 200 });
       }
 
       if (path === "/api/settings/communication" && method === "PATCH") {
         const body = init?.body ? JSON.parse(String(init.body)) : {};
-        return new Response(JSON.stringify({ retentionHours: body.retentionHours, defaultRetentionHours: 24 }), { status: 200 });
+        return new Response(JSON.stringify(buildCommunicationSettingsResponse(body.retentionHours, 3)), { status: 200 });
       }
 
       if (path === "/api/dashboard-config" && method === "GET") {
@@ -1455,6 +1468,10 @@ describe("App", () => {
         return new Response(JSON.stringify({ items: [], retentionHours: 24 }), { status: 200 });
       }
 
+      if (path === "/api/communication-journal/purge" && method === "POST") {
+        return new Response(JSON.stringify({ ok: true, deletedCount: 2, retentionHours: 72, scope: "retention" }), { status: 200 });
+      }
+
       const fallbackResponse = emptyVisibilityResponses(url, method);
       if (fallbackResponse) return fallbackResponse;
       throw new Error(`Unexpected request: ${url}`);
@@ -1477,10 +1494,18 @@ describe("App", () => {
     expect(screen.getByRole("radio", { name: "12 hour" })).toHaveAttribute("aria-checked", "true");
     expect(window.localStorage.getItem("virtual-ocpp-time-format")).toBe("12h");
     expect(screen.getByLabelText("Retention hours")).toHaveValue(24);
+    expect(screen.getByText("Rows")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Retention hours"), { target: { value: "72" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/settings/communication" && init?.method === "PATCH" && String(init.body).includes("72"))).toBe(true);
+    });
+    expect(screen.getByRole("button", { name: "Purge expired" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Type PURGE to confirm"), { target: { value: "PURGE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Purge expired" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/communication-journal/purge" && init?.method === "POST" && String(init.body).includes("retention"))).toBe(true);
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Run onboarding" }));

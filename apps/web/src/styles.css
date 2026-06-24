@@ -1157,6 +1157,16 @@ a {
   align-items: end;
 }
 
+.settings-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 240px) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 .segmented-control {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(100px, 1fr));
@@ -2750,6 +2760,8 @@ td {
   .modal-form-grid,
   .session-detail-grid,
   .communication-expanded__grid,
+  .settings-danger-zone,
+  .settings-inline-form,
   .settings-status-grid {
     grid-template-columns: 1fr;
   }

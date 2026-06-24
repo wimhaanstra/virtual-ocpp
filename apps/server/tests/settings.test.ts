@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { appSettings, onboardingSettings } from '../src/db/schema.js';
+import { appSettings, communicationJournal, onboardingSettings } from '../src/db/schema.js';
 import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 describe('onboarding settings api', () => {
@@ -39,7 +40,6 @@ describe('onboarding settings api', () => {
     closeDb = tempDb.close;
     const app = await buildApp({ config: testConfig(), db: tempDb.db });
     const cookie = await login(app);
-
     const initial = await app.inject({
       method: 'GET',
       url: '/api/settings/onboarding',
@@ -159,6 +159,29 @@ describe('onboarding settings api', () => {
     closeDb = tempDb.close;
     const app = await buildApp({ config: testConfig(), db: tempDb.db });
     const cookie = await login(app);
+    const journalCreatedAt = new Date('2026-06-20T10:00:00.000Z');
+    tempDb.db
+      .insert(communicationJournal)
+      .values({
+        id: randomUUID(),
+        createdAt: journalCreatedAt,
+        direction: 'inbound',
+        sourceType: 'charger',
+        sourceId: 'CHARGER-1',
+        targetType: 'server',
+        targetId: 'server',
+        chargerId: 'CHARGER-1',
+        proxyTargetId: null,
+        messageType: 'call',
+        ocppMethod: 'Heartbeat',
+        transactionId: null,
+        idTag: null,
+        payloadJson: '{}',
+        errorCode: null,
+        errorDescription: null,
+        correlationId: null
+      })
+      .run();
 
     const initial = await app.inject({
       method: 'GET',
@@ -168,7 +191,13 @@ describe('onboarding settings api', () => {
     expect(initial.statusCode).toBe(200);
     expect(initial.json()).toEqual({
       retentionHours: 24,
-      defaultRetentionHours: 24
+      defaultRetentionHours: 24,
+      storage: {
+        rowCount: 1,
+        oldestCreatedAt: journalCreatedAt.toISOString(),
+        newestCreatedAt: journalCreatedAt.toISOString(),
+        retentionHours: 24
+      }
     });
 
     const updated = await app.inject({
@@ -180,7 +209,13 @@ describe('onboarding settings api', () => {
     expect(updated.statusCode).toBe(200);
     expect(updated.json()).toEqual({
       retentionHours: 72,
-      defaultRetentionHours: 24
+      defaultRetentionHours: 24,
+      storage: {
+        rowCount: 1,
+        oldestCreatedAt: journalCreatedAt.toISOString(),
+        newestCreatedAt: journalCreatedAt.toISOString(),
+        retentionHours: 72
+      }
     });
     expect(tempDb.db.select().from(appSettings).all()).toEqual([
       expect.objectContaining({

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
+import type { CommunicationJournalService } from './communication-journal.js';
 import type { Database } from './db/client.js';
 import { appSettings, onboardingSettings } from './db/schema.js';
 
@@ -32,7 +33,7 @@ const UpdateCommunicationSettingsSchema = z
   })
   .strict();
 
-export function registerSettingsRoutes(app: FastifyInstance, db: Database) {
+export function registerSettingsRoutes(app: FastifyInstance, db: Database, journal?: CommunicationJournalService) {
   app.get('/api/settings/onboarding', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -84,7 +85,7 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database) {
   app.get('/api/settings/communication', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
-    return getCommunicationSettings(db);
+    return getCommunicationSettings(db, journal);
   });
 
   app.patch('/api/settings/communication', async (request, reply) => {
@@ -104,7 +105,7 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database) {
       db.insert(appSettings).values({ key: CommunicationRetentionKey, value, updatedAt: now }).run();
     }
 
-    return getCommunicationSettings(db);
+    return getCommunicationSettings(db, journal);
   });
 }
 
@@ -114,10 +115,11 @@ export function getCommunicationRetentionHours(db: Database) {
   return Number.isInteger(parsed) && parsed > 0 && parsed <= MaxCommunicationRetentionHours ? parsed : DefaultCommunicationRetentionHours;
 }
 
-function getCommunicationSettings(db: Database) {
+function getCommunicationSettings(db: Database, journal?: CommunicationJournalService) {
   return {
     retentionHours: getCommunicationRetentionHours(db),
-    defaultRetentionHours: DefaultCommunicationRetentionHours
+    defaultRetentionHours: DefaultCommunicationRetentionHours,
+    storage: journal?.getStorageSummary() ?? null
   };
 }
 
