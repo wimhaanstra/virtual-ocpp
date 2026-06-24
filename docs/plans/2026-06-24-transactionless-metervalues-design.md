@@ -30,9 +30,16 @@ Current live charging stats look up meter samples by `chargerId + transactionId`
 
 ## OCPP Context
 
-The local `docs/ocpp-1.6.pdf` was added as the project reference for OCPP 1.6j. Local text extraction tooling is not currently available in this environment, so exact spec wording still needs to be quoted or cited after PDF extraction is available.
+The local `docs/ocpp-1.6.pdf` is the project reference for OCPP 1.6j. The relevant extracted sections support this feature:
 
-The current code already models `MeterValuesRequest.transactionId` as optional, and the production payload confirms this behavior:
+- Section `4.7 Meter Values` says the Charge Point may sample the energy meter or other sensor/transducer hardware to provide extra meter-value information.
+- The same section defines `connectorId` as the connector the samples were taken from; connector `0` is associated with the entire Charge Point, and energy-related connector `0` samples should come from the main energy meter.
+- The same section says `transactionId` identifies the transaction the values are related to, **if applicable**, and may be omitted when there is no transaction in progress or when values are taken from the main meter.
+- Section `6.31 MeterValues.req` defines `transactionId` with cardinality `0..1`, so the field is optional.
+- Section `7.31 Measurand` includes `Current.Import`, `Energy.Active.Import.Register`, `Power.Active.Import`, `Temperature`, and `Voltage`.
+- Section `7.43 SampledValue` defines optional `context`, `format`, `measurand`, `phase`, `location`, and `unit`. It also says the default `measurand` is `Energy.Active.Import.Register`, decimal values are allowed for values such as temperature and current, and when `phase` is absent the measured value is interpreted as an overall value.
+
+The current code already models `MeterValuesRequest.transactionId` as optional, and the production payload follows this valid OCPP 1.6 behavior:
 
 ```json
 {
@@ -49,7 +56,7 @@ The current code already models `MeterValuesRequest.transactionId` as optional, 
 }
 ```
 
-The implementation should treat omitted `transactionId` as valid OCPP 1.6 behavior, not as malformed input.
+The implementation should therefore treat omitted `transactionId` as valid OCPP 1.6 behavior, not as malformed input.
 
 ## Current Production Evidence
 
@@ -342,4 +349,3 @@ After implementation, use the production database copy:
 
 - Should Slice 1 include temperature on the compact dashboard immediately, or only in expanded live-session details?
 - Should historical meter summaries be part of the sessions endpoint response or a separate endpoint loaded on row expansion?
-- Once PDF extraction is available, add exact OCPP 1.6j references for `MeterValuesRequest.transactionId` and sampled value measurands.
