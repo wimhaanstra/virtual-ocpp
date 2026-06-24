@@ -43,7 +43,6 @@ The server automatically loads `.env` from the current working directory or near
 | `ADMIN_PASSWORD` | Yes | None | Local admin password; must not be empty. |
 | `OCPP_BASIC_AUTH_PASSWORD` | No | None | Optional charger Basic Auth password. When set, the charger Basic Auth username must match the charger id. |
 | `OCPP_PUBLIC_URL` | No | `ws://localhost:<PORT>/ocpp/:chargerId` | Optional charger WebSocket URL template shown on the dashboard; set this for TLS/reverse-proxy deployments. |
-| `COMMUNICATION_LOG_RETENTION_HOURS` | No | `24` | Number of hours to keep full redacted communication journal rows before automatic purge. |
 | `CHARGER_SILENT_AFTER_SECONDS` | No | `300` | Number of seconds without charger traffic before the UI marks a charger as silent. |
 | `METER_GAP_THRESHOLD_WH` | No | `1000` | Minimum meter delta, in Wh, before offline recovery suggestions are created. |
 
@@ -95,8 +94,6 @@ services:
       # OCPP_PUBLIC_URL: ws://YOUR_HOST_OR_IP:8797/ocpp/:chargerId
       # Optional charger Basic Auth password. When set, chargers must use their charger id as username.
       # OCPP_BASIC_AUTH_PASSWORD: charger-password
-      # Optional number of hours to keep redacted communication journal rows.
-      # COMMUNICATION_LOG_RETENTION_HOURS: "24"
       # Optional number of seconds before a charger is considered silent.
       # CHARGER_SILENT_AFTER_SECONDS: "300"
       # Optional minimum meter gap in Wh before offline recovery suggestions are created.
@@ -109,6 +106,8 @@ services:
 volumes:
   virtual-ocpp-data:
 ```
+
+Communication journal retention defaults to 24 hours and can be changed from Settings after login. The setting is stored in the SQLite database.
 
 See `docs/deployment.md` for Traefik/reverse proxy, TLS, storage override, and smoke-test notes.
 

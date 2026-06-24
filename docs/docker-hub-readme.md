@@ -27,8 +27,6 @@ services:
       # OCPP_PUBLIC_URL: ws://YOUR_HOST_OR_IP:8797/ocpp/:chargerId
       # Optional charger Basic Auth password. When set, chargers must use their charger id as username.
       # OCPP_BASIC_AUTH_PASSWORD: charger-password
-      # Optional number of hours to keep redacted communication journal rows.
-      # COMMUNICATION_LOG_RETENTION_HOURS: "24"
       # Optional number of seconds before a charger is considered silent.
       # CHARGER_SILENT_AFTER_SECONDS: "300"
       # Optional minimum meter gap in Wh before offline recovery suggestions are created.
@@ -41,6 +39,8 @@ services:
 volumes:
   virtual-ocpp-data:
 ```
+
+Communication journal retention defaults to 24 hours and can be changed from Settings after login. The setting is stored in SQLite.
 
 After starting the container, open `http://YOUR_HOST_OR_IP:8797` and sign in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
 

@@ -415,6 +415,11 @@ export type OnboardingSettings = {
   skippedAt: string | null;
 };
 
+export type CommunicationSettings = {
+  retentionHours: number;
+  defaultRetentionHours: number;
+};
+
 export type OnboardingState = "unknown" | "pending" | "completed" | "skipped";
 
 export type OnboardingSettingsStatus = "idle" | "loading" | "ready" | "unavailable" | "error";

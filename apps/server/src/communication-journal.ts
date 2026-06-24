@@ -88,12 +88,12 @@ export class CommunicationJournalService {
 
   constructor(
     private readonly db: Database,
-    private readonly retentionHours: number = 24,
+    private readonly retentionHoursProvider: () => number = () => 24,
     private readonly liveUpdates?: LiveUpdateBus
   ) {}
 
   getRetentionHours() {
-    return this.retentionHours;
+    return this.retentionHoursProvider();
   }
 
   recordChargerCall(input: Omit<CommunicationJournalEntryInput, 'direction' | 'sourceType' | 'sourceId' | 'targetType' | 'targetId' | 'messageType'> & {
@@ -283,13 +283,14 @@ export class CommunicationJournalService {
 
   purgeExpired(now = new Date()) {
     this.lastRuntimePurgeAt = now.getTime();
-    const cutoff = new Date(now.getTime() - this.retentionHours * 60 * 60 * 1000);
+    const retentionHours = this.getRetentionHours();
+    const cutoff = new Date(now.getTime() - retentionHours * 60 * 60 * 1000);
     const result = this.db.delete(communicationJournal).where(lt(communicationJournal.createdAt, cutoff)).run();
     const deletedCount = toChanges(result);
     if (deletedCount > 0) {
       this.liveUpdates?.publish({
         type: 'journal.purged',
-        retentionHours: this.retentionHours,
+        retentionHours,
         deletedCount
       });
     }
@@ -307,7 +308,7 @@ export class CommunicationJournalService {
     if (deletedCount > 0) {
       this.liveUpdates?.publish({
         type: 'journal.purged',
-        retentionHours: this.retentionHours,
+        retentionHours: this.getRetentionHours(),
         deletedCount
       });
     }
@@ -339,7 +340,7 @@ export class CommunicationJournalService {
 
     return {
       items: pageRows.map(toPublicItem),
-      retentionHours: this.retentionHours,
+      retentionHours: this.getRetentionHours(),
       nextCursor: rows.length > limit && lastRow ? encodeCommunicationJournalCursor({ createdAt: lastRow.createdAt, id: lastRow.id }) : null,
       hasMore: rows.length > limit,
       storage: this.getStorageSummary()
@@ -360,7 +361,7 @@ export class CommunicationJournalService {
       rowCount: Number(row?.rowCount ?? 0),
       oldestCreatedAt: toIsoDate(row?.oldestCreatedAt ?? null),
       newestCreatedAt: toIsoDate(row?.newestCreatedAt ?? null),
-      retentionHours: this.retentionHours
+      retentionHours: this.getRetentionHours()
     };
   }
 

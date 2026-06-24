@@ -3,9 +3,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { onboardingSettings } from './db/schema.js';
+import { appSettings, onboardingSettings } from './db/schema.js';
 
 const SingletonSettingsId = 'onboarding';
+const CommunicationRetentionKey = 'communication.retentionHours';
+const DefaultCommunicationRetentionHours = 24;
+const MaxCommunicationRetentionHours = 8760;
 
 const UpdateOnboardingSettingsSchema = z
   .object({
@@ -22,6 +25,12 @@ const UpdateOnboardingSettingsSchema = z
       });
     }
   });
+
+const UpdateCommunicationSettingsSchema = z
+  .object({
+    retentionHours: z.coerce.number().int().min(1).max(MaxCommunicationRetentionHours)
+  })
+  .strict();
 
 export function registerSettingsRoutes(app: FastifyInstance, db: Database) {
   app.get('/api/settings/onboarding', async (request, reply) => {
@@ -71,6 +80,45 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database) {
       ...patch
     });
   });
+
+  app.get('/api/settings/communication', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    return getCommunicationSettings(db);
+  });
+
+  app.patch('/api/settings/communication', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const body = UpdateCommunicationSettingsSchema.safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_communication_settings', details: body.error.flatten() });
+    }
+
+    const now = new Date();
+    const value = String(body.data.retentionHours);
+    const existing = db.select().from(appSettings).where(eq(appSettings.key, CommunicationRetentionKey)).limit(1).get();
+    if (existing) {
+      db.update(appSettings).set({ value, updatedAt: now }).where(eq(appSettings.key, CommunicationRetentionKey)).run();
+    } else {
+      db.insert(appSettings).values({ key: CommunicationRetentionKey, value, updatedAt: now }).run();
+    }
+
+    return getCommunicationSettings(db);
+  });
+}
+
+export function getCommunicationRetentionHours(db: Database) {
+  const row = db.select().from(appSettings).where(eq(appSettings.key, CommunicationRetentionKey)).limit(1).get();
+  const parsed = Number(row?.value ?? DefaultCommunicationRetentionHours);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= MaxCommunicationRetentionHours ? parsed : DefaultCommunicationRetentionHours;
+}
+
+function getCommunicationSettings(db: Database) {
+  return {
+    retentionHours: getCommunicationRetentionHours(db),
+    defaultRetentionHours: DefaultCommunicationRetentionHours
+  };
 }
 
 function getOnboardingSettings(db: Database) {

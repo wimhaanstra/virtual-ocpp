@@ -43,7 +43,7 @@ describe('communication journal', () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
 
-    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24);
     const createdAt = new Date(Date.now() - 60_000);
     expect(
       redactCommunicationPayload({
@@ -189,7 +189,7 @@ describe('communication journal', () => {
   it('paginates journal rows with a stable cursor', async () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
-    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24);
     const createdAt = new Date(Date.now() - 60_000);
 
     for (let index = 0; index < 3; index += 1) {
@@ -242,7 +242,7 @@ describe('communication journal', () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
 
-    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24);
     const createdAt = new Date(Date.now() - 60_000);
 
     journal.recordEntry({
@@ -293,7 +293,7 @@ describe('communication journal', () => {
   it('filters journal rows by partial OCPP method', async () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
-    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24);
     const createdAt = new Date(Date.now() - 60_000);
 
     journal.recordEntry({
@@ -434,7 +434,7 @@ describe('communication journal', () => {
   it('exports filtered redacted journal rows as CSV', async () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
-    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24);
     const createdAt = new Date(Date.now() - 60_000);
 
     journal.recordEntry({
@@ -485,7 +485,7 @@ describe('communication journal', () => {
   it('requires confirmation and explicit scope for filtered journal purge', async () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
-    const journal = new CommunicationJournalService(tempDb.db, 24);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24);
     const createdAt = new Date(Date.now() - 60_000);
 
     journal.recordEntry({

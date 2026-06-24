@@ -1,13 +1,18 @@
-import { RefreshCcw, Sparkles } from "lucide-react";
-import type { OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
+import { RefreshCcw, Save, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
 import { formatDateTime, getOnboardingState, getOnboardingStateLabel, getOnboardingStateTone } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type SettingsViewProps = {
   busy: boolean;
+  communicationSettings: CommunicationSettings | null;
+  communicationSettingsStatus: OnboardingSettingsStatus;
   onboardingSettings: OnboardingSettings | null;
   onboardingSettingsStatus: OnboardingSettingsStatus;
   timeFormat: TimeFormatPreference;
+  onCommunicationRetentionChange: (value: number) => void;
+  onRefreshCommunicationSettings: () => void;
   onRefreshOnboarding: () => void;
   onRunOnboarding: () => void;
   onTimeFormatChange: (value: TimeFormatPreference) => void;
@@ -15,13 +20,18 @@ type SettingsViewProps = {
 
 export function SettingsView({
   busy,
+  communicationSettings,
+  communicationSettingsStatus,
   onboardingSettings,
   onboardingSettingsStatus,
   timeFormat,
+  onCommunicationRetentionChange,
+  onRefreshCommunicationSettings,
   onRefreshOnboarding,
   onRunOnboarding,
   onTimeFormatChange
 }: SettingsViewProps) {
+  const [retentionDraft, setRetentionDraft] = useState("24");
   const onboardingState = getOnboardingState(onboardingSettings);
   const onboardingStateLabel = getOnboardingStateLabel(onboardingState);
   const onboardingStateTone = getOnboardingStateTone(onboardingState);
@@ -35,6 +45,24 @@ export function SettingsView({
           : onboardingSettingsStatus === "error"
             ? "Load failed"
             : "Idle";
+  const communicationEndpointLabel =
+    communicationSettingsStatus === "loading"
+      ? "Loading"
+      : communicationSettingsStatus === "ready"
+        ? "Connected"
+        : communicationSettingsStatus === "unavailable"
+          ? "Unavailable"
+          : communicationSettingsStatus === "error"
+            ? "Load failed"
+            : "Idle";
+  const parsedRetention = Number(retentionDraft);
+  const canSaveRetention = Number.isInteger(parsedRetention) && parsedRetention >= 1 && parsedRetention <= 8760 && parsedRetention !== communicationSettings?.retentionHours;
+
+  useEffect(() => {
+    if (communicationSettings) {
+      setRetentionDraft(String(communicationSettings.retentionHours));
+    }
+  }, [communicationSettings]);
 
   return (
     <section className="settings-layout">
@@ -66,6 +94,53 @@ export function SettingsView({
             <dd>{onboardingSettings?.skippedAt ? formatDateTime(onboardingSettings.skippedAt) : "-"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="panel settings-panel">
+        <div className="topbar-actions page-section-header">
+          <div>
+            <p className="eyebrow">Communication</p>
+            <h2>Journal retention</h2>
+            <p className="status-copy">Choose how long redacted protocol communication rows are kept before automatic purge.</p>
+          </div>
+          <span className="pill pill-neutral">{communicationEndpointLabel}</span>
+        </div>
+
+        <dl className="settings-status-grid">
+          <div>
+            <dt>Current</dt>
+            <dd>{communicationSettings?.retentionHours ?? 24} hours</dd>
+          </div>
+          <div>
+            <dt>Default</dt>
+            <dd>{communicationSettings?.defaultRetentionHours ?? 24} hours</dd>
+          </div>
+        </dl>
+
+        <div className="settings-inline-form">
+          <label className="field">
+            <span>Retention hours</span>
+            <input
+              type="number"
+              min={1}
+              max={8760}
+              step={1}
+              value={retentionDraft}
+              onChange={(event) => setRetentionDraft(event.target.value)}
+              disabled={busy}
+            />
+          </label>
+          <div className="action-row settings-action-row">
+            <Button type="button" className="button-secondary" onClick={onRefreshCommunicationSettings} disabled={busy}>
+              <RefreshCcw aria-hidden="true" />
+              Refresh
+            </Button>
+            <Button type="button" onClick={() => onCommunicationRetentionChange(parsedRetention)} disabled={busy || !canSaveRetention}>
+              <Save aria-hidden="true" />
+              Save
+            </Button>
+          </div>
+        </div>
       </section>
 
       <section className="panel settings-panel">

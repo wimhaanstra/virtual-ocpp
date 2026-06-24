@@ -1150,6 +1150,13 @@ a {
   justify-content: flex-start;
 }
 
+.settings-inline-form {
+  display: grid;
+  grid-template-columns: minmax(160px, 260px) auto;
+  gap: 12px;
+  align-items: end;
+}
+
 .segmented-control {
   display: inline-grid;
   grid-template-columns: repeat(2, minmax(100px, 1fr));

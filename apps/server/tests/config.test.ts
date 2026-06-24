@@ -17,7 +17,6 @@ describe('loadConfig', () => {
     expect(config.sqlitePath).toBe('./data/virtual-ocpp.sqlite');
     expect(config.adminUsername).toBe('admin');
     expect(config.adminPassword).toBe('correct-password');
-    expect(config.communicationLogRetentionHours).toBe(24);
     expect(config.chargerSilentAfterSeconds).toBe(300);
     expect(config.meterGapThresholdWh).toBe(1000);
   });
@@ -54,15 +53,6 @@ describe('loadConfig', () => {
         ADMIN_PASSWORD: ''
       })
     ).toThrow(/ADMIN_PASSWORD/);
-  });
-
-  it('parses the configured communication log retention hours', () => {
-    const config = loadConfig({
-      ...baseEnv,
-      COMMUNICATION_LOG_RETENTION_HOURS: '72'
-    });
-
-    expect(config.communicationLogRetentionHours).toBe(72);
   });
 
   it('parses the configured charger silence threshold', () => {

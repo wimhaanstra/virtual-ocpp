@@ -14,7 +14,7 @@ import { ChargerCommandService } from './ocpp/charger-command-service.js';
 import { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import { registerOcppServer } from './ocpp/server.js';
 import { registerProxyTargetRoutes } from './proxy-targets.js';
-import { registerSettingsRoutes } from './settings.js';
+import { getCommunicationRetentionHours, registerSettingsRoutes } from './settings.js';
 import { registerVisibilityRoutes } from './visibility.js';
 import { registerTagRoutes } from './tags.js';
 import { closeStaleChargerConnections } from './startup-maintenance.js';
@@ -30,7 +30,7 @@ type AppWithLiveUpdates = FastifyInstance & { liveUpdates: LiveUpdateBus };
 
 export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWithLiveUpdates> {
   const liveUpdates = new LiveUpdateBus();
-  const communicationJournal = new CommunicationJournalService(db, config.communicationLogRetentionHours, liveUpdates);
+  const communicationJournal = new CommunicationJournalService(db, () => getCommunicationRetentionHours(db), liveUpdates);
   const proxyAuthorization = new ProxyAuthorizationService(db, communicationJournal, liveUpdates);
   const chargerCommands = new ChargerCommandService(communicationJournal);
   const app = Fastify({

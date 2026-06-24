@@ -13,7 +13,6 @@ const ConfigSchema = z.object({
   ADMIN_PASSWORD: z.string().min(1, 'ADMIN_PASSWORD must not be empty'),
   OCPP_BASIC_AUTH_PASSWORD: optionalNonEmptyString(),
   OCPP_PUBLIC_URL: optionalNonEmptyString(),
-  COMMUNICATION_LOG_RETENTION_HOURS: z.coerce.number().int().positive().default(24),
   CHARGER_SILENT_AFTER_SECONDS: z.coerce.number().int().positive().default(300),
   METER_GAP_THRESHOLD_WH: z.coerce.number().int().nonnegative().default(1000)
 });
@@ -32,7 +31,6 @@ export type AppConfig = {
   adminPassword: string;
   ocppBasicAuthPassword?: string;
   ocppPublicUrl?: string;
-  communicationLogRetentionHours: number;
   chargerSilentAfterSeconds: number;
   meterGapThresholdWh: number;
 };
@@ -62,7 +60,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     adminPassword: parsed.data.ADMIN_PASSWORD,
     ocppBasicAuthPassword: parsed.data.OCPP_BASIC_AUTH_PASSWORD,
     ocppPublicUrl: parsed.data.OCPP_PUBLIC_URL,
-    communicationLogRetentionHours: parsed.data.COMMUNICATION_LOG_RETENTION_HOURS,
     chargerSilentAfterSeconds: parsed.data.CHARGER_SILENT_AFTER_SECONDS,
     meterGapThresholdWh: parsed.data.METER_GAP_THRESHOLD_WH
   };

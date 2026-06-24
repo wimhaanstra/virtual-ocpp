@@ -74,9 +74,10 @@ Common optional values:
 - `ADMIN_USERNAME`: defaults to `admin`.
 - `OCPP_PUBLIC_URL`: charger-facing websocket URL, for example `wss://ocpp.example.com/ocpp/:chargerId`.
 - `OCPP_BASIC_AUTH_PASSWORD`: requires chargers to use OCPP websocket Basic Auth with the charger id as username.
-- `COMMUNICATION_LOG_RETENTION_HOURS`: defaults to `24`.
 - `CHARGER_SILENT_AFTER_SECONDS`: defaults to `300`.
 - `METER_GAP_THRESHOLD_WH`: defaults to `1000`.
+
+Communication journal retention defaults to 24 hours and is managed from Settings after login. The value is stored in SQLite.
 
 ## Reverse Proxy
 

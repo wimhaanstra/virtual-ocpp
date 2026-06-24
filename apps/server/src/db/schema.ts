@@ -14,6 +14,12 @@ export const onboardingSettings = sqliteTable('onboarding_settings', {
   skippedAt: integer('skipped_at', { mode: 'timestamp_ms' })
 });
 
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull()
+});
+
 export const tags = sqliteTable('tags', {
   id: text('id').primaryKey(),
   uuid: text('uuid').notNull().unique(),

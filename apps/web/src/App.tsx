@@ -38,6 +38,7 @@ import type {
   ChargerRegistryRow,
   ChargingSession,
   ChargingStats,
+  CommunicationSettings,
   CommunicationJournalFilters,
   CommunicationJournalItem,
   CommunicationJournalResponse,
@@ -166,6 +167,8 @@ export default function App() {
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig | null>(null);
   const [onboardingSettings, setOnboardingSettings] = useState<OnboardingSettings | null>(null);
   const [onboardingSettingsStatus, setOnboardingSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
+  const [communicationSettings, setCommunicationSettings] = useState<CommunicationSettings | null>(null);
+  const [communicationSettingsStatus, setCommunicationSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
   const [tagForm, setTagForm] = useState<TagFormState>(() => emptyTagForm());
   const [proxyTargetForm, setProxyTargetForm] = useState<ProxyTargetFormState>(() => emptyProxyTargetForm());
   const [tagModalOpen, setTagModalOpen] = useState(false);
@@ -189,6 +192,7 @@ export default function App() {
   const [message, setMessage] = useState("Sign in to manage proxy targets.");
   const [busy, setBusy] = useState(false);
   const onboardingSettingsRequestId = useRef(0);
+  const communicationSettingsRequestId = useRef(0);
 
   const connectedChargerCount = useMemo(() => chargers.filter((charger) => charger.active).length, [chargers]);
   const selectedCharger = useMemo(
@@ -454,6 +458,8 @@ export default function App() {
     setRemoteStopTarget(null);
     setOnboardingSettings(null);
     setOnboardingSettingsStatus("idle");
+    setCommunicationSettings(null);
+    setCommunicationSettingsStatus("idle");
     setSelectedChargerId("");
     setActiveView("Home");
     setLiveStatus("connecting");
@@ -491,7 +497,7 @@ export default function App() {
   }
 
   async function loadAdminData(chargerId = selectedChargerId) {
-    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings({ autoOpen: true })]);
+    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings({ autoOpen: true }), loadCommunicationSettings()]);
   }
 
   async function loadScopedData(chargerId = selectedChargerId) {
@@ -596,6 +602,52 @@ export default function App() {
     setOnboardingSettings(data);
     setOnboardingSettingsStatus("ready");
     return data;
+  }
+
+  async function loadCommunicationSettings() {
+    const requestId = communicationSettingsRequestId.current + 1;
+    communicationSettingsRequestId.current = requestId;
+    setCommunicationSettingsStatus("loading");
+
+    const response = await fetch("/api/settings/communication", { credentials: "include" });
+    if (handleUnauthorized(response)) return;
+    if (requestId !== communicationSettingsRequestId.current) return;
+    if (!response.ok) {
+      setCommunicationSettings(null);
+      setCommunicationSettingsStatus("error");
+      return;
+    }
+
+    const data = (await response.json()) as CommunicationSettings;
+    setCommunicationSettings(data);
+    setCommunicationSettingsStatus("ready");
+  }
+
+  async function updateCommunicationRetentionHours(retentionHours: number) {
+    setBusy(true);
+    const requestId = communicationSettingsRequestId.current + 1;
+    communicationSettingsRequestId.current = requestId;
+    try {
+      const response = await fetch("/api/settings/communication", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retentionHours })
+      });
+      if (handleUnauthorized(response)) return;
+      if (requestId !== communicationSettingsRequestId.current) return;
+      if (!response.ok) {
+        setMessage("Could not update communication retention.");
+        return;
+      }
+      const data = (await response.json()) as CommunicationSettings;
+      setCommunicationSettings(data);
+      setCommunicationSettingsStatus("ready");
+      setCommunicationRetentionHours(data.retentionHours);
+      setMessage(`Communication retention updated to ${data.retentionHours} hours.`);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function loadTags() {
@@ -1958,9 +2010,13 @@ export default function App() {
         ) : activeView === "Settings" ? (
           <SettingsView
             busy={busy}
+            communicationSettings={communicationSettings}
+            communicationSettingsStatus={communicationSettingsStatus}
             onboardingSettings={onboardingSettings}
             onboardingSettingsStatus={onboardingSettingsStatus}
             timeFormat={timeFormat}
+            onCommunicationRetentionChange={(value) => void updateCommunicationRetentionHours(value)}
+            onRefreshCommunicationSettings={() => void loadCommunicationSettings()}
             onRefreshOnboarding={() => void loadOnboardingSettings()}
             onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
             onTimeFormatChange={updateTimeFormat}

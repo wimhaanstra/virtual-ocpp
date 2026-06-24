@@ -17,7 +17,6 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     adminUsername: 'admin',
     adminPassword: 'correct-password',
     ocppBasicAuthPassword: undefined,
-    communicationLogRetentionHours: 24,
     chargerSilentAfterSeconds: 300,
     meterGapThresholdWh: 1000,
     ...overrides
@@ -43,6 +42,12 @@ export function createTestDatabase() {
       id text PRIMARY KEY NOT NULL,
       completed_at integer,
       skipped_at integer
+    );
+
+    CREATE TABLE app_settings (
+      key text PRIMARY KEY NOT NULL,
+      value text NOT NULL,
+      updated_at integer NOT NULL
     );
 
     CREATE TABLE tags (

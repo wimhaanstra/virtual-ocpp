@@ -97,6 +97,15 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
     );
   }
 
+  if (path === "/api/settings/communication" && method === "GET") {
+    return new Response(JSON.stringify({ retentionHours: 24, defaultRetentionHours: 24 }), { status: 200 });
+  }
+
+  if (path === "/api/settings/communication" && method === "PATCH") {
+    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    return new Response(JSON.stringify({ retentionHours: body.retentionHours, defaultRetentionHours: 24 }), { status: 200 });
+  }
+
   if (
     (path === "/api/chargers" ||
       path === "/api/charger-connections" ||
@@ -1401,6 +1410,15 @@ describe("App", () => {
         );
       }
 
+      if (path === "/api/settings/communication" && method === "GET") {
+        return new Response(JSON.stringify({ retentionHours: 24, defaultRetentionHours: 24 }), { status: 200 });
+      }
+
+      if (path === "/api/settings/communication" && method === "PATCH") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        return new Response(JSON.stringify({ retentionHours: body.retentionHours, defaultRetentionHours: 24 }), { status: 200 });
+      }
+
       if (path === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
@@ -1453,11 +1471,17 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Completed", { selector: ".pill" })).toBeInTheDocument();
-    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText("Connected", { selector: "dd" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "24 hour" })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("radio", { name: "12 hour" }));
     expect(screen.getByRole("radio", { name: "12 hour" })).toHaveAttribute("aria-checked", "true");
     expect(window.localStorage.getItem("virtual-ocpp-time-format")).toBe("12h");
+    expect(screen.getByLabelText("Retention hours")).toHaveValue(24);
+    fireEvent.change(screen.getByLabelText("Retention hours"), { target: { value: "72" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/settings/communication" && init?.method === "PATCH" && String(init.body).includes("72"))).toBe(true);
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Run onboarding" }));
 

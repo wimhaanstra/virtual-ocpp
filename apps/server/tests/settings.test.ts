@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { onboardingSettings } from '../src/db/schema.js';
+import { appSettings, onboardingSettings } from '../src/db/schema.js';
 import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 describe('onboarding settings api', () => {
@@ -24,6 +24,12 @@ describe('onboarding settings api', () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toEqual({ error: 'unauthorized' });
+
+    const communicationResponse = await app.inject({
+      method: 'GET',
+      url: '/api/settings/communication'
+    });
+    expect(communicationResponse.statusCode).toBe(401);
 
     await app.close();
   });
@@ -144,6 +150,54 @@ describe('onboarding settings api', () => {
     }
 
     expect(tempDb.db.select().from(onboardingSettings).all()).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('returns and updates communication settings', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+
+    const initial = await app.inject({
+      method: 'GET',
+      url: '/api/settings/communication',
+      headers: { cookie }
+    });
+    expect(initial.statusCode).toBe(200);
+    expect(initial.json()).toEqual({
+      retentionHours: 24,
+      defaultRetentionHours: 24
+    });
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: '/api/settings/communication',
+      headers: { cookie },
+      payload: { retentionHours: 72 }
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toEqual({
+      retentionHours: 72,
+      defaultRetentionHours: 24
+    });
+    expect(tempDb.db.select().from(appSettings).all()).toEqual([
+      expect.objectContaining({
+        key: 'communication.retentionHours',
+        value: '72',
+        updatedAt: expect.any(Date)
+      })
+    ]);
+
+    const invalid = await app.inject({
+      method: 'PATCH',
+      url: '/api/settings/communication',
+      headers: { cookie },
+      payload: { retentionHours: 0 }
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ error: 'invalid_communication_settings' });
 
     await app.close();
   });

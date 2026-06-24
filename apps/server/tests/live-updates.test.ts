@@ -85,7 +85,7 @@ describe('live updates', () => {
     });
     cleanup.push(unsubscribe);
 
-    const journal = new CommunicationJournalService(tempDb.db, 24, bus);
+    const journal = new CommunicationJournalService(tempDb.db, () => 24, bus);
     const repository = new OcppRepository(tempDb.db, journal, bus);
 
     const connectionId = repository.recordConnected('CHARGER-LIVE-1');

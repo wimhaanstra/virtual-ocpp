@@ -188,15 +188,10 @@ Proxy connect/disconnect events should be added later when persistent proxy conn
 
 ## Retention And Purging
 
-Add environment variable:
-
-```text
-COMMUNICATION_LOG_RETENTION_HOURS=24
-```
-
 Behavior:
 
 - Default retention is 24 hours.
+- Retention is configured from Settings and stored in SQLite.
 - Values must be positive integers.
 - Old rows are automatically purged when the server starts.
 - Old rows are also purged opportunistically during runtime after journal inserts.
@@ -359,6 +354,6 @@ Frontend tests:
 - Rows can be filtered by source and target.
 - Rows include full redacted payloads.
 - Secrets are redacted before storage.
-- Communication rows older than `COMMUNICATION_LOG_RETENTION_HOURS` are automatically purged.
+- Communication rows older than the configured retention are automatically purged.
 - Admins can manually trigger purge from the API and UI.
 - Existing operational `logs` behavior remains unchanged.
