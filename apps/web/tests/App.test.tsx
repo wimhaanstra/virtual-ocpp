@@ -1178,6 +1178,12 @@ describe("App", () => {
         return url.pathname === "/api/charging-stats";
       }).length
     ).toBeGreaterThan(1);
+    expect(
+      fetchMock.mock.calls.filter(([input]) => {
+        const url = new URL(String(input), "http://localhost");
+        return url.pathname === "/api/sessions";
+      }).length
+    ).toBe(1);
   });
 
   it("detects and labels a newly connected charger from the onboarding wizard", async () => {

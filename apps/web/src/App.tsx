@@ -93,6 +93,16 @@ import {
   withChargerContext
 } from "./app-helpers";
 
+type LiveRefreshTopic =
+  | "chargers"
+  | "sessions"
+  | "charging-stats"
+  | "logs"
+  | "communication"
+  | "proxy-targets"
+  | "proxy-health"
+  | "tags";
+
 type ChargerWizardMode = "add-charger" | "manual-onboarding" | "first-run-onboarding";
 type OnboardingTagMode = "skip" | "existing" | "create";
 const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 3;
@@ -193,6 +203,9 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const onboardingSettingsRequestId = useRef(0);
   const communicationSettingsRequestId = useRef(0);
+  const liveRefreshTimerRef = useRef<number | null>(null);
+  const liveRefreshInFlightRef = useRef(false);
+  const pendingLiveRefreshTopicsRef = useRef(new Set<LiveRefreshTopic>());
 
   const connectedChargerCount = useMemo(() => chargers.filter((charger) => charger.active).length, [chargers]);
   const selectedCharger = useMemo(
@@ -382,7 +395,15 @@ export default function App() {
     events.addEventListener("message", handleLiveEvent as EventListener);
     events.addEventListener("live-update", handleLiveEvent as EventListener);
 
-    return () => events.close();
+    return () => {
+      events.close();
+      if (liveRefreshTimerRef.current !== null) {
+        window.clearTimeout(liveRefreshTimerRef.current);
+        liveRefreshTimerRef.current = null;
+      }
+      pendingLiveRefreshTopicsRef.current.clear();
+      liveRefreshInFlightRef.current = false;
+    };
   }, [authenticated, selectedChargerId]);
 
   async function loadSession() {
@@ -480,6 +501,38 @@ export default function App() {
     return !selectedChargerId || !event.chargerId || event.chargerId === selectedChargerId;
   }
 
+  function getRefreshTopicsForLiveEvent(event: LiveUpdateEvent): LiveRefreshTopic[] {
+    if (event.type === "refresh") {
+      return event.topic === "charger" ? ["chargers"] : event.topic ? [event.topic] : ["sessions"];
+    }
+
+    if (event.type === "charger.connected" || event.type === "charger.disconnected" || event.type === "charger.updated") {
+      return ["chargers", "proxy-health"];
+    }
+
+    if (event.type === "session.created" || event.type === "session.stopped") {
+      return ["sessions", "charging-stats", "logs"];
+    }
+
+    if (event.type === "meter.sample.recorded") {
+      return ["charging-stats"];
+    }
+
+    if (event.type === "proxy.health.changed") {
+      return ["proxy-health"];
+    }
+
+    if (event.type === "log.recorded") {
+      return ["logs"];
+    }
+
+    if (event.type === "journal.purged") {
+      return ["communication"];
+    }
+
+    return ["sessions"];
+  }
+
   function handleLiveUpdate(event: LiveUpdateEvent) {
     if (event.type === "journal.recorded" && activeView === "Communication") {
       if (communicationEventMatchesFilters(event, communicationFilters, selectedChargerId)) {
@@ -489,11 +542,79 @@ export default function App() {
     }
 
     if (!eventAppliesToSelectedCharger(event)) {
-      void loadChargers();
+      queueLiveRefresh(["chargers"]);
       return;
     }
 
-    void loadScopedData(selectedChargerId);
+    queueLiveRefresh(getRefreshTopicsForLiveEvent(event));
+  }
+
+  function queueLiveRefresh(topics: LiveRefreshTopic[]) {
+    for (const topic of topics) {
+      pendingLiveRefreshTopicsRef.current.add(topic);
+    }
+
+    if (liveRefreshTimerRef.current !== null) return;
+    liveRefreshTimerRef.current = window.setTimeout(() => {
+      liveRefreshTimerRef.current = null;
+      void flushLiveRefreshes();
+    }, 250);
+  }
+
+  async function flushLiveRefreshes() {
+    if (liveRefreshInFlightRef.current) {
+      if (liveRefreshTimerRef.current === null) {
+        liveRefreshTimerRef.current = window.setTimeout(() => {
+          liveRefreshTimerRef.current = null;
+          void flushLiveRefreshes();
+        }, 250);
+      }
+      return;
+    }
+
+    const topics = new Set(pendingLiveRefreshTopicsRef.current);
+    pendingLiveRefreshTopicsRef.current.clear();
+    if (topics.size === 0) return;
+
+    liveRefreshInFlightRef.current = true;
+    await Promise.allSettled(buildLiveRefreshTasks(topics));
+    liveRefreshInFlightRef.current = false;
+
+    if (pendingLiveRefreshTopicsRef.current.size > 0 && liveRefreshTimerRef.current === null) {
+      liveRefreshTimerRef.current = window.setTimeout(() => {
+        liveRefreshTimerRef.current = null;
+        void flushLiveRefreshes();
+      }, 250);
+    }
+  }
+
+  function buildLiveRefreshTasks(topics: Set<LiveRefreshTopic>) {
+    const tasks: Array<Promise<void>> = [];
+    const addTask = (task: Promise<unknown>) => tasks.push(task.then(() => undefined));
+
+    if (topics.has("chargers")) addTask(loadChargers());
+    if (topics.has("tags")) addTask(loadTags());
+    if (topics.has("proxy-targets")) addTask(loadProxyTargets(selectedChargerId));
+    if (topics.has("proxy-health")) addTask(loadProxyHealth(selectedChargerId));
+    if (topics.has("sessions")) {
+      addTask(loadChargingSessions(selectedChargerId));
+      addTask(loadSessionSummary(selectedChargerId));
+      addTask(loadActiveSessionAudit(selectedChargerId));
+      addTask(loadMeterGapEvents(selectedChargerId));
+    }
+    if (topics.has("charging-stats")) {
+      addTask(loadChargingStats(selectedChargerId));
+      addTask(loadSessionSummary(selectedChargerId));
+    }
+    if (topics.has("logs")) addTask(loadLogs(selectedChargerId));
+    if (topics.has("communication")) {
+      if (activeView === "Communication") {
+        addTask(loadCommunicationJournal(selectedChargerId, communicationFilters, { mode: "replace" }));
+      }
+      addTask(loadCommunicationSettings());
+    }
+
+    return tasks;
   }
 
   async function loadAdminData(chargerId = selectedChargerId) {
