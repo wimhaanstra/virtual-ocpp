@@ -271,13 +271,13 @@ export default function App() {
 
   function renderCommunicationEndpoint(type: string, id: string) {
     if (type !== "proxy") {
-      return `${type} / ${id}`;
+      return id;
     }
 
     const proxyName = formatProxyTargetLabel(id);
     return (
       <span title={id}>
-        {type} / {proxyName}
+        {proxyName}
       </span>
     );
   }

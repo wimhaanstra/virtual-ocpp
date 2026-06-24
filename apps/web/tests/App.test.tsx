@@ -2161,8 +2161,11 @@ describe("App", () => {
 
     expect(await screen.findAllByTitle("proxy-1")).not.toHaveLength(0);
     expect(screen.getAllByText(/proxy-1/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Jun 19, 2026/)).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Summary" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("proxy").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Show payload" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show communication details" }));
 
     expect(screen.getByText(/"password": "\[redacted\]"/)).toBeInTheDocument();
     expect(screen.getByText(/"token": "\[redacted\]"/)).toBeInTheDocument();

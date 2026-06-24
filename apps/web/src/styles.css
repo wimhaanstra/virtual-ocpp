@@ -2357,6 +2357,50 @@ td {
   font-size: 9px;
 }
 
+.communication-row {
+  cursor: pointer;
+}
+
+.communication-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.communication-row:hover {
+  background: color-mix(in srgb, var(--panel-subtle) 54%, transparent);
+}
+
+.communication-endpoint {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 6px;
+}
+
+.communication-endpoint-type {
+  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.communication-endpoint-type-charger {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  color: var(--accent-strong);
+}
+
+.communication-endpoint-type-proxy {
+  border-color: color-mix(in srgb, var(--warning) 50%, var(--line));
+  color: var(--warning);
+}
+
+.communication-endpoint-id {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .communication-summary {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);

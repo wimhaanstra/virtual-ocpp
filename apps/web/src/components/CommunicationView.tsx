@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Download, Eye, EyeOff, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { CommunicationJournalFilters, CommunicationJournalItem, ProxyTarget } from "../types";
-import { buildCommunicationSummary, formatDateTime, stringifyPayload } from "../app-helpers";
+import { buildCommunicationSummary, formatDateTime, formatTime, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type CommunicationViewProps = {
@@ -50,6 +50,7 @@ export function CommunicationView({
   const validationError = useMemo(() => validateCommunicationFilters(draftFilters), [draftFilters]);
   const scopeChip = selectedChargerLabel ? `Scope: ${selectedChargerLabel}` : null;
   const activeFilterChips = buildActiveFilterChips(communicationFilters);
+  const groupedJournal = groupCommunicationRowsByDate(communicationJournal);
   const hasAdvancedFilters = Boolean(
     draftFilters.from ||
       draftFilters.to ||
@@ -320,6 +321,7 @@ export function CommunicationView({
             <table className="communication-table">
               <thead>
                 <tr>
+                  <th aria-label="Expand"></th>
                   <th>Time</th>
                   <th>Direction</th>
                   <th>Source</th>
@@ -329,92 +331,114 @@ export function CommunicationView({
                   <th>Charger</th>
                   <th>Proxy target</th>
                   <th>Transaction</th>
-                  <th>Summary</th>
                 </tr>
               </thead>
               <tbody>
-                {communicationJournal.map((item) => {
-                  const isExpanded = expandedCommunicationJournalId === item.id;
+                {groupedJournal.map((group) => (
+                  <Fragment key={group.dateKey}>
+                    <tr className="session-date-row">
+                      <td colSpan={10}>{group.label}</td>
+                    </tr>
+                    {group.items.map((item) => {
+                      const isExpanded = expandedCommunicationJournalId === item.id;
 
-                  return (
-                    <Fragment key={item.id}>
-                      <tr key={item.id}>
-                        <td>{formatDateTime(item.createdAt)}</td>
-                        <td>
-                          <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
-                        </td>
-                        <td className="mono">{onRenderEndpoint(item.sourceType, item.sourceId)}</td>
-                        <td className="mono">{onRenderEndpoint(item.targetType, item.targetId)}</td>
-                        <td className="mono">{item.ocppMethod || "-"}</td>
-                        <td>{item.messageType}</td>
-                        <td className="mono">{item.chargerId || "-"}</td>
-                        <td className="mono">
-                          {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
-                        </td>
-                        <td>{item.transactionId ?? "-"}</td>
-                        <td>
-                          <div className="communication-summary">
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button communication-toggle"
-                              onClick={() =>
-                                onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id)
+                      return (
+                        <Fragment key={item.id}>
+                          <tr
+                            className="communication-row"
+                            tabIndex={0}
+                            onClick={() => onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
                               }
-                              aria-expanded={isExpanded}
-                              aria-controls={`journal-payload-${item.id}`}
-                              aria-label={isExpanded ? "Hide payload" : "Show payload"}
-                              title={isExpanded ? "Hide payload" : "Show payload"}
-                            >
-                              {isExpanded ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-                            </Button>
-                            <p className="communication-summary__text">{buildCommunicationSummary(item)}</p>
-                          </div>
-                        </td>
-                      </tr>
-                      {isExpanded ? (
-                        <tr key={`${item.id}-payload`}>
-                          <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={10}>
-                            <div className="communication-expanded__grid">
-                              <div>
-                                <p className="eyebrow">Payload</p>
-                                <pre className="communication-payload">{stringifyPayload(item.payload)}</pre>
-                              </div>
-                              <div className="communication-details">
-                                <p>
-                                  <span className="eyebrow">Direction</span>
-                                  <span>{item.direction}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Source</span>
-                                  <span className="mono">{onRenderEndpoint(item.sourceType, item.sourceId)}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Target</span>
-                                  <span className="mono">{onRenderEndpoint(item.targetType, item.targetId)}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Correlation</span>
-                                  <span className="mono">{item.correlationId || "-"}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Error</span>
-                                  <span className="mono">
-                                    {item.errorCode ? item.errorCode : "-"}
-                                    {item.errorDescription ? ` - ${item.errorDescription}` : ""}
-                                  </span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Tag</span>
-                                  <span className="mono">{item.idTag || "-"}</span>
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
-                  );
-                })}
+                            }}
+                          >
+                            <td>
+                              <Button
+                                type="button"
+                                className="button-secondary icon-button session-expand-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
+                                }}
+                                aria-expanded={isExpanded}
+                                aria-controls={`journal-payload-${item.id}`}
+                                aria-label={isExpanded ? "Hide communication details" : "Show communication details"}
+                                title={isExpanded ? "Hide communication details" : "Show communication details"}
+                              >
+                                {isExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+                              </Button>
+                            </td>
+                            <td>{formatTime(item.createdAt)}</td>
+                            <td>
+                              <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
+                            </td>
+                            <td>{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</td>
+                            <td>{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</td>
+                            <td className="mono">{item.ocppMethod || "-"}</td>
+                            <td>{item.messageType}</td>
+                            <td className="mono">{item.chargerId || "-"}</td>
+                            <td className="mono">
+                              {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
+                            </td>
+                            <td>{item.transactionId ?? "-"}</td>
+                          </tr>
+                          {isExpanded ? (
+                            <tr key={`${item.id}-payload`}>
+                              <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={10}>
+                                <div className="communication-expanded__grid">
+                                  <div>
+                                    <p className="eyebrow">Payload</p>
+                                    <pre className="communication-payload">{stringifyPayload(item.payload)}</pre>
+                                  </div>
+                                  <div className="communication-details">
+                                    <p>
+                                      <span className="eyebrow">Summary</span>
+                                      <span>{buildCommunicationSummary(item)}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Time</span>
+                                      <span>{formatDateTime(item.createdAt)}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Direction</span>
+                                      <span>{item.direction}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Source</span>
+                                      <span className="mono">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Target</span>
+                                      <span className="mono">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Correlation</span>
+                                      <span className="mono">{item.correlationId || "-"}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Error</span>
+                                      <span className="mono">
+                                        {item.errorCode ? item.errorCode : "-"}
+                                        {item.errorDescription ? ` - ${item.errorDescription}` : ""}
+                                      </span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Tag</span>
+                                      <span className="mono">{item.idTag || "-"}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
           </div>
@@ -468,6 +492,42 @@ function parseLocalDateTime(value: string) {
 
 function areCommunicationFiltersEqual(left: CommunicationJournalFilters, right: CommunicationJournalFilters) {
   return (Object.keys(left) as Array<keyof CommunicationJournalFilters>).every((key) => left[key] === right[key]);
+}
+
+function groupCommunicationRowsByDate(items: CommunicationJournalItem[]) {
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+  const groups = new Map<string, { dateKey: string; label: string; items: CommunicationJournalItem[] }>();
+
+  for (const item of items) {
+    const date = new Date(item.createdAt);
+    const dateKey = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+    const existing = groups.get(dateKey);
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      groups.set(dateKey, {
+        dateKey,
+        label: formatter.format(date),
+        items: [item]
+      });
+    }
+  }
+
+  return Array.from(groups.values());
+}
+
+function renderEndpointBadge(type: string, id: string, renderEndpoint: (type: string, id: string) => ReactNode) {
+  return (
+    <span className="communication-endpoint">
+      <span className={`pill communication-endpoint-type communication-endpoint-type-${type}`}>{type}</span>
+      <span className="communication-endpoint-id">{renderEndpoint(type, id)}</span>
+    </span>
+  );
 }
 
 function buildActiveFilterChips(filters: CommunicationJournalFilters) {
