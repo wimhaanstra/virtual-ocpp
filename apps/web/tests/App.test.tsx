@@ -1957,7 +1957,8 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
 
     expect(await screen.findByRole("heading", { name: "Communication" })).toBeInTheDocument();
-    expect(screen.getByText(/Showing the last 24 hours by default, newest first, 100 rows per page\./)).toBeInTheDocument();
+    expect(screen.getByText("0 active")).toBeInTheDocument();
+    expect(screen.getByText("24h retention")).toBeInTheDocument();
     expect(await screen.findByText("BootNotification")).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
   });

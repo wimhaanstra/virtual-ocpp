@@ -1637,42 +1637,40 @@ a {
 }
 
 .communication-filters-panel {
-  gap: 9px;
+  gap: 8px;
+  padding: 10px;
 }
 
-.compact-filter-heading {
+.communication-filter-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
-.compact-filter-heading > svg {
+.communication-filter-header h2 {
+  margin: 1px 0 0;
+}
+
+.communication-filter-header__meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.communication-filter-header__meta > svg {
   width: 20px;
   height: 20px;
   color: var(--accent);
 }
 
-.communication-filter-summary {
-  display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel-subtle);
-}
-
-.communication-filter-summary__header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.communication-filter-summary__count {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
+.communication-active-filters {
+  padding: 2px 0;
 }
 
 .filter-chip-row {
@@ -2277,14 +2275,23 @@ td {
 
 .communication-filter-form {
   display: grid;
-  gap: 8px;
+  gap: 7px;
 }
 
 .communication-filter-primary {
   display: grid;
   grid-template-columns: minmax(130px, 0.65fr) minmax(160px, 1fr) minmax(130px, 0.6fr) minmax(120px, 0.55fr) auto;
-  gap: 8px;
+  gap: 7px;
   align-items: end;
+}
+
+.communication-filters-panel .field {
+  gap: 5px;
+}
+
+.communication-filters-panel .field input,
+.communication-filters-panel .field select {
+  min-height: 32px;
 }
 
 .communication-filter-actions {
@@ -2306,7 +2313,7 @@ td {
 
 .advanced-filters {
   border-top: 1px solid var(--line);
-  padding-top: 8px;
+  padding-top: 7px;
 }
 
 .advanced-filters summary {
@@ -2330,7 +2337,7 @@ td {
 }
 
 .advanced-filters[open] summary {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .communication-table-wrap {

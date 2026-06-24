@@ -125,45 +125,36 @@ export function CommunicationView({
   return (
     <section className="communication-layout">
       <section className="panel communication-filters-panel">
-        <div className="compact-filter-heading">
+        <div className="communication-filter-header">
           <div>
-            <p className="eyebrow">Journal</p>
+            <p className="eyebrow">Journal filters</p>
             <h2>Filters</h2>
-            <p className="status-copy">
-              Showing the last 24 hours by default, newest first, 100 rows per page. Retention is {communicationRetentionHours ?? 24} hours.
-            </p>
           </div>
-          <SlidersHorizontal aria-hidden="true" />
+          <div className="communication-filter-header__meta">
+            <span>{activeFilterChips.length} active</span>
+            <span>{communicationRetentionHours ?? 24}h retention</span>
+            <SlidersHorizontal aria-hidden="true" />
+          </div>
         </div>
-        <div className="communication-filter-summary">
-          <div className="communication-filter-summary__header">
-            <span className="eyebrow">Scope and filters</span>
-            <span className="communication-filter-summary__count">{activeFilterChips.length} selected</span>
-          </div>
-          {scopeChip ? (
-            <div className="filter-chip-row">
-              <span className="filter-chip filter-chip-muted">{scopeChip}</span>
-            </div>
-          ) : null}
-          <div className="filter-chip-row" aria-label="Active communication filters">
-            {activeFilterChips.length > 0 ? (
-              activeFilterChips.map((chip) => (
-                <span className="filter-chip removable-filter-chip" key={chip.key}>
-                  {chip.label}
-                  <button
-                    type="button"
-                    onClick={() => removeFilterChip(chip.key)}
-                    aria-label={`Remove ${chip.label} filter`}
-                    title={`Remove ${chip.label} filter`}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </span>
-              ))
-            ) : (
-              <span className="filter-chip filter-chip-muted">No extra filters</span>
-            )}
-          </div>
+        <div className="filter-chip-row communication-active-filters" aria-label="Active communication filters">
+          {scopeChip ? <span className="filter-chip filter-chip-muted">{scopeChip}</span> : null}
+          {activeFilterChips.length > 0 ? (
+            activeFilterChips.map((chip) => (
+              <span className="filter-chip removable-filter-chip" key={chip.key}>
+                {chip.label}
+                <button
+                  type="button"
+                  onClick={() => removeFilterChip(chip.key)}
+                  aria-label={`Remove ${chip.label} filter`}
+                  title={`Remove ${chip.label} filter`}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
+            ))
+          ) : (
+            <span className="filter-chip filter-chip-muted">No extra filters</span>
+          )}
         </div>
         <div className="communication-filter-form">
           <div className="communication-filter-primary">
