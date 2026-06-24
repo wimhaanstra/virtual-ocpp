@@ -7,11 +7,11 @@ import type {
   HeartbeatRequest,
   MeterValuesRequest,
   OcppHandlerContext,
-  SampledValue,
   StartTransactionRequest,
   StatusNotificationRequest,
   StopTransactionRequest
 } from './types.js';
+import { normalizeSampledValue } from './meter-values.js';
 
 const HEARTBEAT_INTERVAL_SECONDS = 60;
 let nextTransactionId = Date.now();
@@ -365,80 +365,4 @@ function parseOcppDateOrNull(value: string | undefined) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function normalizeSampledValue(sampledValue: SampledValue) {
-  const numericValue = Number.parseFloat(sampledValue.value ?? '');
-  if (!Number.isFinite(numericValue)) {
-    return {
-      numericValue: null,
-      normalizedValue: null,
-      normalizedUnit: null
-    };
-  }
-
-  const measurand = sampledValue.measurand?.trim() || 'Energy.Active.Import.Register';
-  const unit = sampledValue.unit?.trim().toLowerCase();
-
-  if (measurand === 'Energy.Active.Import.Register') {
-    return {
-      numericValue,
-      normalizedValue: unit === 'kwh' ? numericValue * 1000 : numericValue,
-      normalizedUnit: 'Wh'
-    };
-  }
-
-  if (measurand === 'Power.Active.Import') {
-    return {
-      numericValue,
-      normalizedValue: unit === 'kw' ? numericValue * 1000 : numericValue,
-      normalizedUnit: 'W'
-    };
-  }
-
-  if (measurand === 'Current.Import') {
-    return {
-      numericValue,
-      normalizedValue: numericValue,
-      normalizedUnit: sampledValue.unit?.trim() || 'A'
-    };
-  }
-
-  if (measurand === 'Voltage') {
-    return {
-      numericValue,
-      normalizedValue: numericValue,
-      normalizedUnit: sampledValue.unit?.trim() || 'V'
-    };
-  }
-
-  if (measurand === 'Temperature') {
-    if (unit === 'fahrenheit') {
-      return {
-        numericValue,
-        normalizedValue: (numericValue - 32) * (5 / 9),
-        normalizedUnit: 'Celsius'
-      };
-    }
-
-    if (unit === 'k') {
-      return {
-        numericValue,
-        normalizedValue: numericValue - 273.15,
-        normalizedUnit: 'Celsius'
-      };
-    }
-
-    return {
-      numericValue,
-      normalizedValue: numericValue,
-      normalizedUnit: 'Celsius'
-    };
-  }
-
-  return {
-    numericValue,
-    normalizedValue: null,
-    normalizedUnit: null
-  };
 }
