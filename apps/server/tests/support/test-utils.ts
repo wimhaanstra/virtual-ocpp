@@ -109,6 +109,18 @@ export function createTestDatabase() {
       status text NOT NULL
     );
 
+    CREATE TABLE remote_stop_requests (
+      id text PRIMARY KEY NOT NULL,
+      session_id text NOT NULL,
+      charger_id text NOT NULL,
+      transaction_id integer NOT NULL,
+      status text NOT NULL,
+      response_status text,
+      error_code text,
+      requested_at integer NOT NULL,
+      completed_at integer
+    );
+
     CREATE TABLE meter_samples (
       id text PRIMARY KEY NOT NULL,
       charger_id text NOT NULL,

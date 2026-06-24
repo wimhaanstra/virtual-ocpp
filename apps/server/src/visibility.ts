@@ -1,9 +1,10 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargerConnections, chargingSessions, logs, meterGapEvents, meterSamples, proxySessionMappings, proxyTargets } from './db/schema.js';
+import { chargerConnections, chargingSessions, logs, meterGapEvents, meterSamples, proxySessionMappings, proxyTargets, remoteStopRequests } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
 import { recordLogEntry } from './log-writer.js';
 import { ChargerCommandError, type ChargerCommandService } from './ocpp/charger-command-service.js';
@@ -479,8 +480,27 @@ export function registerVisibilityRoutes(
       return reply.code(503).send({ error: 'remote_commands_unavailable' });
     }
 
+    const requestedAt = new Date();
+    const requestId = randomUUID();
+    db.insert(remoteStopRequests).values({
+      id: requestId,
+      sessionId: session.id,
+      chargerId: session.chargerId,
+      transactionId: session.transactionId,
+      status: 'requested',
+      requestedAt
+    }).run();
+
     try {
       const result = await chargerCommands.remoteStopTransaction(session.chargerId, session.transactionId);
+      db.update(remoteStopRequests)
+        .set({
+          status: result.status === 'Accepted' ? 'accepted' : 'rejected',
+          responseStatus: result.status,
+          completedAt: result.status === 'Accepted' ? null : new Date()
+        })
+        .where(eq(remoteStopRequests.id, requestId))
+        .run();
       recordSessionLog(db, liveUpdates, {
         level: result.status === 'Accepted' ? 'info' : 'warn',
         message: 'remote stop transaction requested',
@@ -497,6 +517,15 @@ export function registerVisibilityRoutes(
       };
     } catch (error) {
       const statusCode = error instanceof ChargerCommandError && error.code === 'charger_not_connected' ? 409 : 502;
+      const errorCode = error instanceof ChargerCommandError ? error.code : 'remote_stop_failed';
+      db.update(remoteStopRequests)
+        .set({
+          status: 'failed',
+          errorCode,
+          completedAt: new Date()
+        })
+        .where(eq(remoteStopRequests.id, requestId))
+        .run();
       recordSessionLog(db, liveUpdates, {
         level: 'warn',
         message: 'remote stop transaction failed',
@@ -540,6 +569,7 @@ function recordSessionLog(
 }
 
 function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessions.$inferSelect) {
+  markTimedOutRemoteStops(db, session);
   const activeConnection = db
     .select()
     .from(chargerConnections)
@@ -554,9 +584,11 @@ function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessi
     externalTransactionId: mapping.externalTransactionId,
     stoppedAt: mapping.stoppedAt?.toISOString() ?? null
   }));
+  const remoteStop = findLatestRemoteStopRequest(db, session);
   const warnings = buildActiveSessionWarnings(db, session, {
     chargerConnected: Boolean(activeConnection),
-    latestStatus
+    latestStatus,
+    remoteStop
   });
 
   return {
@@ -571,6 +603,16 @@ function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessi
     latestMeterSampleAt: latestEnergy?.sampledAt.toISOString() ?? null,
     latestMeterWh: latestEnergy ? Math.round(latestEnergy.meterWh) : null,
     forceCloseMeterSource: latestEnergy ? 'latest-meter-sample' : typeof session.startMeterWh === 'number' ? 'start-meter' : 'unknown',
+    remoteStop: remoteStop
+      ? {
+          id: remoteStop.id,
+          status: remoteStop.status,
+          responseStatus: remoteStop.responseStatus,
+          errorCode: remoteStop.errorCode,
+          requestedAt: remoteStop.requestedAt.toISOString(),
+          completedAt: remoteStop.completedAt?.toISOString() ?? null
+        }
+      : null,
     proxyMappings,
     warnings,
     recommendedAction: warnings.length > 0 || !activeConnection ? 'force_close_preview' : 'remote_stop'
@@ -583,6 +625,7 @@ function buildActiveSessionWarnings(
   context: {
     chargerConnected: boolean;
     latestStatus: ReturnType<typeof findLatestConnectorStatus>;
+    remoteStop: typeof remoteStopRequests.$inferSelect | null;
   }
 ) {
   const warnings: Array<{ code: string; severity: 'warn'; message: string; createdAt: string | null }> = [];
@@ -612,13 +655,13 @@ function buildActiveSessionWarnings(
     });
   }
 
-  const remoteStop = findLatestAcceptedRemoteStopLog(db, session);
-  if (remoteStop && Date.now() - remoteStop.createdAt.getTime() > REMOTE_STOP_GRACE_MS) {
+  const remoteStop = context.remoteStop;
+  if (remoteStop?.status === 'timed_out') {
     warnings.push({
       code: 'remote_stop_accepted_waiting_for_stop_transaction',
       severity: 'warn',
       message: 'Remote stop was accepted but StopTransaction has not arrived.',
-      createdAt: remoteStop.createdAt.toISOString()
+      createdAt: remoteStop.requestedAt.toISOString()
     });
   }
 
@@ -650,24 +693,33 @@ function findLatestConnectorStatus(db: Database, session: typeof chargingSession
   return null;
 }
 
-function findLatestAcceptedRemoteStopLog(db: Database, session: typeof chargingSessions.$inferSelect) {
-  const rows = db
+function findLatestRemoteStopRequest(db: Database, session: typeof chargingSessions.$inferSelect) {
+  return db
     .select()
-    .from(logs)
-    .where(and(eq(logs.category, 'session'), eq(logs.chargerId, session.chargerId), eq(logs.transactionId, session.transactionId)))
-    .orderBy(desc(logs.createdAt))
-    .limit(RECENT_LOG_LIMIT)
-    .all();
+    .from(remoteStopRequests)
+    .where(eq(remoteStopRequests.sessionId, session.id))
+    .orderBy(desc(remoteStopRequests.requestedAt))
+    .limit(1)
+    .get() ?? null;
+}
 
-  for (const row of rows) {
-    if (row.createdAt < session.startedAt) continue;
-    if (row.message !== 'remote stop transaction requested') continue;
-    const metadata = parseLogMetadata(row.metadata);
-    if (metadata.status !== 'Accepted') continue;
-    return row;
-  }
+function markTimedOutRemoteStops(db: Database, session: typeof chargingSessions.$inferSelect, now = new Date()) {
+  if (session.status !== 'active') return;
+  const cutoff = new Date(now.getTime() - REMOTE_STOP_GRACE_MS);
 
-  return null;
+  db.update(remoteStopRequests)
+    .set({
+      status: 'timed_out',
+      completedAt: now
+    })
+    .where(
+      and(
+        eq(remoteStopRequests.sessionId, session.id),
+        eq(remoteStopRequests.status, 'accepted'),
+        lt(remoteStopRequests.requestedAt, cutoff)
+      )
+    )
+    .run();
 }
 
 function parseLogMetadata(metadata: string | null) {

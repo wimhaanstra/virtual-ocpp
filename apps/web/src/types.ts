@@ -263,6 +263,14 @@ export type ActiveSessionAuditItem = {
   latestMeterSampleAt: string | null;
   latestMeterWh: number | null;
   forceCloseMeterSource: "latest-meter-sample" | "start-meter" | "unknown";
+  remoteStop: {
+    id: string;
+    status: "requested" | "accepted" | "rejected" | "failed" | "timed_out" | "completed";
+    responseStatus: string | null;
+    errorCode: string | null;
+    requestedAt: string;
+    completedAt: string | null;
+  } | null;
   proxyMappings: Array<{
     proxyTargetId: string;
     proxyTargetName: string;

@@ -15,6 +15,7 @@ import {
   proxySessionMappings,
   proxyTagMappings,
   proxyTargets,
+  remoteStopRequests,
   tagChargerAccess,
   tags
 } from '../../src/db/schema.js';
@@ -487,6 +488,14 @@ describe('OCPP 1.6 local primary', () => {
     expect(response.json()).toEqual({ ok: true, status: 'Accepted' });
     expect(remoteStopCalls).toEqual([{ transactionId: 9001 }]);
     expect(server.db.select().from(chargingSessions).get()).toMatchObject({ status: 'active', stoppedAt: null });
+    expect(server.db.select().from(remoteStopRequests).get()).toMatchObject({
+      sessionId: 'session-remote-stop',
+      chargerId: 'SMART-EVSE-REMOTE-STOP',
+      transactionId: 9001,
+      status: 'accepted',
+      responseStatus: 'Accepted',
+      completedAt: null
+    });
     expect(
       server.db
         .select()

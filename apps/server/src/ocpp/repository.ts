@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import type { Database } from '../db/client.js';
 import type { CommunicationJournalService } from '../communication-journal.js';
 import type { LiveUpdateBus } from '../live-updates.js';
@@ -10,6 +10,7 @@ import {
   meterGapEvents,
   meterSamples,
   proxySessionMappings,
+  remoteStopRequests,
   tagChargerAccess,
   tags
 } from '../db/schema.js';
@@ -430,6 +431,15 @@ export class OcppRepository {
         status: 'stopped'
       })
       .where(and(eq(chargingSessions.chargerId, input.chargerId), eq(chargingSessions.transactionId, input.transactionId)))
+      .run();
+
+    this.db
+      .update(remoteStopRequests)
+      .set({
+        status: 'completed',
+        completedAt: input.stoppedAt
+      })
+      .where(and(eq(remoteStopRequests.sessionId, session.id), or(eq(remoteStopRequests.status, 'accepted'), eq(remoteStopRequests.status, 'timed_out'))))
       .run();
 
     this.recordLog({

@@ -17,6 +17,7 @@ import {
   proxySessionMappings,
   proxyTagMappings,
   proxyTargets,
+  remoteStopRequests,
   sessions,
   tagChargerAccess,
   tags
@@ -1753,18 +1754,19 @@ describe('app', () => {
         transactionId: null,
         metadata: JSON.stringify({ connectorId: 1, status: 'Available', timestamp: '2026-06-19T09:15:00.000Z' }),
         createdAt: new Date('2026-06-19T09:15:00.000Z')
-      },
-      {
-        id: 'log-audit-remote-stop',
-        level: 'info',
-        category: 'session',
-        message: 'remote stop transaction requested',
-        chargerId: 'SMART-EVSE-AUDIT',
-        transactionId: 501,
-        metadata: JSON.stringify({ connectorId: 1, status: 'Accepted' }),
-        createdAt: new Date('2026-06-19T09:16:00.000Z')
       }
     ]).run();
+    tempDb.db.insert(remoteStopRequests).values({
+      id: 'remote-stop-audit',
+      sessionId: 'session-audit',
+      chargerId: 'SMART-EVSE-AUDIT',
+      transactionId: 501,
+      status: 'accepted',
+      responseStatus: 'Accepted',
+      errorCode: null,
+      requestedAt: new Date(Date.now() - 60_000),
+      completedAt: null
+    }).run();
 
     const response = await app.inject({
       method: 'GET',
@@ -1789,6 +1791,13 @@ describe('app', () => {
           latestMeterWh: 1400,
           forceCloseMeterSource: 'latest-meter-sample',
           recommendedAction: 'force_close_preview',
+          remoteStop: {
+            id: 'remote-stop-audit',
+            status: 'timed_out',
+            responseStatus: 'Accepted',
+            errorCode: null,
+            completedAt: expect.any(String)
+          },
           proxyMappings: [
             {
               proxyTargetId: 'proxy-audit',

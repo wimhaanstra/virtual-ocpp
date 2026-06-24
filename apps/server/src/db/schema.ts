@@ -80,6 +80,26 @@ export const chargingSessions = sqliteTable('charging_sessions', {
   status: text('status').notNull()
 });
 
+export const remoteStopRequests = sqliteTable(
+  'remote_stop_requests',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    chargerId: text('charger_id').notNull(),
+    transactionId: integer('transaction_id').notNull(),
+    status: text('status').notNull(),
+    responseStatus: text('response_status'),
+    errorCode: text('error_code'),
+    requestedAt: integer('requested_at', { mode: 'timestamp_ms' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp_ms' })
+  },
+  (table) => ({
+    sessionIdx: index('remote_stop_requests_session_id_idx').on(table.sessionId),
+    chargerTransactionIdx: index('remote_stop_requests_charger_transaction_idx').on(table.chargerId, table.transactionId),
+    statusIdx: index('remote_stop_requests_status_idx').on(table.status)
+  })
+);
+
 export const meterSamples = sqliteTable('meter_samples', {
   id: text('id').primaryKey(),
   chargerId: text('charger_id').notNull(),
