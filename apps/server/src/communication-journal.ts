@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, gte, lt, lte, or } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, lte, or, sql } from 'drizzle-orm';
 import type { Database } from './db/client.js';
 import { communicationJournal } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
@@ -379,11 +379,15 @@ function buildFilterConditions(filters: CommunicationJournalPurgeFilters) {
   if (filters.targetId) conditions.push(eq(communicationJournal.targetId, filters.targetId));
   if (filters.chargerId) conditions.push(eq(communicationJournal.chargerId, filters.chargerId));
   if (filters.proxyTargetId) conditions.push(eq(communicationJournal.proxyTargetId, filters.proxyTargetId));
-  if (filters.ocppMethod) conditions.push(eq(communicationJournal.ocppMethod, filters.ocppMethod));
+  if (filters.ocppMethod) conditions.push(sql`${communicationJournal.ocppMethod} like ${`%${escapeLikePattern(filters.ocppMethod)}%`} escape '\\'`);
   if (filters.messageType) conditions.push(eq(communicationJournal.messageType, filters.messageType));
   if (typeof filters.transactionId === 'number') conditions.push(eq(communicationJournal.transactionId, filters.transactionId));
 
   return conditions;
+}
+
+function escapeLikePattern(value: string) {
+  return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
 }
 
 export function redactCommunicationPayload(payload: unknown): unknown {

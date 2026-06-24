@@ -2690,7 +2690,7 @@ function communicationEventMatchesFilters(event: LiveUpdateEvent, filters: Commu
   if (filters.targetId.trim() && event.targetId !== filters.targetId.trim()) return false;
   if (filters.proxyTargetId.trim() && event.proxyTargetId !== filters.proxyTargetId.trim()) return false;
   if (filters.messageType.trim() && event.messageType !== filters.messageType.trim()) return false;
-  if (filters.ocppMethod.trim() && event.ocppMethod !== filters.ocppMethod.trim()) return false;
+  if (filters.ocppMethod.trim() && !String(event.ocppMethod ?? "").toLowerCase().includes(filters.ocppMethod.trim().toLowerCase())) return false;
   if (filters.transactionId.trim() && String(event.transactionId ?? "") !== filters.transactionId.trim()) return false;
   if (!event.createdAt) return true;
 
