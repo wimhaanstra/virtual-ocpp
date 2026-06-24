@@ -216,11 +216,18 @@ export const communicationJournal = sqliteTable(
   },
   (table) => ({
     createdAtIdx: index('communication_journal_created_at_idx').on(table.createdAt),
+    createdAtIdIdx: index('communication_journal_created_at_id_idx').on(table.createdAt, table.id),
     sourceIdx: index('communication_journal_source_idx').on(table.sourceType, table.sourceId),
+    sourceCreatedAtIdx: index('communication_journal_source_created_at_idx').on(table.sourceType, table.sourceId, table.createdAt, table.id),
     targetIdx: index('communication_journal_target_idx').on(table.targetType, table.targetId),
+    targetCreatedAtIdx: index('communication_journal_target_created_at_idx').on(table.targetType, table.targetId, table.createdAt, table.id),
     chargerIdx: index('communication_journal_charger_id_idx').on(table.chargerId),
+    chargerCreatedAtIdx: index('communication_journal_charger_created_at_idx').on(table.chargerId, table.createdAt, table.id),
     proxyTargetIdx: index('communication_journal_proxy_target_id_idx').on(table.proxyTargetId),
+    proxyTargetCreatedAtIdx: index('communication_journal_proxy_target_created_at_idx').on(table.proxyTargetId, table.createdAt, table.id),
     methodIdx: index('communication_journal_ocpp_method_idx').on(table.ocppMethod),
-    messageTypeIdx: index('communication_journal_message_type_idx').on(table.messageType)
+    messageTypeIdx: index('communication_journal_message_type_idx').on(table.messageType),
+    messageTypeCreatedAtIdx: index('communication_journal_message_type_created_at_idx').on(table.messageType, table.createdAt, table.id),
+    transactionCreatedAtIdx: index('communication_journal_transaction_created_at_idx').on(table.transactionId, table.createdAt, table.id)
   })
 );

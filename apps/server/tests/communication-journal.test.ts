@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { buildApp } from '../src/app.js';
 import { communicationJournal } from '../src/db/schema.js';
-import { createDatabase } from '../src/db/client.js';
+import { applyMigrations, createDatabase } from '../src/db/client.js';
 import { CommunicationJournalService, redactCommunicationPayload } from '../src/communication-journal.js';
 import { createTestDatabase, testConfig } from './support/test-utils.js';
 
@@ -568,6 +568,27 @@ describe('communication journal', () => {
     expect(response.json()).toEqual({ ok: true });
 
     await app.close();
+  });
+
+  it('creates composite indexes for common communication journal filters', () => {
+    const sqlitePath = join(tmpdir(), `virtual-ocpp-journal-indexes-${randomUUID()}.sqlite`);
+    const rawDb = new RawDatabase(sqlitePath);
+    applyMigrations(rawDb);
+
+    const indexes = rawDb.prepare('PRAGMA index_list(communication_journal)').all() as Array<{ name: string }>;
+    const indexNames = indexes.map((index) => index.name);
+
+    expect(indexNames).toEqual(expect.arrayContaining([
+      'communication_journal_created_at_id_idx',
+      'communication_journal_charger_created_at_idx',
+      'communication_journal_proxy_target_created_at_idx',
+      'communication_journal_source_created_at_idx',
+      'communication_journal_target_created_at_idx',
+      'communication_journal_message_type_created_at_idx',
+      'communication_journal_transaction_created_at_idx'
+    ]));
+
+    rawDb.close();
   });
 });
 
