@@ -313,11 +313,6 @@ export class ProxyAuthorizationService {
           attempted: false,
           ok: false
         });
-        this.db
-          .update(proxySessionMappings)
-          .set({ stoppedAt })
-          .where(eq(proxySessionMappings.id, mapping.id))
-          .run();
         continue;
       }
 
@@ -333,11 +328,13 @@ export class ProxyAuthorizationService {
         ok: response.ok
       });
 
-      this.db
-        .update(proxySessionMappings)
-        .set({ stoppedAt })
-        .where(eq(proxySessionMappings.id, mapping.id))
-        .run();
+      if (response.ok) {
+        this.db
+          .update(proxySessionMappings)
+          .set({ stoppedAt })
+          .where(eq(proxySessionMappings.id, mapping.id))
+          .run();
+      }
     }
 
     return results;

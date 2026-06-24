@@ -1202,6 +1202,64 @@ describe('OCPP 1.6 local primary', () => {
     });
   });
 
+  it('keeps proxy session mappings retryable when upstream StopTransaction fails', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'STOP-FAIL-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-STOP-FAIL' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-stop-fail',
+      chargerId: 'SMART-EVSE-STOP-FAIL',
+      name: 'Stop fail CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-STOP-FAIL',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-STOP-FAIL');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const start = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'STOP-FAIL-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { transactionId: number; idTagInfo: { status: string } };
+
+    await proxy.close();
+
+    const stop = await charger.call('StopTransaction', {
+      transactionId: start.transactionId,
+      idTag: 'STOP-FAIL-TAG',
+      meterStop: 1550,
+      timestamp: '2026-06-19T10:10:00.000Z',
+      reason: 'Local'
+    });
+
+    expect(stop).toEqual({ idTagInfo: { status: 'Accepted' } });
+    expect(server.db.select().from(chargingSessions).where(eq(chargingSessions.transactionId, start.transactionId)).get()).toMatchObject({
+      status: 'stopped',
+      stopMeterWh: 1550,
+      stopReason: 'Local'
+    });
+    expect(
+      server.db
+        .select()
+        .from(proxySessionMappings)
+        .where(eq(proxySessionMappings.localTransactionId, start.transactionId))
+        .get()
+    ).toMatchObject({
+      proxyTargetId: 'proxy-stop-fail',
+      externalTransactionId: 4242,
+      stoppedAt: null
+    });
+  });
+
   it('reuses an active transaction for duplicate StartTransaction retries', async () => {
     const proxy = await startRecordingProxyServer();
     cleanup.push(proxy.close);
