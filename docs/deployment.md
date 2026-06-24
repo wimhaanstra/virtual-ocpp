@@ -37,7 +37,8 @@ Set `DOCKER_IMAGE=yourname/virtual-ocpp` to build or publish a different reposit
 On Apple hardware, this is the publish command to use for Linux amd64 servers.
 
 Published images include OCI metadata labels for the source repository, documentation URL, package version, git revision, and build timestamp.
-The Docker Hub repository overview is maintained in `docs/docker-hub-readme.md`. To sync it from GitHub Actions, set the GitHub variable `DOCKERHUB_USERNAME` and secret `DOCKERHUB_TOKEN`, then run the `Docker Hub Description` workflow or push a change to that overview file.
+The Docker Hub repository overview is maintained in `docs/docker-hub-readme.md`. To sync it from GitHub Actions, set the GitHub variable `DOCKERHUB_USERNAME` to the Docker Hub account name, set the GitHub secret `DOCKERHUB_TOKEN` to a Docker Hub personal access token with write access to `wimhaanstra/virtual-ocpp`, then run the `Docker Hub Description` workflow.
+A GitHub personal access token cannot update the Docker Hub repository description. If the workflow returns `Forbidden`, confirm the Docker Hub repository exists under the same namespace and that the Docker Hub token has write access to that repository.
 
 The admin interface shows the same package version in the sidebar after login, so a running container can be matched to the Docker image tag.
 
