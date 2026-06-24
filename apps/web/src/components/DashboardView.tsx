@@ -223,11 +223,21 @@ export function DashboardView({
                         <span>Voltage</span>
                         <strong>{formatDecimalUnit(stats.latestVoltageV, "V")}</strong>
                       </div>
+                      <div>
+                        <span>Temperature</span>
+                        <strong>{formatDecimalUnit(stats.latestTemperatureC, "C")}</strong>
+                      </div>
+                      {stats.latestCurrentPhasesA ? (
+                        <div>
+                          <span>Phase current</span>
+                          <strong>{formatPhaseValues(stats.latestCurrentPhasesA, "A")}</strong>
+                        </div>
+                      ) : null}
                     </div>
                     <p className="status-copy">
                       {stats.latestSampleAt === null
                         ? `Charging, waiting for first MeterValues. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}.`
-                        : `Charging. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}; last meter sample ${formatDateTime(stats.latestSampleAt)}.`}
+                        : `Charging. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}; last meter sample ${formatDateTime(stats.latestSampleAt)} (${formatSampleAssociation(stats.sampleAssociation)}).`}
                     </p>
                     <div className="action-row compact-action-row">
                       <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
@@ -408,4 +418,17 @@ function buildProxyHealthDetail(health: ProxyHealthTarget) {
   }
 
   return details.filter(Boolean).join(" · ");
+}
+
+function formatPhaseValues(values: Record<string, number>, unit: string) {
+  return Object.entries(values)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([phase, value]) => `${phase} ${formatDecimalUnit(value, unit)}`)
+    .join(" / ");
+}
+
+function formatSampleAssociation(value: string) {
+  if (value === "transaction-id") return "transaction matched";
+  if (value === "connector-time-window") return "connector/time matched";
+  return "unmatched";
 }

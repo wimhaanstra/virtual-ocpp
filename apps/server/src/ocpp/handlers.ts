@@ -412,6 +412,30 @@ function normalizeSampledValue(sampledValue: SampledValue) {
     };
   }
 
+  if (measurand === 'Temperature') {
+    if (unit === 'fahrenheit') {
+      return {
+        numericValue,
+        normalizedValue: (numericValue - 32) * (5 / 9),
+        normalizedUnit: 'Celsius'
+      };
+    }
+
+    if (unit === 'k') {
+      return {
+        numericValue,
+        normalizedValue: numericValue - 273.15,
+        normalizedUnit: 'Celsius'
+      };
+    }
+
+    return {
+      numericValue,
+      normalizedValue: numericValue,
+      normalizedUnit: 'Celsius'
+    };
+  }
+
   return {
     numericValue,
     normalizedValue: null,

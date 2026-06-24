@@ -892,7 +892,10 @@ describe('OCPP 1.6 local primary', () => {
       meterValue: [
         {
           timestamp: '2026-06-19T10:05:00.000Z',
-          sampledValue: [{ value: '2.5', measurand: 'Energy.Active.Import.Register', unit: 'kWh' }]
+          sampledValue: [
+            { value: '2.5', measurand: 'Energy.Active.Import.Register', unit: 'kWh' },
+            { value: '102.2', measurand: 'Temperature', unit: 'Fahrenheit' }
+          ]
         }
       ]
     });
@@ -932,14 +935,22 @@ describe('OCPP 1.6 local primary', () => {
       externalTransactionId: 4242
     });
     const recordedSamples = server.db.select().from(meterSamples).all();
-    expect(recordedSamples).toHaveLength(1);
-    expect(recordedSamples[0]).toMatchObject({
+    expect(recordedSamples).toHaveLength(2);
+    expect(recordedSamples.find((sample) => sample.measurand === 'Energy.Active.Import.Register')).toMatchObject({
       value: '2.5',
       numericValue: 2.5,
       normalizedValue: 2500,
       normalizedUnit: 'Wh',
       measurand: 'Energy.Active.Import.Register',
       unit: 'kWh'
+    });
+    expect(recordedSamples.find((sample) => sample.measurand === 'Temperature')).toMatchObject({
+      value: '102.2',
+      numericValue: 102.2,
+      normalizedValue: 39,
+      normalizedUnit: 'Celsius',
+      measurand: 'Temperature',
+      unit: 'Fahrenheit'
     });
     expect(server.db.select().from(chargingSessions).all()).toHaveLength(1);
   });

@@ -151,8 +151,9 @@ Charging sessions, meter samples, charger connection events, authorization decis
 - `Energy.Active.Import.Register` is normalized to Wh, including kWh samples.
 - `Power.Active.Import` is normalized to W, including kW samples.
 - Aggregate/no-phase `Current.Import` and `Voltage` are exposed as amps and volts when supplied by the charger.
+- `Temperature` is normalized to Celsius when supplied by the charger.
 
-The dashboard can show live energy used and charging speed only when the charger emits periodic `MeterValues`. While a session is waiting for its first meter sample, the UI keeps the card in `Charging` instead of reverting to an idle state. Chargers that only send `StartTransaction.meterStart` and `StopTransaction.meterStop` still produce session totals once stopped, but live power/current/voltage remain unavailable. Phase-scoped current/voltage samples are stored but not collapsed into a fake total on the dashboard.
+The dashboard can show live energy used, charging speed, current, temperature, and phase current details when the charger emits periodic `MeterValues`. OCPP 1.6 allows `MeterValues.transactionId` to be omitted, so Virtual OCPP can safely match transactionless samples to the active session by charger, connector, and sample time when the match is unambiguous. While a session is waiting for its first meter sample, the UI keeps the card in `Charging` instead of reverting to an idle state. Chargers that only send `StartTransaction.meterStart` and `StopTransaction.meterStop` still produce session totals once stopped, but live power/current/voltage/temperature remain unavailable.
 
 ## OCPP Charger Simulator
 

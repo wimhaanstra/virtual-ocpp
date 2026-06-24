@@ -44,6 +44,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Meter gap polish increment 1: session rows prefer exact stopped-session meter totals over live-sample estimates, and session details plus force-close/recovery previews show readable meter-source labels so operators can tell exact stop values from latest-sample fallbacks.
 - Communication export and purge increment 1: operators can export the currently filtered redacted communication journal as CSV, retention purge is explicit, and destructive filtered purge requires a constrained scope plus `PURGE` confirmation.
 - Settings display preferences increment 1: Settings now exposes a browser-persisted 12-hour/24-hour timestamp preference that applies to dashboard, session, settings, and communication timestamp rendering.
+- Transactionless MeterValues live stats increment 1: active-session live stats now match OCPP 1.6 `MeterValues` without transaction ids by charger, connector, and sample time window, expose connector/time source labels, and show temperature plus phase current metadata when supplied.
 
 ## Next Candidate Slices
 

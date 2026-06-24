@@ -113,8 +113,11 @@ export type ChargingStats = {
   energyUsedWh: number | null;
   latestPowerW: number | null;
   latestCurrentA: number | null;
+  latestCurrentPhasesA: Record<string, number> | null;
   latestVoltageV: number | null;
+  latestTemperatureC: number | null;
   latestSampleAt: string | null;
+  sampleAssociation: "transaction-id" | "connector-time-window" | "none";
   latestEnergyContext: string | null;
   latestPowerContext: string | null;
 };

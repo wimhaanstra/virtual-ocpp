@@ -340,8 +340,11 @@ describe("App", () => {
               energyUsedWh: 1650,
               latestPowerW: 7200,
               latestCurrentA: 31.3,
+              latestCurrentPhasesA: { L1: 31.3, L2: 0, L3: 0 },
               latestVoltageV: 230,
+              latestTemperatureC: 42,
               latestSampleAt: "2026-06-19T09:36:00.000Z",
+              sampleAssociation: "connector-time-window",
               latestEnergyContext: "Sample.Periodic",
               latestPowerContext: "Sample.Periodic"
             }
@@ -463,6 +466,9 @@ describe("App", () => {
     expect(screen.getByText("7.2 kW")).toBeInTheDocument();
     expect(screen.getByText("31.3 A")).toBeInTheDocument();
     expect(screen.getByText("230 V")).toBeInTheDocument();
+    expect(screen.getByText("42 C")).toBeInTheDocument();
+    expect(screen.getByText("L1 31.3 A / L2 0 A / L3 0 A")).toBeInTheDocument();
+    expect(screen.getByText(/connector\/time matched/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upstream targets" })).toBeInTheDocument();
     expect(screen.getByText("Tap Electric")).toBeInTheDocument();
     expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);

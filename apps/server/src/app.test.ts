@@ -916,6 +916,23 @@ describe('app', () => {
         format: null
       },
       {
+        id: 'sample-temperature',
+        chargerId: 'CHARGER-ACTIVE',
+        connectorId: 2,
+        transactionId: 1002,
+        sampledAt: new Date('2026-06-19T09:10:00.000Z'),
+        value: '42',
+        numericValue: 42,
+        normalizedValue: 42,
+        normalizedUnit: 'Celsius',
+        measurand: 'Temperature',
+        unit: 'Celsius',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
         id: 'sample-voltage',
         chargerId: 'CHARGER-ACTIVE',
         connectorId: 2,
@@ -1153,10 +1170,184 @@ describe('app', () => {
         energyUsedWh: 750,
         latestPowerW: 7200,
         latestCurrentA: 31.3,
+        latestCurrentPhasesA: {
+          L1: 99
+        },
         latestVoltageV: 230,
+        latestTemperatureC: 42,
         latestSampleAt: '2026-06-19T09:10:00.000Z',
+        sampleAssociation: 'transaction-id',
         latestEnergyContext: 'Sample.Periodic',
         latestPowerContext: 'Sample.Periodic'
+      })
+    ]);
+
+    await app.close();
+  });
+
+  it('matches transactionless MeterValues to the active session by connector and time window', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-transactionless',
+      chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+      connectorId: 1,
+      transactionId: 1782211273551,
+      idTag: '4227105',
+      startedAt: new Date('2026-06-23T15:22:08.000Z'),
+      stoppedAt: null,
+      startMeterWh: 480341,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+
+    tempDb.db.insert(meterSamples).values([
+      {
+        id: 'transactionless-energy',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:30:28.000Z'),
+        value: '480834',
+        numericValue: 480834,
+        normalizedValue: 480834,
+        normalizedUnit: 'Wh',
+        measurand: 'Energy.Active.Import.Register',
+        unit: 'Wh',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'transactionless-power',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:30:28.000Z'),
+        value: '3757.00',
+        numericValue: 3757,
+        normalizedValue: 3757,
+        normalizedUnit: 'W',
+        measurand: 'Power.Active.Import',
+        unit: 'W',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'transactionless-current',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:30:28.000Z'),
+        value: '16.00',
+        numericValue: 16,
+        normalizedValue: 16,
+        normalizedUnit: 'A',
+        measurand: 'Current.Import',
+        unit: 'A',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'transactionless-current-l1',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:30:28.000Z'),
+        value: '16.00',
+        numericValue: 16,
+        normalizedValue: 16,
+        normalizedUnit: 'A',
+        measurand: 'Current.Import',
+        unit: 'A',
+        context: 'Sample.Periodic',
+        phase: 'L1',
+        location: null,
+        format: null
+      },
+      {
+        id: 'transactionless-current-l2',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:30:28.000Z'),
+        value: '0.00',
+        numericValue: 0,
+        normalizedValue: 0,
+        normalizedUnit: 'A',
+        measurand: 'Current.Import',
+        unit: 'A',
+        context: 'Sample.Periodic',
+        phase: 'L2',
+        location: null,
+        format: null
+      },
+      {
+        id: 'transactionless-temperature',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:30:28.000Z'),
+        value: '39.00',
+        numericValue: 39,
+        normalizedValue: null,
+        normalizedUnit: null,
+        measurand: 'Temperature',
+        unit: 'Celsius',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'outside-window-energy',
+        chargerId: 'SMART-EVSE-TRANSACTIONLESS',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-23T15:00:00.000Z'),
+        value: '999999',
+        numericValue: 999999,
+        normalizedValue: 999999,
+        normalizedUnit: 'Wh',
+        measurand: 'Energy.Active.Import.Register',
+        unit: 'Wh',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      }
+    ]).run();
+
+    const statsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/charging-stats?chargerId=SMART-EVSE-TRANSACTIONLESS',
+      headers: { cookie }
+    });
+
+    expect(statsResponse.statusCode).toBe(200);
+    expect(statsResponse.json()).toEqual([
+      expect.objectContaining({
+        sessionId: 'session-transactionless',
+        latestMeterWh: 480834,
+        energyUsedWh: 493,
+        latestPowerW: 3757,
+        latestCurrentA: 16,
+        latestCurrentPhasesA: {
+          L1: 16,
+          L2: 0
+        },
+        latestTemperatureC: 39,
+        latestSampleAt: '2026-06-23T15:30:28.000Z',
+        sampleAssociation: 'connector-time-window'
       })
     ]);
 
