@@ -107,7 +107,7 @@ OCPP 1.6 `MeterValues.transactionId` is optional. When a charger sends transacti
 
 Stopped sessions use the final `StopTransaction` meter value as the exact energy total when available. Active sessions and recovery previews label latest-sample or start-meter fallbacks so operators can tell estimated values from exact stopped-session totals.
 
-The frontend opens `GET /api/live-updates` with `EventSource` after login. The stream uses the signed admin session cookie, replays missed events after reconnect, and tells the UI which REST slices to refresh.
+The frontend opens `GET /api/live-updates` with `EventSource` after login. The stream uses the signed admin session cookie, replays missed events after reconnect, and tells the UI which REST slices to refresh. High-volume events such as meter samples and communication journal rows are coalesced per charger/connector before publishing so the UI does not receive one SSE message per stored sample or protocol row during active charging.
 
 Display preferences such as 12-hour versus 24-hour timestamp formatting are stored locally in the browser and apply to dashboards, sessions, settings, and communication rows after the Settings control is changed.
 

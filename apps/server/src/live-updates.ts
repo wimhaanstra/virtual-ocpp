@@ -104,6 +104,7 @@ type LiveUpdateListener = (event: LiveUpdateEnvelope) => void;
 export class LiveUpdateBus {
   private readonly listeners = new Set<LiveUpdateListener>();
   private readonly history: LiveUpdateEnvelope[] = [];
+  private readonly coalesced = new Map<string, { lastPublishedAt: number; pending: LiveUpdateEvent | null; timer: NodeJS.Timeout | null }>();
   private nextId = 1;
 
   constructor(private readonly historyLimit = 200) {}
@@ -119,10 +120,43 @@ export class LiveUpdateBus {
             chargerId: chargerId ?? null
           } as LiveUpdateEvent)
         : eventOrTopic;
+    return this.publishNow(event as TEvent);
+  }
+
+  publishCoalesced<TEvent extends LiveUpdateEvent>(key: string, event: TEvent, intervalMs = 1000) {
+    const now = Date.now();
+    const existing = this.coalesced.get(key);
+    if (!existing || now - existing.lastPublishedAt >= intervalMs) {
+      const envelope = this.publishNow(event);
+      this.coalesced.set(key, { lastPublishedAt: now, pending: null, timer: null });
+      return envelope;
+    }
+
+    existing.pending = event;
+    if (!existing.timer) {
+      const delayMs = Math.max(0, intervalMs - (now - existing.lastPublishedAt));
+      existing.timer = setTimeout(() => {
+        const current = this.coalesced.get(key);
+        if (!current) return;
+        current.timer = null;
+        const pending = current.pending;
+        current.pending = null;
+        if (pending) {
+          this.publishNow(pending);
+          current.lastPublishedAt = Date.now();
+        }
+      }, delayMs);
+      existing.timer.unref?.();
+    }
+
+    return null;
+  }
+
+  private publishNow<TEvent extends LiveUpdateEvent>(event: TEvent) {
     const envelope: LiveUpdateEnvelope<TEvent> = {
       id: String(this.nextId++),
       occurredAt: new Date().toISOString(),
-      event: event as TEvent
+      event
     };
 
     this.history.push(envelope);

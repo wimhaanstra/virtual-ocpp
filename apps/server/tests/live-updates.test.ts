@@ -1,6 +1,6 @@
 import { RPCClient, RPCServer } from 'ocpp-rpc';
 import type { Server } from 'node:http';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { CommunicationJournalService } from '../src/communication-journal.js';
 import { createTestDatabase, testConfig } from './support/test-utils.js';
@@ -16,6 +16,7 @@ describe('live updates', () => {
   const cleanup: Cleanup[] = [];
 
   afterEach(async () => {
+    vi.useRealTimers();
     while (cleanup.length > 0) {
       await cleanup.pop()?.();
     }
@@ -145,6 +146,47 @@ describe('live updates', () => {
       ])
     );
     expect(new Set(envelopes).size).toBe(envelopes.length);
+  });
+
+  it('coalesces noisy live updates by key', async () => {
+    vi.useFakeTimers();
+    const bus = new LiveUpdateBus();
+    const events: Array<string> = [];
+    const unsubscribe = bus.subscribe((envelope) => {
+      events.push(`${envelope.event.type}:${'chargerId' in envelope.event ? envelope.event.chargerId : ''}`);
+    });
+    cleanup.push(unsubscribe);
+
+    bus.publishCoalesced('meter:CHARGER-LIVE-1:1', {
+      type: 'meter.sample.recorded',
+      chargerId: 'CHARGER-LIVE-1',
+      connectorId: 1,
+      transactionId: 101,
+      sampledAt: '2026-06-20T09:05:00.000Z',
+      measurand: 'Power.Active.Import'
+    });
+    bus.publishCoalesced('meter:CHARGER-LIVE-1:1', {
+      type: 'meter.sample.recorded',
+      chargerId: 'CHARGER-LIVE-1',
+      connectorId: 1,
+      transactionId: 101,
+      sampledAt: '2026-06-20T09:05:01.000Z',
+      measurand: 'Power.Active.Import'
+    });
+    bus.publishCoalesced('meter:CHARGER-LIVE-1:1', {
+      type: 'meter.sample.recorded',
+      chargerId: 'CHARGER-LIVE-1',
+      connectorId: 1,
+      transactionId: 101,
+      sampledAt: '2026-06-20T09:05:02.000Z',
+      measurand: 'Power.Active.Import'
+    });
+
+    expect(events).toEqual(['meter.sample.recorded:CHARGER-LIVE-1']);
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(events).toEqual(['meter.sample.recorded:CHARGER-LIVE-1', 'meter.sample.recorded:CHARGER-LIVE-1']);
   });
 
   it('publishes proxy health changes when a proxy target warms up', async () => {

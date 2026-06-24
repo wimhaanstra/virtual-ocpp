@@ -482,7 +482,7 @@ export class OcppRepository {
       location: input.location,
       format: input.format
     }).run();
-    this.liveUpdates?.publish({
+    this.liveUpdates?.publishCoalesced(`meter:${input.chargerId}:${input.connectorId}`, {
       type: 'meter.sample.recorded',
       chargerId: input.chargerId,
       connectorId: input.connectorId,

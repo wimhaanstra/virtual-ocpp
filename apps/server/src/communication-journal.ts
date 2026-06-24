@@ -272,7 +272,7 @@ export class CommunicationJournalService {
     }).run();
 
     this.purgeIfDue(new Date());
-    this.liveUpdates?.publish({
+    this.liveUpdates?.publishCoalesced(`journal:${input.chargerId ?? input.sourceType}:${input.chargerId ?? input.sourceId}`, {
       type: 'journal.recorded',
       journalId: id,
       createdAt: createdAt.toISOString(),
