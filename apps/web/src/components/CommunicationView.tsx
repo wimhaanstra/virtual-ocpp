@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Download, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
-import type { CommunicationJournalFilters, CommunicationJournalItem, ProxyTarget } from "../types";
+import type { CommunicationJournalFilters, CommunicationJournalItem, CommunicationJournalStorageSummary, ProxyTarget } from "../types";
 import { buildCommunicationSummary, formatDateTime, formatTime, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
 
@@ -11,6 +11,7 @@ type CommunicationViewProps = {
   hasMore: boolean;
   loadingMore: boolean;
   communicationRetentionHours: number | null;
+  communicationStorage: CommunicationJournalStorageSummary | null;
   expandedCommunicationJournalId: string | null;
   proxyTargets: ProxyTarget[];
   selectedChargerId: string;
@@ -32,6 +33,7 @@ export function CommunicationView({
   hasMore,
   loadingMore,
   communicationRetentionHours,
+  communicationStorage,
   expandedCommunicationJournalId,
   proxyTargets,
   selectedChargerId,
@@ -301,7 +303,10 @@ export function CommunicationView({
           <div>
             <p className="eyebrow">Communication</p>
             <h2>Recent journal rows</h2>
-            <p className="status-copy">{communicationJournal.length} row{communicationJournal.length === 1 ? "" : "s"} loaded.</p>
+            <p className="status-copy">
+              {communicationJournal.length} row{communicationJournal.length === 1 ? "" : "s"} loaded
+              {communicationStorage ? ` · ${communicationStorage.rowCount.toLocaleString()} stored · oldest ${formatStorageDate(communicationStorage.oldestCreatedAt)} · newest ${formatStorageDate(communicationStorage.newestCreatedAt)}` : ""}
+            </p>
           </div>
           <div className="action-row compact-action-row">
             <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
@@ -593,4 +598,8 @@ function formatPreset(value: string) {
   if (value === "1h") return "Last hour";
   if (value === "6h") return "Last 6h";
   return value;
+}
+
+function formatStorageDate(value: string | null) {
+  return value ? formatDateTime(value) : "-";
 }

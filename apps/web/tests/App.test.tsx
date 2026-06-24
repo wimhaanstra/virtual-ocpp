@@ -1939,7 +1939,21 @@ describe("App", () => {
       }
 
       if (url.startsWith("/api/communication-journal") && method === "GET") {
-        return new Response(JSON.stringify({ items: journalRows, retentionHours: 24, nextCursor: null, hasMore: false }), { status: 200 });
+        return new Response(
+          JSON.stringify({
+            items: journalRows,
+            retentionHours: 24,
+            nextCursor: null,
+            hasMore: false,
+            storage: {
+              rowCount: 12,
+              oldestCreatedAt: "2026-06-18T10:15:00.000Z",
+              newestCreatedAt: "2026-06-19T10:15:00.000Z",
+              retentionHours: 24
+            }
+          }),
+          { status: 200 }
+        );
       }
 
       const fallbackResponse = emptyVisibilityResponses(url, method);
@@ -1960,6 +1974,7 @@ describe("App", () => {
     expect(screen.getByText("0 active")).toBeInTheDocument();
     expect(screen.getByText("24h retention")).toBeInTheDocument();
     expect(await screen.findByText("BootNotification")).toBeInTheDocument();
+    expect(screen.getByText(/12 stored/)).toBeInTheDocument();
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
   });
 

@@ -391,6 +391,14 @@ export type CommunicationJournalResponse = {
   retentionHours: number;
   nextCursor: string | null;
   hasMore: boolean;
+  storage?: CommunicationJournalStorageSummary;
+};
+
+export type CommunicationJournalStorageSummary = {
+  rowCount: number;
+  oldestCreatedAt: string | null;
+  newestCreatedAt: string | null;
+  retentionHours: number;
 };
 
 export type DashboardConfig = {

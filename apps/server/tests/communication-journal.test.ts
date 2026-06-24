@@ -147,7 +147,13 @@ describe('communication journal', () => {
       ],
       retentionHours: 24,
       nextCursor: null,
-      hasMore: false
+      hasMore: false,
+      storage: {
+        rowCount: 2,
+        oldestCreatedAt: createdAt.toISOString(),
+        newestCreatedAt: new Date(createdAt.getTime() + 5_000).toISOString(),
+        retentionHours: 24
+      }
     });
     expect(response.body).not.toContain('secret-token');
     expect(response.body).not.toContain('super-secret');

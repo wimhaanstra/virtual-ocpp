@@ -71,6 +71,13 @@ export type CommunicationJournalItem = {
   correlationId: string | null;
 };
 
+export type CommunicationJournalStorageSummary = {
+  rowCount: number;
+  oldestCreatedAt: string | null;
+  newestCreatedAt: string | null;
+  retentionHours: number;
+};
+
 export type CommunicationJournalCursor = {
   createdAt: Date;
   id: string;
@@ -334,7 +341,26 @@ export class CommunicationJournalService {
       items: pageRows.map(toPublicItem),
       retentionHours: this.retentionHours,
       nextCursor: rows.length > limit && lastRow ? encodeCommunicationJournalCursor({ createdAt: lastRow.createdAt, id: lastRow.id }) : null,
-      hasMore: rows.length > limit
+      hasMore: rows.length > limit,
+      storage: this.getStorageSummary()
+    };
+  }
+
+  getStorageSummary(): CommunicationJournalStorageSummary {
+    const row = this.db
+      .select({
+        rowCount: sql<number>`count(*)`,
+        oldestCreatedAt: sql<number | string | Date | null>`min(${communicationJournal.createdAt})`,
+        newestCreatedAt: sql<number | string | Date | null>`max(${communicationJournal.createdAt})`
+      })
+      .from(communicationJournal)
+      .get();
+
+    return {
+      rowCount: Number(row?.rowCount ?? 0),
+      oldestCreatedAt: toIsoDate(row?.oldestCreatedAt ?? null),
+      newestCreatedAt: toIsoDate(row?.newestCreatedAt ?? null),
+      retentionHours: this.retentionHours
     };
   }
 
@@ -344,6 +370,12 @@ export class CommunicationJournalService {
     }
     this.purgeExpired(now);
   }
+}
+
+function toIsoDate(value: number | string | Date | null) {
+  if (value === null) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export function encodeCommunicationJournalCursor(cursor: CommunicationJournalCursor) {

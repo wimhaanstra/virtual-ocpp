@@ -41,6 +41,7 @@ import type {
   CommunicationJournalFilters,
   CommunicationJournalItem,
   CommunicationJournalResponse,
+  CommunicationJournalStorageSummary,
   DashboardConfig,
   ForceClosePreview,
   LiveStatus,
@@ -153,6 +154,7 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [communicationJournal, setCommunicationJournal] = useState<CommunicationJournalItem[]>([]);
   const [communicationRetentionHours, setCommunicationRetentionHours] = useState<number | null>(null);
+  const [communicationStorage, setCommunicationStorage] = useState<CommunicationJournalStorageSummary | null>(null);
   const [communicationFilters, setCommunicationFilters] = useState<CommunicationJournalFilters>(() => getCommunicationFiltersFromSearch());
   const [communicationNextCursor, setCommunicationNextCursor] = useState<string | null>(null);
   const [communicationHasMore, setCommunicationHasMore] = useState(false);
@@ -433,6 +435,7 @@ export default function App() {
     resetOnboardingSetupState();
     setCommunicationJournal([]);
     setCommunicationRetentionHours(null);
+    setCommunicationStorage(null);
     setCommunicationNextCursor(null);
     setCommunicationHasMore(false);
     setCommunicationLoadingMore(false);
@@ -1368,6 +1371,7 @@ export default function App() {
       return data.items;
     });
     setCommunicationRetentionHours(data.retentionHours);
+    setCommunicationStorage(data.storage ?? null);
     setCommunicationNextCursor(data.nextCursor);
     setCommunicationHasMore(data.hasMore);
     if (mode === "replace") {
@@ -1991,6 +1995,7 @@ export default function App() {
             hasMore={communicationHasMore}
             loadingMore={communicationLoadingMore}
             communicationRetentionHours={communicationRetentionHours}
+            communicationStorage={communicationStorage}
             expandedCommunicationJournalId={expandedCommunicationJournalId}
             proxyTargets={proxyTargets}
             selectedChargerId={selectedChargerId}
