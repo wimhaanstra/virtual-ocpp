@@ -111,12 +111,16 @@ export class OcppRepository {
 
   recordSeen(chargerId: string) {
     this.upsertChargerSeen(chargerId);
-    this.liveUpdates?.publish({
-      type: 'charger.updated',
-      chargerId,
-      updatedAt: new Date().toISOString(),
-      reason: 'seen'
-    });
+    this.liveUpdates?.publishCoalesced(
+      `charger-seen:${chargerId}`,
+      {
+        type: 'charger.updated',
+        chargerId,
+        updatedAt: new Date().toISOString(),
+        reason: 'seen'
+      },
+      15_000
+    );
   }
 
   recordDisconnected(chargerId: string, connectionId?: string) {
