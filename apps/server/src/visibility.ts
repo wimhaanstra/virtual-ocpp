@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
@@ -9,6 +9,10 @@ import { recordLogEntry } from './log-writer.js';
 import { ChargerCommandError, type ChargerCommandService } from './ocpp/charger-command-service.js';
 import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import type { StopTransactionRequest } from './ocpp/types.js';
+import { registerChargerCommandRoutes } from './visibility/charger-command-routes.js';
+import { registerConnectionRoutes } from './visibility/connection-routes.js';
+import { registerLogRoutes } from './visibility/log-routes.js';
+import { toPublicChargingSession, toPublicMeterGapEvent } from './visibility/public-mappers.js';
 
 const RECENT_LIMIT = 50;
 const RECENT_LOG_LIMIT = 100;
@@ -31,45 +35,6 @@ const ProxyStopRecoverySchema = z.object({
 const ProxyStopRecoverySuggestionSchema = z.object({
   proxyTargetId: z.string().trim().min(1)
 });
-const GetConfigurationCommandSchema = z.object({
-  key: z.array(z.string().trim().min(1)).max(64).optional()
-});
-const ChangeConfigurationCommandSchema = z.object({
-  key: z.string().trim().min(1),
-  value: z.string()
-});
-const TriggerMessageCommandSchema = z.object({
-  requestedMessage: z.enum([
-    'BootNotification',
-    'DiagnosticsStatusNotification',
-    'FirmwareStatusNotification',
-    'Heartbeat',
-    'MeterValues',
-    'StatusNotification'
-  ]),
-  connectorId: z.coerce.number().int().min(0).optional()
-});
-const READABLE_CONFIGURATION_KEYS = new Set([
-  'ClockAlignedDataInterval',
-  'ConnectorPhaseRotation',
-  'HeartbeatInterval',
-  'MeterValueSampleInterval',
-  'MeterValuesAlignedData',
-  'MeterValuesSampledData',
-  'NumberOfConnectors',
-  'StopTxnAlignedData',
-  'StopTxnSampledData',
-  'SupportedFeatureProfiles'
-]);
-const WRITABLE_CONFIGURATION_KEYS = new Set([
-  'ClockAlignedDataInterval',
-  'HeartbeatInterval',
-  'MeterValueSampleInterval',
-  'MeterValuesAlignedData',
-  'MeterValuesSampledData',
-  'StopTxnAlignedData',
-  'StopTxnSampledData'
-]);
 
 export function registerVisibilityRoutes(
   app: FastifyInstance,
@@ -78,23 +43,9 @@ export function registerVisibilityRoutes(
   proxyAuthorization?: ProxyAuthorizationService,
   liveUpdates?: LiveUpdateBus
 ) {
-  const listConnections = async (request: FastifyRequest, reply: FastifyReply) => {
-    if (await requireAdmin(request, reply, db)) return;
-
-    const parsed = ChargerScopedQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'invalid_charger_query', details: parsed.error.flatten() });
-    }
-
-    const query = db.select().from(chargerConnections);
-    const rows = parsed.data.chargerId
-      ? query.where(eq(chargerConnections.chargerId, parsed.data.chargerId)).orderBy(desc(chargerConnections.connectedAt)).limit(RECENT_LIMIT).all()
-      : query.orderBy(desc(chargerConnections.connectedAt)).limit(RECENT_LIMIT).all();
-
-    return rows.map(toPublicChargerConnection);
-  };
-
-  app.get('/api/charger-connections', listConnections);
+  registerConnectionRoutes(app, db);
+  registerChargerCommandRoutes(app, db, chargerCommands, liveUpdates);
+  registerLogRoutes(app, db);
 
   app.get('/api/sessions', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
@@ -563,141 +514,6 @@ export function registerVisibilityRoutes(
     }
   });
 
-  app.post<{ Params: { id: string } }>('/api/chargers/:id/commands/get-configuration', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
-
-    const parsed = GetConfigurationCommandSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'invalid_get_configuration_command', details: parsed.error.flatten() });
-    }
-    const blockedKeys = getBlockedConfigurationKeys(parsed.data.key, READABLE_CONFIGURATION_KEYS);
-    if (!parsed.data.key || parsed.data.key.length === 0 || blockedKeys.length > 0) {
-      return reply.code(400).send({
-        error: 'configuration_key_not_allowed',
-        allowedKeys: [...READABLE_CONFIGURATION_KEYS].sort(),
-        blockedKeys
-      });
-    }
-    if (!chargerCommands) {
-      return reply.code(503).send({ error: 'charger_commands_unavailable' });
-    }
-
-    try {
-      const result = await chargerCommands.getConfiguration(request.params.id, parsed.data);
-      recordChargerCommandLog(db, liveUpdates, {
-        level: 'info',
-        message: 'get configuration requested',
-        chargerId: request.params.id,
-        metadata: {
-          keyCount: parsed.data.key?.length ?? 0,
-          returnedKeyCount: result.configurationKey?.length ?? 0,
-          unknownKeyCount: result.unknownKey?.length ?? 0
-        }
-      });
-      return result;
-    } catch (error) {
-      return handleChargerCommandFailure(reply, db, liveUpdates, {
-        error,
-        chargerId: request.params.id,
-        message: 'get configuration failed'
-      });
-    }
-  });
-
-  app.post<{ Params: { id: string } }>('/api/chargers/:id/commands/change-configuration', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
-
-    const parsed = ChangeConfigurationCommandSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'invalid_change_configuration_command', details: parsed.error.flatten() });
-    }
-    if (!WRITABLE_CONFIGURATION_KEYS.has(parsed.data.key)) {
-      return reply.code(400).send({
-        error: 'configuration_key_not_writable',
-        allowedKeys: [...WRITABLE_CONFIGURATION_KEYS].sort(),
-        blockedKeys: [parsed.data.key]
-      });
-    }
-    if (!chargerCommands) {
-      return reply.code(503).send({ error: 'charger_commands_unavailable' });
-    }
-
-    try {
-      const result = await chargerCommands.changeConfiguration(request.params.id, parsed.data);
-      const status = typeof result.status === 'string' ? result.status : 'Unknown';
-      recordChargerCommandLog(db, liveUpdates, {
-        level: status === 'Accepted' || status === 'RebootRequired' ? 'info' : 'warn',
-        message: 'change configuration requested',
-        chargerId: request.params.id,
-        metadata: {
-          key: parsed.data.key,
-          status
-        }
-      });
-      return { ...result, status };
-    } catch (error) {
-      return handleChargerCommandFailure(reply, db, liveUpdates, {
-        error,
-        chargerId: request.params.id,
-        message: 'change configuration failed',
-        metadata: { key: parsed.data.key }
-      });
-    }
-  });
-
-  app.post<{ Params: { id: string } }>('/api/chargers/:id/commands/trigger-message', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
-
-    const parsed = TriggerMessageCommandSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'invalid_trigger_message_command', details: parsed.error.flatten() });
-    }
-    if (!chargerCommands) {
-      return reply.code(503).send({ error: 'charger_commands_unavailable' });
-    }
-
-    try {
-      const result = await chargerCommands.triggerMessage(request.params.id, parsed.data);
-      const status = typeof result.status === 'string' ? result.status : 'Unknown';
-      recordChargerCommandLog(db, liveUpdates, {
-        level: status === 'Accepted' ? 'info' : 'warn',
-        message: 'trigger message requested',
-        chargerId: request.params.id,
-        metadata: {
-          requestedMessage: parsed.data.requestedMessage,
-          connectorId: parsed.data.connectorId ?? null,
-          status
-        }
-      });
-      return { ...result, status };
-    } catch (error) {
-      return handleChargerCommandFailure(reply, db, liveUpdates, {
-        error,
-        chargerId: request.params.id,
-        message: 'trigger message failed',
-        metadata: {
-          requestedMessage: parsed.data.requestedMessage,
-          connectorId: parsed.data.connectorId ?? null
-        }
-      });
-    }
-  });
-
-  app.get('/api/logs', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
-
-    const parsed = ChargerScopedQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'invalid_logs_query', details: parsed.error.flatten() });
-    }
-
-    const query = db.select().from(logs);
-    const rows = parsed.data.chargerId
-      ? query.where(eq(logs.chargerId, parsed.data.chargerId)).orderBy(desc(logs.createdAt)).limit(RECENT_LOG_LIMIT).all()
-      : query.orderBy(desc(logs.createdAt)).limit(RECENT_LOG_LIMIT).all();
-
-    return rows.map(toPublicLog);
-  });
 }
 
 function recordSessionLog(
@@ -721,57 +537,6 @@ function recordSessionLog(
     metadata: input.metadata,
     createdAt: input.createdAt
   });
-}
-
-function recordChargerCommandLog(
-  db: Database,
-  liveUpdates: LiveUpdateBus | undefined,
-  input: {
-    level: 'info' | 'warn';
-    message: string;
-    chargerId: string;
-    metadata?: Record<string, unknown>;
-  }
-) {
-  recordLogEntry(db, liveUpdates, {
-    level: input.level,
-    category: 'charger-command',
-    message: input.message,
-    chargerId: input.chargerId,
-    metadata: input.metadata
-  });
-}
-
-function handleChargerCommandFailure(
-  reply: FastifyReply,
-  db: Database,
-  liveUpdates: LiveUpdateBus | undefined,
-  input: {
-    error: unknown;
-    chargerId: string;
-    message: string;
-    metadata?: Record<string, unknown>;
-  }
-) {
-  const statusCode = input.error instanceof ChargerCommandError && input.error.code === 'charger_not_connected' ? 409 : 502;
-  recordChargerCommandLog(db, liveUpdates, {
-    level: 'warn',
-    message: input.message,
-    chargerId: input.chargerId,
-    metadata: {
-      ...input.metadata,
-      errorType: input.error instanceof Error ? input.error.name : 'unknown_error',
-      errorCode: input.error && typeof input.error === 'object' && 'code' in input.error ? (input.error as { code?: unknown }).code : undefined
-    }
-  });
-
-  return reply.code(statusCode).send({
-    error: input.error instanceof ChargerCommandError ? input.error.code : 'charger_command_failed'
-  });
-}
-
-function getBlockedConfigurationKeys(keys: string[] | undefined, allowlist: Set<string>) {
-  return (keys ?? []).filter((key) => !allowlist.has(key));
 }
 
 function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessions.$inferSelect) {
@@ -1160,53 +925,6 @@ function normalizeEnergyWh(sample: typeof meterSamples.$inferSelect) {
   return sample.unit?.trim().toLowerCase() === 'kwh' ? value * 1000 : value;
 }
 
-function toPublicChargerConnection(connection: typeof chargerConnections.$inferSelect) {
-  return {
-    id: connection.id,
-    chargerId: connection.chargerId,
-    connectedAt: connection.connectedAt.toISOString(),
-    disconnectedAt: connection.disconnectedAt?.toISOString() ?? null,
-    active: connection.disconnectedAt === null
-  };
-}
-
-function toPublicChargingSession(session: typeof chargingSessions.$inferSelect) {
-  return {
-    id: session.id,
-    chargerId: session.chargerId,
-    connectorId: session.connectorId,
-    transactionId: session.transactionId,
-    idTag: session.idTag,
-    startedAt: session.startedAt.toISOString(),
-    stoppedAt: session.stoppedAt?.toISOString() ?? null,
-    startMeterWh: session.startMeterWh ?? null,
-    stopMeterWh: session.stopMeterWh ?? null,
-    stopReason: session.stopReason,
-    status: session.status,
-    active: session.status === 'active'
-  };
-}
-
-function toPublicMeterGapEvent(event: typeof meterGapEvents.$inferSelect) {
-  return {
-    id: event.id,
-    chargerId: event.chargerId,
-    connectorId: event.connectorId,
-    previousSessionId: event.previousSessionId,
-    newSessionId: event.newSessionId,
-    previousStoppedAt: event.previousStoppedAt?.toISOString() ?? null,
-    newStartedAt: event.newStartedAt.toISOString(),
-    previousMeterWh: event.previousMeterWh,
-    newMeterStartWh: event.newMeterStartWh,
-    deltaWh: event.deltaWh,
-    thresholdWh: event.thresholdWh,
-    status: event.status,
-    submissionResult: parseSubmissionResult(event.submissionResultJson),
-    createdAt: event.createdAt.toISOString(),
-    updatedAt: event.updatedAt.toISOString()
-  };
-}
-
 function buildMeterGapRecoveryPreview(
   db: Database,
   proxyAuthorization: ProxyAuthorizationService | undefined,
@@ -1243,48 +961,4 @@ function buildMeterGapRecoveryPreview(
       canSubmit: !target.hasActiveTransaction
     }))
   };
-}
-
-function parseSubmissionResult(value: string | null) {
-  if (!value) return null;
-
-  try {
-    return JSON.parse(value) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function toPublicLog(entry: typeof logs.$inferSelect) {
-  return {
-    id: entry.id,
-    level: entry.level,
-    category: entry.category,
-    message: entry.message,
-    chargerId: entry.chargerId,
-    transactionId: entry.transactionId,
-    createdAt: entry.createdAt.toISOString(),
-    hasMetadata: Boolean(entry.metadata),
-    context: extractSafeLogContext(entry.metadata)
-  };
-}
-
-function extractSafeLogContext(metadata: string | null) {
-  if (!metadata) return null;
-
-  try {
-    const parsed = JSON.parse(metadata) as Record<string, unknown>;
-    const context: Record<string, string> = {};
-
-    for (const key of ['proxyTargetId', 'method', 'status']) {
-      const value = parsed[key];
-      if (typeof value === 'string') {
-        context[key] = value;
-      }
-    }
-
-    return Object.keys(context).length > 0 ? context : null;
-  } catch {
-    return null;
-  }
 }
