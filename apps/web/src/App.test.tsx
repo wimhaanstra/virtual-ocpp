@@ -477,6 +477,113 @@ describe("App", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
   });
 
+  it("sends charger diagnostics commands from the charger dashboard", async () => {
+    window.history.replaceState({}, "", "/charger-dashboard?chargerId=SMART-EVSE-1");
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
+      }
+
+      if (url === "/api/chargers" && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "SMART-EVSE-1",
+              label: "Bay 1",
+              lastSeenAt: "2026-06-19T09:00:00.000Z",
+              connectedAt: "2026-06-19T09:00:00.000Z",
+              disconnectedAt: null,
+              active: true
+            }
+          ]),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/chargers/SMART-EVSE-1/commands/get-configuration") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            configurationKey: [
+              { key: "HeartbeatInterval", readonly: false, value: "300" },
+              { key: "MeterValueSampleInterval", readonly: false, value: "60" }
+            ],
+            unknownKey: []
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/chargers/SMART-EVSE-1/commands/change-configuration") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            key: "HeartbeatInterval",
+            value: "300",
+            status: "Accepted"
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (url.startsWith("/api/chargers/SMART-EVSE-1/commands/trigger-message") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            requestedMessage: "Heartbeat",
+            status: "Accepted"
+          }),
+          { status: 200 }
+        );
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method, init);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Configuration commands" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Get configuration" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/chargers/SMART-EVSE-1/commands/get-configuration" && init?.method === "POST")).toBe(true)
+    );
+    expect(await screen.findByText("Loaded 2 requested keys.")).toBeInTheDocument();
+    const getCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/chargers/SMART-EVSE-1/commands/get-configuration");
+    expect(getCall?.[1]?.body ? JSON.parse(String(getCall[1].body)) : null).toEqual({
+      key: ["HeartbeatInterval", "MeterValueSampleInterval"]
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/chargers/SMART-EVSE-1/commands/change-configuration" && init?.method === "POST")).toBe(true)
+    );
+    expect(await screen.findByText("ChangeConfiguration sent for HeartbeatInterval.")).toBeInTheDocument();
+
+    const triggerCard = screen.getByRole("heading", { name: "Request a charger callback" }).closest("form");
+    expect(triggerCard).not.toBeNull();
+    fireEvent.click(within(triggerCard as HTMLElement).getByRole("button", { name: "Trigger" }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/chargers/SMART-EVSE-1/commands/trigger-message" && init?.method === "POST")).toBe(true)
+    );
+    expect(await screen.findByText("TriggerMessage sent for Heartbeat.")).toBeInTheDocument();
+    const triggerCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/chargers/SMART-EVSE-1/commands/trigger-message");
+    expect(triggerCall?.[1]?.body ? JSON.parse(String(triggerCall[1].body)) : null).toEqual({
+      requestedMessage: "Heartbeat"
+    });
+
+    const changeCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/chargers/SMART-EVSE-1/commands/change-configuration");
+    expect(changeCall?.[1]?.body ? JSON.parse(String(changeCall[1].body)) : null).toEqual({
+      key: "HeartbeatInterval",
+      value: "60"
+    });
+  });
+
   it("shows an active charging session before the first MeterValues sample arrives", async () => {
     window.history.replaceState({}, "", "/?chargerId=SMART-EVSE-1");
 

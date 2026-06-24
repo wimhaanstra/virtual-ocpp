@@ -943,6 +943,101 @@ a {
   font-size: 20px;
 }
 
+.charger-diagnostics-panel {
+  gap: 14px;
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.command-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-subtle);
+}
+
+.command-card__header,
+.command-card__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.command-card__header h3 {
+  margin: 3px 0 0;
+  font-size: 16px;
+}
+
+.command-card__header svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip-row .filter-chip {
+  cursor: pointer;
+}
+
+.command-card .field {
+  gap: 6px;
+}
+
+.command-card .field small {
+  margin-top: -2px;
+}
+
+.command-result {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--background);
+}
+
+.command-result strong {
+  font-size: 13px;
+}
+
+.command-result pre {
+  margin: 0;
+  overflow: auto;
+  max-height: 220px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--foreground);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.command-result-success {
+  border-color: color-mix(in srgb, var(--success) 34%, var(--line));
+}
+
+.command-result-error {
+  border-color: color-mix(in srgb, var(--danger) 38%, var(--line));
+}
+
 .global-dashboard {
   display: grid;
   gap: 12px;
@@ -2517,6 +2612,7 @@ td {
 
   .communication-filters,
   .communication-filter-primary,
+  .command-grid,
   .charger-wizard-grid,
   .modal-form-grid,
   .session-detail-grid,
@@ -2564,6 +2660,11 @@ td {
 
   .app-shell-collapsed .sidebar-context {
     display: grid;
+  }
+
+  .command-card__header,
+  .command-card__footer {
+    flex-direction: column;
   }
 
   .mobile-bottom-nav {

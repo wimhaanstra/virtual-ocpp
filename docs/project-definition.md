@@ -12,6 +12,8 @@ Virtual OCPP is a local-primary OCPP 1.6j service for Smart EVSE-style chargers 
 - The charger context is selected in the UI and carried in `?chargerId=...`.
 - The charger dashboard shows connection status, live charging state, proxy health, session summary, meter-gap review, active-session audit context, force-close previews, firmware status, and links into the communication journal.
 - Live updates use authenticated server-sent events to invalidate the relevant REST slices.
+- Operator-triggered server-to-charger OCPP commands include `RemoteStopTransaction` plus charger-dashboard diagnostics for allowlisted `GetConfiguration`, allowlisted `ChangeConfiguration`, and `TriggerMessage`.
+- Unsupported charger-originated OCPP methods currently return `NotImplemented` and are recorded in the communication journal and logs.
 - The repo includes a charger simulator for development, demos, and smoke tests.
 - The production image serves the API, OCPP websocket endpoint, and frontend from one Fastify process with SQLite stored under `/data`.
 

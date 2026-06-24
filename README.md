@@ -126,6 +126,9 @@ Implemented OCPP 1.6j calls:
 Server-initiated command:
 
 - `RemoteStopTransaction`
+- `GetConfiguration` for allowlisted operational keys
+- `ChangeConfiguration` for allowlisted operational keys
+- `TriggerMessage` for supported OCPP 1.6 current-state messages
 
 Authorization uses the SQLite `tags` allowlist and `tag_charger_access`. Known enabled tags are still rejected until they have explicit enabled access for the charger that is authorizing. Unknown tags, disabled tags, or tags without charger access are rejected. Operators can manage global tags and grant/revoke selected-charger access from the protected admin UI.
 
@@ -207,11 +210,12 @@ The current frontend includes global tag management, selected-charger tag access
 - Edit proxy credentials through masked inputs; unchanged masks preserve stored values, cleared inputs remove stored values.
 - Add per-proxy tag mappings so an upstream receives a different idTag than the charger sends locally.
 - Open the protected default global dashboard for a clean fleet overview of connected chargers, active sessions, live charge details when available, and sessions needing attention.
-- Use the charger-scoped dashboard for a compact charger summary with session totals, stored energy, last-session energy, active-session state, local OCPP connection info, runtime proxy target state, live charging energy/power/current/voltage when available, and missing-stop audit warnings.
+- Use the charger-scoped dashboard for a compact charger summary with session totals, stored energy, last-session energy, active-session state, local OCPP connection info, runtime proxy target state, live charging energy/power/current/voltage when available, diagnostics/configuration commands, and missing-stop audit warnings.
 - Choose 12-hour or 24-hour timestamp display from Settings. The preference is stored in the browser.
 - View recent charging sessions.
 - Review missing-stop audit warnings for active sessions where the charger appears available/disconnected or an accepted remote stop has not produced `StopTransaction`.
 - Request a real OCPP remote stop for active sessions when the charger is connected.
+- Query allowlisted charger configuration keys, change allowlisted operational keys, and trigger supported current-state OCPP messages from the charger dashboard. The command payloads and responses are recorded in the communication journal.
 - Close lingering active session records from the Sessions page. This is a local cleanup action for stale records and proxy mappings, not a remote stop-charging command.
 - Recover an orphaned upstream proxy session by previewing and sending a manual proxy `StopTransaction` for an already-stopped local session. The recovery modal shows a predicted upstream transaction id when it can infer one from the latest stored mapping for that proxy target.
 - View full redacted OCPP communication on the Communication page, filter by source/target/method/message type, expand payloads, export filtered CSV, and manually purge expired or explicitly filtered rows.

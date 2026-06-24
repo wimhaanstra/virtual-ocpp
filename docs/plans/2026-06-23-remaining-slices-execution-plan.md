@@ -7,8 +7,9 @@ This plan turns the remaining candidate slices in [docs/implementation-plan.md](
 - The backend already has stable seams for settings, visibility, communication journal, live updates, charger commands, and OCPP proxy/runtime logic under `apps/server/src`.
 - The frontend already has protected route-level views, a sidebar shell, live-update refresh wiring, and broad UI coverage concentrated in `apps/web/src/App.tsx`, `apps/web/src/components/*`, and `apps/web/src/App.test.tsx`.
 - Current settings persistence only covers onboarding. Theme and sidebar collapse are still browser-local in `apps/web/src/app-helpers.ts` and `apps/web/src/App.tsx`.
-- Current communication journal support covers filtered listing plus retention-based purge only. Export and scoped manual purge do not exist yet.
+- Current communication journal support already covers filtered listing, CSV export, and explicit/manual purge on top of retention-based cleanup.
 - Current proxy target behavior is charger-scoped and persistence-backed, but the product policy for multiple simultaneous upstreams is still implicit.
+- A reusable charger-command transport already exists for `GetConfiguration`, `ChangeConfiguration`, `TriggerMessage`, and `RemoteStopTransaction`, but only remote stop is surfaced through the protected admin API today.
 
 ## Shared Execution Rules
 
@@ -28,11 +29,12 @@ This plan turns the remaining candidate slices in [docs/implementation-plan.md](
 | 4 | Meter gap polish | Safer once session and proxy lifecycle rules are stable. | 1, 3 |
 | 5 | Communication export and purge | Adds missing operator controls on an already-live journal surface without blocking runtime slices. | Current journal only |
 | 6 | Settings display preferences | Replaces local-only shell preferences with persisted settings before more new UI surfaces land. | Current settings only |
-| 7 | Operational health overview | Should summarize stable session, proxy, meter-gap, onboarding, and communication signals. | 1, 3, 4, 5, 6 |
-| 8 | Diagnostics view | Reuses the hardened runtime and health signals for charger-specific drill-down. | 1, 3, 4, 7 |
-| 9 | Backup, restore, and admin maintenance | Safer after settings, journal policy, and multi-upstream/runtime behavior are settled. | 2, 5, 6 |
-| 10 | UI density pass | Best done after new health, diagnostics, and maintenance surfaces exist so compaction happens once. | 5, 6, 7, 8, 9 |
-| 11 | Frontend and backend test expansion | Final gap-closing slice after the remaining behavior is in place. | 1-10 |
+| 7 | OCPP diagnostics and configuration controls | Reuses the existing charger-command seam and journal before the broader diagnostics view is built on top of it. | Current charger commands, 5 |
+| 8 | Operational health overview | Should summarize stable session, proxy, meter-gap, onboarding, communication, and charger-command signals. | 1, 3, 4, 5, 6 |
+| 9 | Diagnostics view | Reuses the hardened runtime, health signals, and charger-command controls for charger-specific drill-down. | 1, 3, 4, 7, 8 |
+| 10 | Backup, restore, and admin maintenance | Safer after settings, journal policy, and multi-upstream/runtime behavior are settled. | 2, 5, 6 |
+| 11 | UI density pass | Best done after new health, diagnostics, and maintenance surfaces exist so compaction happens once. | 5, 6, 8, 9, 10 |
+| 12 | Frontend and backend test expansion | Final gap-closing slice after the remaining behavior is in place. | 1-11 |
 
 ## Subagent Strategy
 
@@ -44,9 +46,9 @@ Use three parallel work lanes, but keep schema and state-machine ownership singl
 
 Coordination rules:
 
-- For slices 1-4 and 9, the `server-runtime` lane owns the contract first. The `web-operator` lane starts only after route shape and persistence behavior are settled.
-- For slices 5-8 and 10, freeze backend response shapes early, then let `web-operator` and `verification-docs` run in parallel.
-- Slice 11 is the only place where server and web coverage work should intentionally branch in parallel and reconverge on shared smoke verification.
+- For slices 1-4 and 10, the `server-runtime` lane owns the contract first. The `web-operator` lane starts only after route shape and persistence behavior are settled.
+- For slices 5-9 and 11, freeze backend response shapes early, then let `web-operator` and `verification-docs` run in parallel.
+- Slice 12 is the only place where server and web coverage work should intentionally branch in parallel and reconverge on shared smoke verification.
 
 ## Slice Playbooks
 
@@ -160,7 +162,26 @@ Coordination rules:
   - `npm run build --workspace=@virtual-ocpp/web`
 - Commit strategy: one cross-layer commit, for example `feat(settings): persist operator display preferences`
 
-### 7. Operational health overview
+### 7. OCPP diagnostics and configuration controls
+
+- Primary surfaces: `apps/server/src/ocpp/charger-command-service.ts`, `apps/server/src/ocpp/types.ts`, `apps/server/src/visibility.ts` or an extracted charger-diagnostics route module, `apps/server/src/app.test.ts`, charger-facing frontend route/components, and communication-journal consumers
+- Dependency goal: surface safe charger command and configuration controls before the broader diagnostics UI tries to incorporate them
+- Subagent strategy: `server-runtime` defines the allowlisted command/config contract first; `web-operator` follows with charger-scoped UX and journal drill-down links
+- Acceptance gate:
+  - Operators can request allowlisted `GetConfiguration` reads from a connected charger without exposing arbitrary vendor-specific keys or secret-like values.
+  - Operators can attempt allowlisted `ChangeConfiguration` writes and see `Accepted`, `Rejected`, `RebootRequired`, or `NotSupported` without backend reinterpretation.
+  - Operators can issue supported `TriggerMessage` requests and understand that an accepted trigger only means the charger intends to send the follow-up message.
+  - Disconnected chargers and blocked keys fail clearly and do not create synthetic OCPP command state.
+- Test commands:
+  - `npm run test --workspace=@virtual-ocpp/server`
+  - `npm run test --workspace=@virtual-ocpp/web`
+  - `npm run lint --workspace=@virtual-ocpp/server`
+  - `npm run lint --workspace=@virtual-ocpp/web`
+  - `npm run build --workspace=@virtual-ocpp/server`
+  - `npm run build --workspace=@virtual-ocpp/web`
+- Commit strategy: one cross-layer commit, for example `feat(diagnostics): add charger configuration and trigger controls`
+
+### 8. Operational health overview
 
 - Primary surfaces: `apps/server/src/visibility.ts`, `apps/server/src/live-updates.ts`, `apps/server/src/charging-stats.ts`, `apps/web/src/components/GlobalDashboardView.tsx`, `apps/web/src/App.tsx`, related tests
 - Dependency goal: create one installation-level summary once the underlying session, proxy, meter-gap, communication, and settings signals are stable
@@ -178,13 +199,14 @@ Coordination rules:
   - `npm run build --workspace=@virtual-ocpp/web`
 - Commit strategy: one commit, for example `feat(web): add operational health overview`
 
-### 8. Diagnostics view
+### 9. Diagnostics view
 
 - Primary surfaces: `apps/server/src/visibility.ts`, possibly a dedicated diagnostics route module if extraction is warranted, `apps/web/src/App.tsx`, new diagnostics components, `apps/web/src/App.test.tsx`
 - Dependency goal: provide charger-specific troubleshooting after the higher-level health summary exists
 - Subagent strategy: `server-runtime` assembles the charger diagnostics model and event timeline; `web-operator` focuses on compact drill-down UX with links back to communication
 - Acceptance gate:
   - Operators can answer whether a charger is connected, talking, charging, and forwarding from one diagnostics surface.
+  - The view reuses the existing diagnostics/configuration command surface instead of inventing a second configuration workflow.
   - Recent state changes and warnings can be correlated without opening several other pages first.
   - Diagnostics data updates live or on the same lightweight refresh model as the related existing pages.
   - Sensitive payloads stay redacted and diagnostics link to Communication for rawer context instead of duplicating it.
@@ -196,7 +218,7 @@ Coordination rules:
   - `npm run build --workspace=@virtual-ocpp/web`
 - Commit strategy: one commit, for example `feat(diagnostics): add charger troubleshooting view`
 
-### 9. Backup, restore, and admin maintenance
+### 10. Backup, restore, and admin maintenance
 
 - Primary surfaces: new maintenance routes under `apps/server/src`, `apps/server/src/settings.ts` or a dedicated maintenance module, SQLite-facing helpers, `docs/deployment.md`, settings/admin frontend, and matching tests
 - Dependency goal: define safe operational maintenance only after the main persisted data model and operator controls are settled
@@ -214,7 +236,7 @@ Coordination rules:
   - `npm run build`
 - Commit strategy: one commit, for example `feat(maintenance): add backup and restore workflows`
 
-### 10. UI density pass
+### 11. UI density pass
 
 - Primary surfaces: `apps/web/src/components/*`, `apps/web/src/App.tsx`, `apps/web/src/styles.css`, `apps/web/src/App.test.tsx`
 - Dependency goal: normalize the final set of operator surfaces once the remaining pages and settings-driven density options exist
@@ -230,7 +252,7 @@ Coordination rules:
   - `npm run build --workspace=@virtual-ocpp/web`
 - Commit strategy: one frontend-only commit, for example `refactor(web): complete operator UI density pass`
 
-### 11. Frontend and backend test expansion
+### 12. Frontend and backend test expansion
 
 - Primary surfaces: server Vitest suites, web Vitest suites, simulator smoke coverage, and `docs/development.md`
 - Dependency goal: close the explicit remaining coverage gaps after the feature set is complete
@@ -249,7 +271,7 @@ Coordination rules:
 
 ## Commit Sequencing
 
-- Keep the sequence linear at the top level: slices 1 through 11 should produce 11 reviewable commits or 11 reviewable PR-equivalent changesets.
+- Keep the sequence linear at the top level: slices 1 through 12 should produce 12 reviewable commits or 12 reviewable PR-equivalent changesets.
 - Inside an active slice, temporary checkpoint commits are acceptable, but collapse them before handoff so the retained history still maps one commit to one slice.
 - Migrations must never be committed ahead of the code and tests that use them.
 - If a slice changes operator-visible behavior, the same commit must include the relevant doc updates and test coverage.

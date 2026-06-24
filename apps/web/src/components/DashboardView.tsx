@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ArrowRight, CheckCircle2, Gauge, Info, MessageSquareText, RefreshCcw, X } from "lucide-react";
+import { ChargerDiagnosticsPanel } from "./ChargerDiagnosticsPanel";
 import { Button } from "./ui/button";
 import type {
   ActiveSessionAuditResponse,
@@ -34,6 +35,9 @@ type DashboardViewProps = {
   onNavigate: (view: ActiveView) => void;
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
   onOpenSessions: () => void;
+  onGetConfiguration: (chargerId: string, keys: string[]) => Promise<unknown>;
+  onChangeConfiguration: (chargerId: string, key: string, value: string) => Promise<unknown>;
+  onTriggerMessage: (chargerId: string, requestedMessage: string, connectorId: number | null) => Promise<unknown>;
   onRefresh: () => void;
   onDismissMeterGap: (event: MeterGapEvent) => void;
   onScanMeterGaps: () => void;
@@ -54,6 +58,9 @@ export function DashboardView({
   onNavigate,
   onOpenCommunication,
   onOpenSessions,
+  onGetConfiguration,
+  onChangeConfiguration,
+  onTriggerMessage,
   onRefresh,
   onDismissMeterGap,
   onScanMeterGaps,
@@ -295,6 +302,14 @@ export function DashboardView({
           </div>
         )}
       </section>
+
+      <ChargerDiagnosticsPanel
+        busy={busy}
+        selectedChargerId={selectedChargerId}
+        onGetConfiguration={onGetConfiguration}
+        onChangeConfiguration={onChangeConfiguration}
+        onTriggerMessage={onTriggerMessage}
+      />
 
       <section className="panel table-panel">
         <div className="topbar-actions page-section-header">

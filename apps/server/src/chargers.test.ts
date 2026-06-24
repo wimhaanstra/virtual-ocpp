@@ -305,6 +305,153 @@ describe('charger management', () => {
     const systemLog = tempDb.db.select().from(logs).where(eqByCategoryAndMessage('charger', 'charger deleted')).all();
     expect(systemLog).toHaveLength(1);
   });
+
+  it('forwards charger commands through authenticated API routes and journals the exchange', async () => {
+    const tempDb = createTestDatabase();
+    cleanup.push(() => {
+      tempDb.close();
+    });
+
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    cleanup.push(async () => {
+      await app.close();
+    });
+
+    const cookie = await login(app);
+    await listen(app);
+    const charger = await connectCharger(getBaseUrl(app), 'CHARGER-COMMANDS');
+    cleanup.push(async () => {
+      await charger.close({});
+    });
+
+    const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+    charger.handle('GetConfiguration', async ({ params }) => {
+      calls.push({ method: 'GetConfiguration', params: (params ?? {}) as Record<string, unknown> });
+      return {
+        configurationKey: [
+          {
+            key: 'MeterValueSampleInterval',
+            readonly: false,
+            value: '60'
+          }
+        ],
+        unknownKey: ['MissingKey']
+      };
+    });
+    charger.handle('ChangeConfiguration', async ({ params }) => {
+      calls.push({ method: 'ChangeConfiguration', params: (params ?? {}) as Record<string, unknown> });
+      return { status: 'Accepted' };
+    });
+    charger.handle('TriggerMessage', async ({ params }) => {
+      calls.push({ method: 'TriggerMessage', params: (params ?? {}) as Record<string, unknown> });
+      return { status: 'Accepted' };
+    });
+
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Smart EVSE',
+      chargePointModel: 'SmartEVSE',
+      firmwareVersion: '4.2.0'
+    });
+
+    const configuration = await app.inject({
+      method: 'POST',
+      url: '/api/chargers/CHARGER-COMMANDS/commands/get-configuration',
+      headers: { cookie },
+      payload: {
+        key: ['MeterValueSampleInterval']
+      }
+    });
+    expect(configuration.statusCode).toBe(200);
+    expect(configuration.json()).toEqual({
+      configurationKey: [
+        {
+          key: 'MeterValueSampleInterval',
+          readonly: false,
+          value: '60'
+        }
+      ],
+      unknownKey: ['MissingKey']
+    });
+
+    const change = await app.inject({
+      method: 'POST',
+      url: '/api/chargers/CHARGER-COMMANDS/commands/change-configuration',
+      headers: { cookie },
+      payload: {
+        key: 'HeartbeatInterval',
+        value: 'true'
+      }
+    });
+    expect(change.statusCode).toBe(200);
+    expect(change.json()).toEqual({
+      status: 'Accepted'
+    });
+
+    const trigger = await app.inject({
+      method: 'POST',
+      url: '/api/chargers/CHARGER-COMMANDS/commands/trigger-message',
+      headers: { cookie },
+      payload: {
+        requestedMessage: 'Heartbeat',
+        connectorId: 1
+      }
+    });
+    expect(trigger.statusCode).toBe(200);
+    expect(trigger.json()).toEqual({
+      status: 'Accepted'
+    });
+
+    expect(calls).toEqual([
+      {
+        method: 'GetConfiguration',
+        params: {
+          key: ['MeterValueSampleInterval']
+        }
+      },
+      {
+        method: 'ChangeConfiguration',
+        params: {
+          key: 'HeartbeatInterval',
+          value: 'true'
+        }
+      },
+      {
+        method: 'TriggerMessage',
+        params: {
+          requestedMessage: 'Heartbeat',
+          connectorId: 1
+        }
+      }
+    ]);
+    expect(
+      tempDb.db
+        .select()
+        .from(communicationJournal)
+        .all()
+        .filter(
+          (row) =>
+            row.chargerId === 'CHARGER-COMMANDS' &&
+            row.direction === 'outbound' &&
+            row.sourceType === 'server' &&
+            row.messageType === 'call'
+        )
+        .map((row) => row.ocppMethod)
+    ).toEqual(['GetConfiguration', 'ChangeConfiguration', 'TriggerMessage']);
+    expect(
+      tempDb.db
+        .select()
+        .from(communicationJournal)
+        .all()
+        .filter(
+          (row) =>
+            row.chargerId === 'CHARGER-COMMANDS' &&
+            row.direction === 'inbound' &&
+            row.sourceType === 'charger' &&
+            row.messageType === 'callResult'
+        )
+        .map((row) => row.ocppMethod)
+    ).toEqual(['GetConfiguration', 'ChangeConfiguration', 'TriggerMessage']);
+  });
 });
 
 async function login(app: Awaited<ReturnType<typeof buildApp>>) {

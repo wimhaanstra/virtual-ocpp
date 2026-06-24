@@ -27,6 +27,43 @@ export type StopTransactionRequest = {
   reason?: string;
 };
 
+export type GetConfigurationRequest = {
+  key?: string[];
+};
+
+export type GetConfigurationResponse = {
+  configurationKey?: Array<{
+    key?: string;
+    readonly?: boolean;
+    value?: string;
+  }>;
+  unknownKey?: string[];
+};
+
+export type ChangeConfigurationRequest = {
+  key: string;
+  value: string;
+};
+
+export type ChangeConfigurationResponse = {
+  status?: string;
+};
+
+export type TriggerMessageRequest = {
+  requestedMessage:
+    | 'BootNotification'
+    | 'DiagnosticsStatusNotification'
+    | 'FirmwareStatusNotification'
+    | 'Heartbeat'
+    | 'MeterValues'
+    | 'StatusNotification';
+  connectorId?: number;
+};
+
+export type TriggerMessageResponse = {
+  status?: string;
+};
+
 export type StatusNotificationRequest = {
   connectorId?: number;
   errorCode?: string;

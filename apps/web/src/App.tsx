@@ -497,6 +497,56 @@ export default function App() {
     setDashboardConfig(data);
   }
 
+  async function requestChargerCommand<T>(chargerId: string, action: string, body: Record<string, unknown>) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/chargers/${encodeURIComponent(chargerId)}/commands/${action}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (handleUnauthorized(response)) return null;
+
+      if (response.status === 404) {
+        throw new Error("This OCPP command endpoint is not available yet.");
+      }
+
+      if (!response.ok) {
+        const error = await readErrorResponse(response);
+        if (response.status === 409) {
+          throw new Error(error === "charger_not_connected" ? "Charger is not connected." : "Charger rejected the command because it is not ready.");
+        }
+        if (response.status === 503) {
+          throw new Error("Command service is unavailable.");
+        }
+        throw new Error(error ?? "Could not send charger command.");
+      }
+
+      const payload = (await response.json().catch(() => null)) as T | null;
+      return payload;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function getChargerConfiguration(chargerId: string, keys: string[]) {
+    return requestChargerCommand(chargerId, "get-configuration", { key: keys });
+  }
+
+  async function changeChargerConfiguration(chargerId: string, key: string, value: string) {
+    return requestChargerCommand(chargerId, "change-configuration", { key, value });
+  }
+
+  async function triggerChargerMessage(chargerId: string, requestedMessage: string, connectorId: number | null) {
+    return requestChargerCommand(
+      chargerId,
+      "trigger-message",
+      connectorId === null ? { requestedMessage } : { requestedMessage, connectorId }
+    );
+  }
+
   async function loadOnboardingSettings(options: { autoOpen?: boolean } = {}) {
     const requestId = onboardingSettingsRequestId.current + 1;
     onboardingSettingsRequestId.current = requestId;
@@ -1867,9 +1917,12 @@ export default function App() {
               sessionSummary={sessionSummary}
               selectedChargerId={selectedChargerId}
               selectedChargerLabel={selectedChargerLabel}
+              onChangeConfiguration={(chargerId, key, value) => changeChargerConfiguration(chargerId, key, value)}
+              onGetConfiguration={(chargerId, keys) => getChargerConfiguration(chargerId, keys)}
               onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
               onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
               onNavigate={navigateToView}
+              onTriggerMessage={(chargerId, requestedMessage, connectorId) => triggerChargerMessage(chargerId, requestedMessage, connectorId)}
               onRefresh={() => void loadScopedData(selectedChargerId)}
               onDismissMeterGap={(event) => void dismissMeterGap(event)}
               onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}

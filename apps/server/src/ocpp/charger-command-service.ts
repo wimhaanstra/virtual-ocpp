@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { CommunicationJournalService } from '../communication-journal.js';
+import type {
+  ChangeConfigurationRequest,
+  ChangeConfigurationResponse,
+  GetConfigurationRequest,
+  GetConfigurationResponse,
+  TriggerMessageRequest,
+  TriggerMessageResponse
+} from './types.js';
 
 type ConnectedChargerClient = {
   call: (method: string, params: Record<string, unknown>, options?: { callTimeoutMs?: number }) => Promise<unknown>;
@@ -39,14 +47,34 @@ export class ChargerCommandService {
     }
   }
 
+  async getConfiguration(chargerId: string, params: GetConfigurationRequest): Promise<GetConfigurationResponse> {
+    return this.callCharger<GetConfigurationRequest, GetConfigurationResponse>(chargerId, 'GetConfiguration', params);
+  }
+
+  async changeConfiguration(chargerId: string, params: ChangeConfigurationRequest): Promise<ChangeConfigurationResponse> {
+    return this.callCharger<ChangeConfigurationRequest, ChangeConfigurationResponse>(chargerId, 'ChangeConfiguration', params);
+  }
+
+  async triggerMessage(chargerId: string, params: TriggerMessageRequest): Promise<TriggerMessageResponse> {
+    return this.callCharger<TriggerMessageRequest, TriggerMessageResponse>(chargerId, 'TriggerMessage', params);
+  }
+
   async remoteStopTransaction(chargerId: string, transactionId: number): Promise<RemoteStopResult> {
+    return this.callCharger<{ transactionId: number }, RemoteStopResult>(chargerId, 'RemoteStopTransaction', { transactionId }, transactionId);
+  }
+
+  private async callCharger<TParams extends object, TResult extends Record<string, unknown>>(
+    chargerId: string,
+    method: string,
+    payload: TParams,
+    transactionId?: number
+  ): Promise<TResult> {
     const client = this.clients.get(chargerId);
     if (!client) {
       throw new ChargerCommandError('charger_not_connected', `Charger ${chargerId} is not connected`);
     }
 
     const correlationId = randomUUID();
-    const payload = { transactionId };
     this.communicationJournal?.recordEntry({
       direction: 'outbound',
       sourceType: 'server',
@@ -55,15 +83,14 @@ export class ChargerCommandService {
       targetId: chargerId,
       chargerId,
       messageType: 'call',
-      ocppMethod: 'RemoteStopTransaction',
+      ocppMethod: method,
       transactionId,
       payload,
       correlationId
     });
 
     try {
-      const response = (await client.call('RemoteStopTransaction', payload, { callTimeoutMs: 5000 })) as { status?: unknown };
-      const status = typeof response.status === 'string' ? response.status : 'Unknown';
+      const response = (await client.call(method, payload as Record<string, unknown>, { callTimeoutMs: 5000 })) as TResult;
       this.communicationJournal?.recordEntry({
         direction: 'inbound',
         sourceType: 'charger',
@@ -72,12 +99,12 @@ export class ChargerCommandService {
         targetId: 'server',
         chargerId,
         messageType: 'callResult',
-        ocppMethod: 'RemoteStopTransaction',
+        ocppMethod: method,
         transactionId,
         payload: response,
         correlationId
       });
-      return { status };
+      return response;
     } catch (error) {
       this.communicationJournal?.recordEntry({
         direction: 'inbound',
@@ -87,7 +114,7 @@ export class ChargerCommandService {
         targetId: 'server',
         chargerId,
         messageType: 'callError',
-        ocppMethod: 'RemoteStopTransaction',
+        ocppMethod: method,
         transactionId,
         payload: serializeErrorPayload(error),
         errorCode: getErrorCode(error),

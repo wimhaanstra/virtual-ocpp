@@ -503,6 +503,136 @@ describe('OCPP 1.6 local primary', () => {
     expect(server.db.select().from(logs).all().some((row) => row.message === 'remote stop transaction requested')).toBe(true);
   });
 
+  it('sends diagnostic and configuration commands to the connected charger', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const getConfigurationCalls: Array<Record<string, unknown>> = [];
+    const changeConfigurationCalls: Array<Record<string, unknown>> = [];
+    const triggerMessageCalls: Array<Record<string, unknown>> = [];
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-COMMANDS');
+    charger.handle('GetConfiguration', async ({ params }) => {
+      getConfigurationCalls.push(params ?? {});
+      return {
+        configurationKey: [
+          { key: 'MeterValueSampleInterval', readonly: false, value: '60' }
+        ],
+        unknownKey: ['StopTxnSampledData']
+      };
+    });
+    charger.handle('ChangeConfiguration', async ({ params }) => {
+      changeConfigurationCalls.push(params ?? {});
+      return { status: 'Accepted' };
+    });
+    charger.handle('TriggerMessage', async ({ params }) => {
+      triggerMessageCalls.push(params ?? {});
+      return { status: 'Accepted' };
+    });
+    cleanup.push(async () => { await charger.close({}); });
+
+    const cookie = await loginAdmin(server.app);
+    const getConfiguration = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/SMART-EVSE-COMMANDS/commands/get-configuration',
+      headers: { cookie },
+      payload: { key: ['MeterValueSampleInterval', 'StopTxnSampledData'] }
+    });
+    const changeConfiguration = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/SMART-EVSE-COMMANDS/commands/change-configuration',
+      headers: { cookie },
+      payload: { key: 'MeterValueSampleInterval', value: '30' }
+    });
+    const triggerMessage = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/SMART-EVSE-COMMANDS/commands/trigger-message',
+      headers: { cookie },
+      payload: { requestedMessage: 'MeterValues', connectorId: 1 }
+    });
+
+    expect(getConfiguration.statusCode).toBe(200);
+    expect(getConfiguration.json()).toMatchObject({
+      configurationKey: [{ key: 'MeterValueSampleInterval', readonly: false, value: '60' }],
+      unknownKey: ['StopTxnSampledData']
+    });
+    expect(changeConfiguration.statusCode).toBe(200);
+    expect(changeConfiguration.json()).toEqual({ status: 'Accepted' });
+    expect(triggerMessage.statusCode).toBe(200);
+    expect(triggerMessage.json()).toEqual({ status: 'Accepted' });
+    expect(getConfigurationCalls).toEqual([{ key: ['MeterValueSampleInterval', 'StopTxnSampledData'] }]);
+    expect(changeConfigurationCalls).toEqual([{ key: 'MeterValueSampleInterval', value: '30' }]);
+    expect(triggerMessageCalls).toEqual([{ requestedMessage: 'MeterValues', connectorId: 1 }]);
+
+    const journalMethods = server.db
+      .select()
+      .from(communicationJournal)
+      .all()
+      .filter((row) => row.direction === 'outbound' && row.targetType === 'charger')
+      .map((row) => row.ocppMethod);
+    expect(journalMethods).toEqual(expect.arrayContaining(['GetConfiguration', 'ChangeConfiguration', 'TriggerMessage']));
+    expect(server.db.select().from(logs).all().map((row) => row.message)).toEqual(
+      expect.arrayContaining(['get configuration requested', 'change configuration requested', 'trigger message requested'])
+    );
+  });
+
+  it('returns a conflict when sending a diagnostic command to a disconnected charger', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const cookie = await loginAdmin(server.app);
+    const response = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/OFFLINE-CHARGER/commands/trigger-message',
+      headers: { cookie },
+      payload: { requestedMessage: 'Heartbeat' }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'charger_not_connected' });
+    expect(server.db.select().from(logs).all().some((row) => row.message === 'trigger message failed')).toBe(true);
+  });
+
+  it('blocks non-allowlisted configuration commands before contacting the charger', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const chargerCalls: Array<Record<string, unknown>> = [];
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-CONFIG-ALLOWLIST');
+    charger.handle('GetConfiguration', async ({ params }) => {
+      chargerCalls.push(params ?? {});
+      return {};
+    });
+    cleanup.push(async () => { await charger.close({}); });
+
+    const cookie = await loginAdmin(server.app);
+    const fullDumpResponse = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/SMART-EVSE-CONFIG-ALLOWLIST/commands/get-configuration',
+      headers: { cookie },
+      payload: {}
+    });
+    const secretReadResponse = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/SMART-EVSE-CONFIG-ALLOWLIST/commands/get-configuration',
+      headers: { cookie },
+      payload: { key: ['AuthorizationKey'] }
+    });
+    const secretWriteResponse = await server.app.inject({
+      method: 'POST',
+      url: '/api/chargers/SMART-EVSE-CONFIG-ALLOWLIST/commands/change-configuration',
+      headers: { cookie },
+      payload: { key: 'AuthorizationKey', value: 'secret' }
+    });
+
+    expect(fullDumpResponse.statusCode).toBe(400);
+    expect(fullDumpResponse.json()).toMatchObject({ error: 'configuration_key_not_allowed' });
+    expect(secretReadResponse.statusCode).toBe(400);
+    expect(secretReadResponse.json()).toMatchObject({ error: 'configuration_key_not_allowed', blockedKeys: ['AuthorizationKey'] });
+    expect(secretWriteResponse.statusCode).toBe(400);
+    expect(secretWriteResponse.json()).toMatchObject({ error: 'configuration_key_not_writable', blockedKeys: ['AuthorizationKey'] });
+    expect(chargerCalls).toHaveLength(0);
+  });
+
   it('reuses one persistent upstream proxy connection for repeated calls', async () => {
     const proxy = await startRecordingProxyServer();
     cleanup.push(proxy.close);

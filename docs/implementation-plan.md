@@ -84,6 +84,26 @@ Acceptance criteria:
 - Timestamp and density-related preferences apply consistently across the major operator views they affect.
 - Frontend and backend tests cover preference read/write flows and rendering changes for each supported option.
 
+### OCPP diagnostics and configuration controls
+
+Add a charger-scoped OCPP diagnostics/configuration surface so operators can inspect selected non-secret charger configuration and request current state messages without dropping into raw websocket tooling.
+
+Scope:
+
+- Expose protected admin flows for charger-connected `GetConfiguration`, `ChangeConfiguration`, and `TriggerMessage` using the existing server-to-charger command path.
+- Keep configuration access allowlisted to documented non-secret OCPP keys that matter to transaction stop behavior, meter cadence, and heartbeat behavior; do not expose an unrestricted raw configuration dump in this slice.
+- Restrict configuration writes to an explicit writable-key policy, surface `Accepted`, `Rejected`, `RebootRequired`, and `NotSupported` outcomes clearly, and preserve the charger as the final authority on whether a change applies.
+- Support trigger requests only for the current-state messages that fit the existing product scope, and keep request/result/error payloads redacted and journaled like the rest of the OCPP surface.
+- Note `StopTransaction.transactionData` as a follow-up persistence and diagnostics problem instead of expanding this slice into stop-payload billing detail handling.
+
+Acceptance criteria:
+
+- Operators can request allowlisted configuration reads from a connected charger and see returned key, value, readonly, and unknown-key results without exposing secrets in frontend responses.
+- Operators can attempt allowlisted configuration changes and see whether the charger returned `Accepted`, `Rejected`, `RebootRequired`, or `NotSupported`.
+- Operators can trigger supported current-state charger messages and understand that `Accepted` means the charger intends to send the follow-up message, not that the follow-up has already arrived.
+- Disconnected chargers fail with a clear protected API error instead of hanging or creating synthetic protocol state.
+- Backend and frontend tests cover disconnected-charger failures, journaling, allowed-versus-blocked keys, change-status handling, and trigger-message result handling.
+
 ### Communication export and purge
 
 Extend the communication journal with operator-safe export and manual purge capabilities, while preserving the existing redaction boundaries.
@@ -181,6 +201,7 @@ Add a dedicated charger diagnostics view that brings together the most useful ch
 Scope:
 
 - Show per-charger connection status, recent heartbeat/traffic timing, firmware status, current transaction context, proxy target state, and recent warnings in one place.
+- Reuse the command and configuration controls from the diagnostics/configuration slice instead of re-defining `GetConfiguration`, `ChangeConfiguration`, or `TriggerMessage` behavior here.
 - Provide a compact timeline or event list that helps operators correlate charger state changes with proxy/runtime issues.
 - Link out to the communication journal for deep protocol inspection instead of duplicating the full raw trace UI.
 - Keep sensitive payloads redacted and avoid exposing backend-only secrets in diagnostic summaries.
