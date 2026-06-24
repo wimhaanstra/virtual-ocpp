@@ -2151,6 +2151,11 @@ describe("App", () => {
     });
 
     vi.stubGlobal("fetch", fetchMock);
+    const clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: clipboardWriteText }
+    });
 
     render(<App />);
 
@@ -2169,6 +2174,11 @@ describe("App", () => {
 
     expect(screen.getByText(/"password": "\[redacted\]"/)).toBeInTheDocument();
     expect(screen.getByText(/"token": "\[redacted\]"/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy payload" }));
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith(expect.stringContaining('"password": "[redacted]"'));
+    });
   });
 
   it("purges the communication journal and refreshes the list", async () => {

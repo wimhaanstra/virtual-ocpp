@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Download, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Download, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { CommunicationJournalFilters, CommunicationJournalItem, ProxyTarget } from "../types";
 import { buildCommunicationSummary, formatDateTime, formatTime, stringifyPayload } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -46,6 +46,7 @@ export function CommunicationView({
   onResetFilters
 }: CommunicationViewProps) {
   const [draftFilters, setDraftFilters] = useState(communicationFilters);
+  const [copiedPayloadId, setCopiedPayloadId] = useState<string | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const validationError = useMemo(() => validateCommunicationFilters(draftFilters), [draftFilters]);
   const scopeChip = selectedChargerLabel ? `Scope: ${selectedChargerLabel}` : null;
@@ -110,6 +111,15 @@ export function CommunicationView({
       return;
     }
     updateFiltersNow({ [key]: "" });
+  }
+
+  async function copyPayload(item: CommunicationJournalItem) {
+    if (!navigator.clipboard?.writeText) return;
+    await navigator.clipboard.writeText(stringifyPayload(item.payload));
+    setCopiedPayloadId(item.id);
+    window.setTimeout(() => {
+      setCopiedPayloadId((current) => (current === item.id ? null : current));
+    }, 1600);
   }
 
   return (
@@ -338,6 +348,7 @@ export function CommunicationView({
                     </tr>
                     {group.items.map((item) => {
                       const isExpanded = expandedCommunicationJournalId === item.id;
+                      const payloadText = stringifyPayload(item.payload);
 
                       return (
                         <Fragment key={item.id}>
@@ -382,8 +393,19 @@ export function CommunicationView({
                               <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={7}>
                                 <div className="communication-expanded__grid">
                                   <div>
-                                    <p className="eyebrow">Payload</p>
-                                    <pre className="communication-payload">{stringifyPayload(item.payload)}</pre>
+                                    <div className="communication-payload-header">
+                                      <p className="eyebrow">Payload</p>
+                                      <Button
+                                        type="button"
+                                        className="button-secondary icon-button"
+                                        onClick={() => void copyPayload(item)}
+                                        title="Copy payload"
+                                        aria-label="Copy payload"
+                                      >
+                                        {copiedPayloadId === item.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                                      </Button>
+                                    </div>
+                                    <pre className="communication-payload">{payloadText}</pre>
                                   </div>
                                   <div className="communication-details">
                                     <p>

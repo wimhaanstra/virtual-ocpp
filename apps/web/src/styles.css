@@ -2430,9 +2430,20 @@ td {
 
 .communication-expanded__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(240px, 0.9fr);
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
   gap: 10px;
   align-items: start;
+}
+
+.communication-payload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.communication-payload-header .eyebrow {
+  margin: 0;
 }
 
 .communication-payload {
@@ -2449,7 +2460,7 @@ td {
 
 .communication-details {
   display: grid;
-  gap: 7px;
+  gap: 0;
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -2458,11 +2469,34 @@ td {
 
 .communication-details p {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(96px, 0.42fr) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 12px;
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+}
+
+.communication-details p:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.communication-details p:last-child {
+  padding-bottom: 0;
 }
 
 .communication-details .eyebrow {
   margin: 0;
+  letter-spacing: 0.08em;
+}
+
+.communication-details p > span:last-child {
+  min-width: 0;
+  justify-self: end;
+  max-width: 100%;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .panel p:last-child {
