@@ -2214,7 +2214,7 @@ table {
 }
 
 .communication-table {
-  min-width: 1120px;
+  min-width: 760px;
 }
 
 .charger-table {
@@ -2946,6 +2946,80 @@ td {
 
   .sessions-table .action-row {
     flex-wrap: nowrap;
+  }
+
+  .communication-table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .communication-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .communication-table tbody,
+  .communication-table tr,
+  .communication-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .communication-table .session-date-row {
+    display: table-row;
+  }
+
+  .communication-table .session-date-row td {
+    display: table-cell;
+    width: auto;
+  }
+
+  .communication-table .communication-row {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-subtle);
+    padding: 8px 10px;
+  }
+
+  .communication-table .communication-row td {
+    display: grid;
+    grid-template-columns: minmax(86px, 32%) minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border-top: 0;
+    padding: 5px 0;
+    overflow-wrap: anywhere;
+  }
+
+  .communication-table .communication-row td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .communication-table .communication-row td[data-label="Expand"] {
+    display: flex;
+    justify-content: flex-end;
+    padding-bottom: 0;
+  }
+
+  .communication-table .communication-row td[data-label="Expand"]::before {
+    display: none;
+  }
+
+  .communication-expanded {
+    display: block;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
   }
 
   .mobile-card-table {

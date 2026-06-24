@@ -328,16 +328,13 @@ export function CommunicationView({
                   <th>Target</th>
                   <th>Method</th>
                   <th>Message type</th>
-                  <th>Charger</th>
-                  <th>Proxy target</th>
-                  <th>Transaction</th>
                 </tr>
               </thead>
               <tbody>
                 {groupedJournal.map((group) => (
                   <Fragment key={group.dateKey}>
                     <tr className="session-date-row">
-                      <td colSpan={10}>{group.label}</td>
+                      <td colSpan={7}>{group.label}</td>
                     </tr>
                     {group.items.map((item) => {
                       const isExpanded = expandedCommunicationJournalId === item.id;
@@ -355,7 +352,7 @@ export function CommunicationView({
                               }
                             }}
                           >
-                            <td>
+                            <td data-label="Expand">
                               <Button
                                 type="button"
                                 className="button-secondary icon-button session-expand-button"
@@ -371,23 +368,18 @@ export function CommunicationView({
                                 {isExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
                               </Button>
                             </td>
-                            <td>{formatTime(item.createdAt)}</td>
-                            <td>
+                            <td data-label="Time">{formatTime(item.createdAt)}</td>
+                            <td data-label="Direction">
                               <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
                             </td>
-                            <td>{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</td>
-                            <td>{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</td>
-                            <td className="mono">{item.ocppMethod || "-"}</td>
-                            <td>{item.messageType}</td>
-                            <td className="mono">{item.chargerId || "-"}</td>
-                            <td className="mono">
-                              {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
-                            </td>
-                            <td>{item.transactionId ?? "-"}</td>
+                            <td data-label="Source">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</td>
+                            <td data-label="Target">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</td>
+                            <td className="mono" data-label="Method">{item.ocppMethod || "-"}</td>
+                            <td data-label="Message type">{item.messageType}</td>
                           </tr>
                           {isExpanded ? (
                             <tr key={`${item.id}-payload`}>
-                              <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={10}>
+                              <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={7}>
                                 <div className="communication-expanded__grid">
                                   <div>
                                     <p className="eyebrow">Payload</p>
@@ -407,12 +399,34 @@ export function CommunicationView({
                                       <span>{item.direction}</span>
                                     </p>
                                     <p>
+                                      <span className="eyebrow">Message type</span>
+                                      <span>{item.messageType}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Method</span>
+                                      <span className="mono">{item.ocppMethod || "-"}</span>
+                                    </p>
+                                    <p>
                                       <span className="eyebrow">Source</span>
                                       <span className="mono">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
                                     </p>
                                     <p>
                                       <span className="eyebrow">Target</span>
                                       <span className="mono">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Charger</span>
+                                      <span className="mono">{item.chargerId || "-"}</span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Proxy target</span>
+                                      <span className="mono">
+                                        {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
+                                      </span>
+                                    </p>
+                                    <p>
+                                      <span className="eyebrow">Transaction</span>
+                                      <span className="mono">{item.transactionId ?? "-"}</span>
                                     </p>
                                     <p>
                                       <span className="eyebrow">Correlation</span>
