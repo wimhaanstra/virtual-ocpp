@@ -126,6 +126,89 @@ export function registerVisibilityRoutes(
     };
   });
 
+  app.get('/api/proxy-stop-recovery-queue', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = ChargerScopedQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_proxy_stop_recovery_queue_query', details: parsed.error.flatten() });
+    }
+
+    const queueItems = buildProxyStopRecoveryQueue(db, parsed.data.chargerId);
+    return {
+      summary: {
+        pendingStops: queueItems.length,
+        retryableStops: queueItems.filter((item) => item.proxyTarget.enabled && item.preview !== null).length
+      },
+      items: queueItems
+    };
+  });
+
+  app.post<{ Params: { mappingId: string } }>('/api/proxy-stop-recovery-queue/:mappingId/retry', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    if (!proxyAuthorization) {
+      return reply.code(503).send({ error: 'proxy_recovery_unavailable' });
+    }
+
+    const mapping = db.select().from(proxySessionMappings).where(eq(proxySessionMappings.id, request.params.mappingId)).limit(1).get();
+    if (!mapping || mapping.stoppedAt !== null) {
+      return reply.code(404).send({ error: 'proxy_stop_recovery_queue_item_not_found' });
+    }
+
+    const session = db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, mapping.chargerId), eq(chargingSessions.transactionId, mapping.localTransactionId)))
+      .limit(1)
+      .get();
+    if (!session) {
+      return reply.code(404).send({ error: 'session_not_found' });
+    }
+    if (session.status === 'active') {
+      return reply.code(409).send({ error: 'session_still_active' });
+    }
+    if (session.status !== 'stopped') {
+      return reply.code(409).send({ error: 'session_not_stopped' });
+    }
+
+    const preview = buildProxyStopRecoveryPreview(db, session, mapping.proxyTargetId, mapping.externalTransactionId);
+    if (!preview) {
+      return reply.code(404).send({ error: 'proxy_target_not_found' });
+    }
+
+    const result = await proxyAuthorization.manualStopTransaction(
+      session.chargerId,
+      mapping.proxyTargetId,
+      session.transactionId,
+      preview.payload
+    );
+
+    recordSessionLog(db, liveUpdates, {
+      level: result.ok ? 'info' : 'warn',
+      message: result.ok ? 'proxy stop transaction retry recovered' : 'proxy stop transaction retry failed',
+      chargerId: session.chargerId,
+      transactionId: session.transactionId,
+      metadata: {
+        mappingId: mapping.id,
+        proxyTargetId: result.proxyTargetId,
+        proxyTargetName: result.proxyTargetName,
+        externalTransactionId: result.externalTransactionId,
+        attempted: result.attempted,
+        ok: result.ok,
+        payload: preview.payload
+      },
+      createdAt: new Date()
+    });
+    liveUpdates?.publish('sessions', session.chargerId);
+
+    return {
+      ...preview,
+      mapping: toPublicProxySessionMapping(mapping),
+      result
+    };
+  });
+
   app.get('/api/meter-gap-events', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
@@ -943,6 +1026,62 @@ function buildProxyStopRecoverySuggestion(
     lastKnownExternalTransactionId: latestMapping?.externalTransactionId ?? null,
     lastKnownLocalTransactionId: latestMapping?.localTransactionId ?? null,
     source: latestMapping ? 'last-proxy-mapping' : 'none'
+  };
+}
+
+function buildProxyStopRecoveryQueue(db: Database, chargerId?: string) {
+  const mappingsQuery = db.select().from(proxySessionMappings);
+  const mappings = chargerId
+    ? mappingsQuery
+        .where(and(eq(proxySessionMappings.chargerId, chargerId), isNull(proxySessionMappings.stoppedAt)))
+        .orderBy(desc(proxySessionMappings.createdAt))
+        .all()
+    : mappingsQuery.where(isNull(proxySessionMappings.stoppedAt)).orderBy(desc(proxySessionMappings.createdAt)).all();
+
+  const items = [];
+  for (const mapping of mappings) {
+    const session = db
+      .select()
+      .from(chargingSessions)
+      .where(and(eq(chargingSessions.chargerId, mapping.chargerId), eq(chargingSessions.transactionId, mapping.localTransactionId)))
+      .limit(1)
+      .get();
+    if (!session || session.status !== 'stopped') continue;
+
+    const target = db.select().from(proxyTargets).where(eq(proxyTargets.id, mapping.proxyTargetId)).limit(1).get() ?? null;
+    const preview = target ? buildProxyStopRecoveryPreview(db, session, mapping.proxyTargetId, mapping.externalTransactionId) : null;
+
+    items.push({
+      mapping: toPublicProxySessionMapping(mapping),
+      session: toPublicChargingSession(session),
+      proxyTarget: {
+        id: mapping.proxyTargetId,
+        name: target?.name ?? mapping.proxyTargetId,
+        enabled: target?.enabled === true
+      },
+      externalTransactionId: mapping.externalTransactionId,
+      payload: preview?.payload ?? null,
+      preview,
+      warnings: [
+        ...(target ? [] : ['The proxy target no longer exists.']),
+        ...(preview?.warnings.filter((warning) => warning !== 'A proxy mapping already exists for this local session. Review the external transaction id before submitting.') ?? [])
+      ]
+    });
+    if (items.length >= RECENT_LIMIT) break;
+  }
+
+  return items;
+}
+
+function toPublicProxySessionMapping(mapping: typeof proxySessionMappings.$inferSelect) {
+  return {
+    id: mapping.id,
+    chargerId: mapping.chargerId,
+    proxyTargetId: mapping.proxyTargetId,
+    localTransactionId: mapping.localTransactionId,
+    externalTransactionId: mapping.externalTransactionId,
+    createdAt: mapping.createdAt.toISOString(),
+    stoppedAt: mapping.stoppedAt?.toISOString() ?? null
   };
 }
 

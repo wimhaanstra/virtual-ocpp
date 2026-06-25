@@ -140,6 +140,8 @@ See `docs/deployment.md` for Traefik/reverse proxy, TLS, storage override, and s
 - `GET /api/sessions` lists recent charging sessions. Requires admin session.
 - `GET /api/active-session-audit?chargerId=...` lists active sessions that may have missed `StopTransaction`, with latest meter/status context and active proxy mappings. Requires admin session.
 - `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` to the connected charger for an active session. Requires admin session.
+- `GET /api/proxy-stop-recovery-queue?chargerId=...` lists stopped local sessions whose upstream proxy mapping is still open, including the preserved upstream transaction id and preview `StopTransaction` payload. Requires admin session.
+- `POST /api/proxy-stop-recovery-queue/:mappingId/retry` retries one queued upstream proxy `StopTransaction` and clears the queue item only after the proxy call succeeds. Requires admin session.
 - `POST /api/sessions/:id/proxy-stop-recovery-suggestion` predicts the next upstream transaction id for one proxy target from the latest stored proxy mapping. Requires admin session.
 - `POST /api/sessions/:id/proxy-stop-recovery-preview` previews a manual `StopTransaction` for one proxy target using an operator-supplied upstream transaction id. Requires admin session.
 - `POST /api/sessions/:id/proxy-stop-recovery` sends that manual proxy `StopTransaction` for an already-stopped local session and records the recovered upstream mapping. Requires admin session.

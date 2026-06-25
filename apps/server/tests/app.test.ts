@@ -1723,6 +1723,143 @@ describe('app', () => {
     await app.close();
   });
 
+  it('queues and retries stopped local sessions with open proxy stop mappings', async () => {
+    const proxy = await startRecordingProxyServer();
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = () => {
+      proxy.close();
+      tempDb.close();
+    };
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-open-proxy-stop',
+      chargerId: 'SMART-EVSE-RETRY-STOP',
+      connectorId: 1,
+      transactionId: 901,
+      idTag: 'TAG-RETRY',
+      startedAt: new Date('2026-06-22T10:42:39.000Z'),
+      stoppedAt: new Date('2026-06-23T05:39:03.000Z'),
+      startMeterWh: 472632,
+      stopMeterWh: 480341,
+      stopReason: 'EVDisconnected',
+      status: 'stopped'
+    }).run();
+    tempDb.db.insert(proxyTargets).values({
+      id: 'proxy-retry-stop',
+      chargerId: 'SMART-EVSE-RETRY-STOP',
+      name: 'TapElectric',
+      url: proxy.endpoint,
+      stationId: '8881',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open',
+      createdAt: new Date('2026-06-22T10:00:00.000Z'),
+      updatedAt: new Date('2026-06-22T10:00:00.000Z')
+    }).run();
+    tempDb.db.insert(proxySessionMappings).values({
+      id: 'open-proxy-stop-mapping',
+      chargerId: 'SMART-EVSE-RETRY-STOP',
+      proxyTargetId: 'proxy-retry-stop',
+      localTransactionId: 901,
+      externalTransactionId: 10084,
+      createdAt: new Date('2026-06-22T10:42:40.000Z'),
+      stoppedAt: null
+    }).run();
+
+    const queueResponse = await app.inject({
+      method: 'GET',
+      url: '/api/proxy-stop-recovery-queue?chargerId=SMART-EVSE-RETRY-STOP',
+      headers: { cookie }
+    });
+
+    expect(queueResponse.statusCode).toBe(200);
+    expect(queueResponse.json()).toMatchObject({
+      summary: {
+        pendingStops: 1,
+        retryableStops: 1
+      },
+      items: [
+        {
+          mapping: {
+            id: 'open-proxy-stop-mapping',
+            localTransactionId: 901,
+            externalTransactionId: 10084,
+            stoppedAt: null
+          },
+          session: {
+            id: 'session-open-proxy-stop',
+            status: 'stopped'
+          },
+          proxyTarget: {
+            id: 'proxy-retry-stop',
+            name: 'TapElectric',
+            enabled: true
+          },
+          payload: {
+            transactionId: 10084,
+            idTag: 'TAG-RETRY',
+            meterStop: 480341,
+            timestamp: '2026-06-23T05:39:03.000Z',
+            reason: 'EVDisconnected'
+          }
+        }
+      ]
+    });
+
+    const retryResponse = await app.inject({
+      method: 'POST',
+      url: '/api/proxy-stop-recovery-queue/open-proxy-stop-mapping/retry',
+      headers: { cookie }
+    });
+
+    expect(retryResponse.statusCode).toBe(200);
+    expect(retryResponse.json()).toMatchObject({
+      externalTransactionId: 10084,
+      result: {
+        proxyTargetId: 'proxy-retry-stop',
+        proxyTargetName: 'TapElectric',
+        externalTransactionId: 10084,
+        attempted: true,
+        ok: true
+      }
+    });
+    expect(proxy.calls.find((call) => call.method === 'StopTransaction')?.params).toMatchObject({
+      transactionId: 10084,
+      idTag: 'TAG-RETRY',
+      meterStop: 480341,
+      timestamp: '2026-06-23T05:39:03.000Z',
+      reason: 'EVDisconnected'
+    });
+    expect(tempDb.db.select().from(proxySessionMappings).where(eq(proxySessionMappings.id, 'open-proxy-stop-mapping')).get()?.stoppedAt).toBeInstanceOf(Date);
+    expect(
+      tempDb.db
+        .select()
+        .from(logs)
+        .where(eq(logs.message, 'proxy stop transaction retry recovered'))
+        .get()
+    ).toMatchObject({ chargerId: 'SMART-EVSE-RETRY-STOP', transactionId: 901 });
+
+    const emptyQueueResponse = await app.inject({
+      method: 'GET',
+      url: '/api/proxy-stop-recovery-queue?chargerId=SMART-EVSE-RETRY-STOP',
+      headers: { cookie }
+    });
+
+    expect(emptyQueueResponse.statusCode).toBe(200);
+    expect(emptyQueueResponse.json()).toMatchObject({
+      summary: {
+        pendingStops: 0,
+        retryableStops: 0
+      },
+      items: []
+    });
+
+    await app.close();
+  });
+
   it('returns active session audit warnings and proxy mapping context', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();
