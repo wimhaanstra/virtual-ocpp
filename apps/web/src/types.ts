@@ -258,6 +258,8 @@ export type ActiveSessionAuditItem = {
   transactionId: number;
   startedAt: string;
   chargerConnected: boolean;
+  disconnectSource: "startup_reconciliation" | "charger_disconnect" | null;
+  disconnectSourceAt: string | null;
   latestStatus: string | null;
   latestStatusAt: string | null;
   latestMeterSampleAt: string | null;

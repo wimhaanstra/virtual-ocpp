@@ -578,6 +578,7 @@ function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessi
     .get();
   const latestStatus = findLatestConnectorStatus(db, session);
   const latestEnergy = findLatestEnergySampleForSession(db, session);
+  const disconnectSource = findDisconnectSource(db, session);
   const proxyMappings = getActiveProxyMappings(db, session).map(({ mapping, target }) => ({
     proxyTargetId: mapping.proxyTargetId,
     proxyTargetName: target?.name ?? mapping.proxyTargetId,
@@ -598,6 +599,8 @@ function buildActiveSessionAuditItem(db: Database, session: typeof chargingSessi
     transactionId: session.transactionId,
     startedAt: session.startedAt.toISOString(),
     chargerConnected: Boolean(activeConnection),
+    disconnectSource: disconnectSource.source,
+    disconnectSourceAt: disconnectSource.at?.toISOString() ?? null,
     latestStatus: latestStatus?.status ?? null,
     latestStatusAt: latestStatus?.createdAt.toISOString() ?? null,
     latestMeterSampleAt: latestEnergy?.sampledAt.toISOString() ?? null,
@@ -640,13 +643,7 @@ function buildActiveSessionWarnings(
   }
 
   if (!context.chargerConnected) {
-    const latestConnection = db
-      .select()
-      .from(chargerConnections)
-      .where(eq(chargerConnections.chargerId, session.chargerId))
-      .orderBy(desc(chargerConnections.connectedAt))
-      .limit(1)
-      .get();
+    const latestConnection = findLatestConnection(db, session.chargerId);
     warnings.push({
       code: 'charger_disconnected_without_stop_transaction',
       severity: 'warn',
@@ -691,6 +688,36 @@ function findLatestConnectorStatus(db: Database, session: typeof chargingSession
   }
 
   return null;
+}
+
+function findLatestConnection(db: Database, chargerId: string) {
+  return db
+    .select()
+    .from(chargerConnections)
+    .where(eq(chargerConnections.chargerId, chargerId))
+    .orderBy(desc(chargerConnections.connectedAt))
+    .limit(1)
+    .get() ?? null;
+}
+
+function findDisconnectSource(db: Database, session: typeof chargingSessions.$inferSelect) {
+  const latestConnection = findLatestConnection(db, session.chargerId);
+  if (!latestConnection?.disconnectedAt) {
+    return { source: null, at: null };
+  }
+
+  const startupCleanupLog = db
+    .select()
+    .from(logs)
+    .where(and(eq(logs.category, 'charger'), eq(logs.chargerId, session.chargerId), eq(logs.message, 'stale charger connection closed on startup')))
+    .orderBy(desc(logs.createdAt))
+    .limit(1)
+    .get();
+
+  return {
+    source: startupCleanupLog && Math.abs(startupCleanupLog.createdAt.getTime() - latestConnection.disconnectedAt.getTime()) < 1000 ? 'startup_reconciliation' : 'charger_disconnect',
+    at: latestConnection.disconnectedAt
+  };
 }
 
 function findLatestRemoteStopRequest(db: Database, session: typeof chargingSessions.$inferSelect) {

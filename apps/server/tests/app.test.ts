@@ -179,6 +179,19 @@ describe('app', () => {
       chargerId: 'SMART-EVSE-STALE-STARTUP',
       connectedAt: new Date('2026-06-19T09:00:00.000Z')
     }).run();
+    tempDb.db.insert(chargingSessions).values({
+      id: 'session-stale-startup',
+      chargerId: 'SMART-EVSE-STALE-STARTUP',
+      connectorId: 1,
+      transactionId: 111,
+      idTag: 'STALE-TAG',
+      startedAt: new Date('2026-06-19T09:05:00.000Z'),
+      stoppedAt: null,
+      startMeterWh: 1000,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
 
     const app = await buildApp({ config, db: tempDb.db });
 
@@ -192,6 +205,31 @@ describe('app', () => {
         chargerId: 'SMART-EVSE-STALE-STARTUP'
       })
     ]);
+    expect(app.liveUpdates.replaySince().map((event) => event.event)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'charger.disconnected',
+          chargerId: 'SMART-EVSE-STALE-STARTUP'
+        }),
+        expect.objectContaining({
+          type: 'refresh',
+          topic: 'sessions',
+          chargerId: 'SMART-EVSE-STALE-STARTUP'
+        })
+      ])
+    );
+    const cookie = await login(app);
+    const audit = await app.inject({
+      method: 'GET',
+      url: '/api/active-session-audit?chargerId=SMART-EVSE-STALE-STARTUP',
+      headers: { cookie }
+    });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json().items[0]).toMatchObject({
+      sessionId: 'session-stale-startup',
+      disconnectSource: 'startup_reconciliation',
+      disconnectSourceAt: expect.any(String)
+    });
 
     await app.close();
   });
@@ -1787,6 +1825,8 @@ describe('app', () => {
           connectorId: 1,
           transactionId: 501,
           chargerConnected: false,
+          disconnectSource: 'charger_disconnect',
+          disconnectSourceAt: '2026-06-19T09:20:00.000Z',
           latestStatus: 'Available',
           latestMeterWh: 1400,
           forceCloseMeterSource: 'latest-meter-sample',

@@ -37,6 +37,7 @@ export function closeStaleChargerConnections(db: Database, liveUpdates?: LiveUpd
       connectionId: connection.id,
       disconnectedAt: stoppedAt.toISOString()
     });
+    liveUpdates?.publish('sessions', connection.chargerId);
   }
 
   return openConnections.length;
