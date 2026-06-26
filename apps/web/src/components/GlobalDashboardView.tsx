@@ -1,4 +1,4 @@
-import { ArrowRight, BatteryCharging, Gauge, MessageSquareText, TriangleAlert } from "lucide-react";
+import { ArrowRight, BatteryCharging, Gauge, MessagesSquare, TriangleAlert } from "lucide-react";
 import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats, CommunicationJournalFilters, MeterGapEvent } from "../types";
 import {
   formatDateTime,
@@ -125,7 +125,7 @@ export function GlobalDashboardView({
                         >
                           {getChargerConnectionLabel(charger)}
                         </span>
-                        <div className="action-row compact-action-row">
+                        <div className="action-row compact-action-row runtime-status-card__actions">
                           <Button
                             type="button"
                             className="button-secondary icon-button overview-icon-action"
@@ -133,7 +133,7 @@ export function GlobalDashboardView({
                             title="Show charger communication"
                             aria-label={`Show communication for ${chargerId}`}
                           >
-                            <MessageSquareText aria-hidden="true" />
+                            <MessagesSquare aria-hidden="true" />
                           </Button>
                           <Button
                             type="button"

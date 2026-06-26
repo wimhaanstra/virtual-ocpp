@@ -168,8 +168,15 @@ wa-button.overview-icon-action::part(base):hover {
 }
 
 .runtime-status-card__controls {
-  display: grid;
-  justify-items: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.runtime-status-card__actions {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
 }
 
