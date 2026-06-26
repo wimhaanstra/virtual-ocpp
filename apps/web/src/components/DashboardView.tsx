@@ -55,14 +55,14 @@ export function DashboardView({
 
   return (
     <section className="home-stack charger-dashboard-stack">
-      <section className="charger-dashboard-hero" aria-label="Charger summary">
-        <div className="charger-dashboard-hero__header">
-          <div>
+      <section className="charger-dashboard-hero dashboard-item" aria-label="Charger summary">
+        <div className="charger-dashboard-hero__header dashboard-item__header">
+          <div className="dashboard-item__identity">
             <p className="eyebrow">Selected charger</p>
             <h2>{selectedChargerLabel}</h2>
             <p className="status-copy mono">{selectedChargerId || "Select a charger context"}</p>
           </div>
-          <div className="topbar-actions">
+          <div className="topbar-actions dashboard-item__actions">
             <Button
               type="button"
               className="button-secondary icon-button overview-icon-action"
@@ -86,7 +86,7 @@ export function DashboardView({
           </div>
         </div>
 
-        <div className="charger-dashboard-metrics">
+        <div className="charger-dashboard-metrics dashboard-item__badges">
           <article>
             <span>Total sessions</span>
             <strong>{sessionSummary ? sessionSummary.totalSessions : "-"}</strong>
@@ -167,9 +167,9 @@ export function DashboardView({
             ) : chargingStats.length > 0 ? (
               <div className="charging-session-stack">
                 {chargingStats.map((stats) => (
-                  <article className="charging-session-card" key={stats.sessionId}>
-                    <div className="charging-session-card__header">
-                      <div className="charging-session-card__heading">
+                  <article className="charging-session-card dashboard-item" key={stats.sessionId}>
+                    <div className="charging-session-card__header dashboard-item__header">
+                      <div className="charging-session-card__heading dashboard-item__identity">
                         <h4>Transaction {stats.transactionId}</h4>
                         <p className="charging-session-card__meta">
                           <span>{stats.chargerId}</span>
@@ -177,67 +177,69 @@ export function DashboardView({
                           <span>Started {formatDuration(stats.elapsedSeconds)} ago</span>
                         </p>
                       </div>
-                      <span className={`charging-state-badge ${stats.latestSampleAt === null ? "charging-state-badge-pending" : "charging-state-badge-live"}`}>Charging</span>
+                      <div className="dashboard-item__actions">
+                        <span className={`charging-state-badge ${stats.latestSampleAt === null ? "charging-state-badge-pending" : "charging-state-badge-live"}`}>Charging</span>
+                        <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
+                          <ArrowRight aria-hidden="true" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="charging-session-summary">
-                      <div>
-                        <span>Tag</span>
-                        <strong>{stats.idTag ?? "None"}</strong>
-                      </div>
-                      <div>
-                        <span>Start meter</span>
-                        <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
-                      </div>
-                      {stats.latestSampleAt === null ? (
+                    <div className="dashboard-item__badges charging-session-badges">
+                      <div className="charging-session-summary">
                         <div>
-                          <span>MeterValues</span>
-                          <strong>Pending</strong>
+                          <span>Tag</span>
+                          <strong>{stats.idTag ?? "None"}</strong>
                         </div>
-                      ) : (
-                        <>
-                          <div>
-                            <span>Last sample</span>
-                            <strong>{formatDateTime(stats.latestSampleAt)}</strong>
-                          </div>
-                          <div>
-                            <span>Match</span>
-                            <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <div className="charging-stats-grid">
-                      <div>
-                        <span>Energy used</span>
-                        <strong>{formatEnergyWh(stats.energyUsedWh)}</strong>
-                      </div>
-                      <div>
-                        <span>Charging power</span>
-                        <strong>{formatPowerW(stats.latestPowerW)}</strong>
-                      </div>
-                      <div>
-                        <span>Current</span>
-                        <strong>{formatDecimalUnit(stats.latestCurrentA, "A")}</strong>
-                      </div>
-                      <div>
-                        <span>Voltage</span>
-                        <strong>{formatDecimalUnit(stats.latestVoltageV, "V")}</strong>
-                      </div>
-                      <div>
-                        <span>Temperature</span>
-                        <strong>{formatDecimalUnit(stats.latestTemperatureC, "C")}</strong>
-                      </div>
-                      {stats.latestCurrentPhasesA ? (
                         <div>
-                          <span>Phase current</span>
-                          <strong>{formatPhaseValues(stats.latestCurrentPhasesA, "A")}</strong>
+                          <span>Start meter</span>
+                          <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
                         </div>
-                      ) : null}
-                    </div>
-                    <div className="action-row compact-action-row">
-                      <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
-                        <ArrowRight aria-hidden="true" />
-                      </Button>
+                        {stats.latestSampleAt === null ? (
+                          <div>
+                            <span>MeterValues</span>
+                            <strong>Pending</strong>
+                          </div>
+                        ) : (
+                          <>
+                            <div>
+                              <span>Last sample</span>
+                              <strong>{formatDateTime(stats.latestSampleAt)}</strong>
+                            </div>
+                            <div>
+                              <span>Match</span>
+                              <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="charging-stats-grid">
+                        <div>
+                          <span>Energy used</span>
+                          <strong>{formatEnergyWh(stats.energyUsedWh)}</strong>
+                        </div>
+                        <div>
+                          <span>Charging power</span>
+                          <strong>{formatPowerW(stats.latestPowerW)}</strong>
+                        </div>
+                        <div>
+                          <span>Current</span>
+                          <strong>{formatDecimalUnit(stats.latestCurrentA, "A")}</strong>
+                        </div>
+                        <div>
+                          <span>Voltage</span>
+                          <strong>{formatDecimalUnit(stats.latestVoltageV, "V")}</strong>
+                        </div>
+                        <div>
+                          <span>Temperature</span>
+                          <strong>{formatDecimalUnit(stats.latestTemperatureC, "C")}</strong>
+                        </div>
+                        {stats.latestCurrentPhasesA ? (
+                          <div>
+                            <span>Phase current</span>
+                            <strong>{formatPhaseValues(stats.latestCurrentPhasesA, "A")}</strong>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -265,25 +267,32 @@ export function DashboardView({
         ) : (
           <div className="proxy-health-list">
             {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
-              <article className="proxy-health-list-item" key={health.proxyTargetId}>
-                <div>
-                  <strong>{health.name}</strong>
-                  <span className="status-copy">{buildProxyHealthDetail(health)}</span>
-                  <span className="status-copy mono">{connectionUrl || health.upstreamIdentity || "No upstream identity"}</span>
+              <article className="proxy-health-list-item dashboard-item" key={health.proxyTargetId}>
+                <div className="dashboard-item__header">
+                  <div className="dashboard-item__identity">
+                    <h3>{health.name}</h3>
+                    <p className="status-copy">{buildProxyHealthDetail(health)}</p>
+                  </div>
+                  <div className="proxy-health-actions dashboard-item__actions">
+                    <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
+                      {formatProxyHealthState(health.state)}
+                    </span>
+                    <Button
+                      type="button"
+                      className="button-secondary icon-button overview-icon-action"
+                      onClick={() => onOpenCommunication({ proxyTargetId: health.proxyTargetId })}
+                      title="Show proxy communication"
+                      aria-label={`Show communication for ${health.name}`}
+                    >
+                      <MessageSquareText aria-hidden="true" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="proxy-health-actions">
-                  <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
-                    {formatProxyHealthState(health.state)}
-                  </span>
-                  <Button
-                    type="button"
-                    className="button-secondary icon-button"
-                    onClick={() => onOpenCommunication({ proxyTargetId: health.proxyTargetId })}
-                    title="Show proxy communication"
-                    aria-label={`Show communication for ${health.name}`}
-                  >
-                    <MessageSquareText aria-hidden="true" />
-                  </Button>
+                <div className="dashboard-item__badges proxy-health-badges">
+                  <div>
+                    <span>Upstream</span>
+                    <strong className="mono">{connectionUrl || health.upstreamIdentity || "No upstream identity"}</strong>
+                  </div>
                 </div>
               </article>
             ))}

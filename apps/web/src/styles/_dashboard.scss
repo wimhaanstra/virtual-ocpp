@@ -2,6 +2,45 @@
   gap: 18px;
 }
 
+.dashboard-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dashboard-item__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.dashboard-item__identity {
+  min-width: 0;
+}
+
+.dashboard-item__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dashboard-item__badges {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: auto;
+}
+
+.dashboard-item__badges > article,
+.dashboard-item__badges > div {
+  min-width: 0;
+}
+
 .charger-dashboard-stack .charger-dashboard-hero {
   gap: 14px;
   border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
@@ -11,10 +50,6 @@
   padding: 14px;
 }
 
-.charger-dashboard-stack .charger-dashboard-hero__header {
-  align-items: center;
-}
-
 .charger-dashboard-stack .charger-dashboard-hero h2 {
   margin-block: 2px 3px;
   font-size: clamp(24px, 2vw, 30px);
@@ -22,10 +57,7 @@
 }
 
 .charger-dashboard-stack .charger-dashboard-metrics {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
+  align-items: flex-end;
 }
 
 .charger-dashboard-stack .charger-dashboard-metrics article {
@@ -86,7 +118,8 @@
   gap: 10px;
 }
 
-.charger-live-panel .charging-session-card {
+.charger-live-panel .charging-session-card,
+.charger-proxy-section .proxy-health-list-item {
   gap: 10px;
   border: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
   border-radius: 16px;
@@ -97,15 +130,6 @@
 .charger-live-panel .charging-session-card + .charging-session-card {
   padding-top: 14px;
   border-top: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
-}
-
-.charger-live-panel .charging-session-card__header {
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.charger-live-panel .charging-session-card__heading {
-  min-width: 0;
 }
 
 .charger-live-panel .charging-session-card__heading h4 {
@@ -170,6 +194,11 @@
   color: var(--wa-color-warning-on-quiet);
 }
 
+.charger-live-panel .charging-session-badges {
+  display: grid;
+  gap: 7px;
+}
+
 .charger-live-panel .charging-session-summary,
 .charger-live-panel .charging-stats-grid {
   display: flex;
@@ -210,32 +239,59 @@
   word-break: normal;
 }
 
-.charger-live-panel .charging-session-card > .action-row {
-  justify-content: flex-end;
-}
-
 .charger-proxy-section .page-section-header {
   padding-inline: 2px;
 }
 
-.charger-proxy-section .proxy-health-list-item {
-  border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
-  padding: 12px;
+.charger-proxy-section .proxy-health-list-item h3 {
+  margin: 0 0 4px;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-m);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.charger-proxy-section .proxy-health-list-item .status-copy {
+  margin: 0;
+}
+
+.charger-proxy-section .proxy-health-badges > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
+  padding: 5px 9px;
+}
+
+.charger-proxy-section .proxy-health-badges span {
+  flex: 0 0 auto;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.04em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
+}
+
+.charger-proxy-section .proxy-health-badges strong {
+  overflow: hidden;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
-  .charger-dashboard-stack .charger-dashboard-hero__header {
-    align-items: flex-start;
-  }
-
-  .charger-live-panel .charging-session-card__header {
+  .dashboard-item__header {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .charger-live-panel .charging-state-badge {
+  .dashboard-item__actions {
     align-self: flex-start;
   }
 
