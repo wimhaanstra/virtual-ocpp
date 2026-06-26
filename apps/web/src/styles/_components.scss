@@ -12,3 +12,161 @@
   border-radius: var(--wa-border-radius-m);
   background: var(--wa-color-surface-default);
 }
+
+.panel {
+  border-color: var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-m);
+  background: var(--wa-color-surface-default);
+  box-shadow: none;
+}
+
+.home-panel,
+.table-panel,
+.settings-panel,
+.communication-filters-panel,
+.modal-panel,
+.auth-card,
+.hero-panel {
+  padding: var(--app-panel-padding);
+}
+
+.topbar-actions,
+.page-section-header,
+.modal-header {
+  align-items: start;
+  gap: 12px;
+}
+
+.field {
+  gap: 6px;
+}
+
+.field > span,
+.field > label,
+.field .eyebrow {
+  align-self: end;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.08em;
+  line-height: var(--wa-line-height-condensed);
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 38px;
+  border-color: var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-s);
+  background: var(--wa-color-surface-raised);
+  color: var(--wa-color-text-normal);
+  padding-inline: 11px;
+  font: inherit;
+  line-height: 1.25;
+}
+
+.field textarea {
+  min-height: 92px;
+  padding-block: 9px;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--wa-color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wa-color-focus) 22%, transparent);
+  background: var(--wa-color-surface-raised);
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled {
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-text-quiet);
+  cursor: not-allowed;
+}
+
+.field small,
+.field .status-copy {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  line-height: 1.35;
+}
+
+.checkbox-field,
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.checkbox-field input,
+.check-row input,
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--wa-color-brand-fill-loud);
+}
+
+.modal-backdrop {
+  padding: clamp(12px, 3vw, 28px);
+  background: var(--wa-color-overlay-modal);
+  backdrop-filter: blur(8px);
+}
+
+.modal-panel {
+  border-radius: var(--wa-border-radius-l);
+}
+
+.modal-header,
+.modal-panel > .topbar-actions.page-section-header {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.modal-header .button-ghost,
+.modal-panel > .topbar-actions.page-section-header .button-ghost {
+  justify-self: end;
+}
+
+.modal-section-form,
+.modal-form-section,
+.form-grid {
+  gap: 12px;
+}
+
+.modal-form-section {
+  padding-top: 14px;
+  border-top-color: var(--wa-color-surface-border);
+}
+
+.modal-form-section h3 {
+  font-size: var(--wa-font-size-s);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.modal-actions,
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-actions {
+  justify-content: flex-end;
+}
+
+.notice,
+.message-banner {
+  border-color: var(--wa-color-brand-border-normal);
+  border-radius: var(--wa-border-radius-m);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
+}
+
+:root[data-theme="dark"] .notice,
+:root[data-theme="dark"] .message-banner {
+  background: color-mix(in srgb, var(--wa-color-brand-fill-quiet) 74%, var(--wa-color-surface-default));
+}

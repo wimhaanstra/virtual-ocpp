@@ -43,54 +43,47 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
       {tags.length === 0 ? (
         <p>No tags configured yet.</p>
       ) : (
-        <div className="table-wrap">
-          <table className="mobile-card-table tag-access-table">
-            <thead>
-              <tr>
-                <th>Tag UUID</th>
-                <th>Label</th>
-                <th>Global status</th>
-                <th>Selected charger access</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tags.map((tag) => {
-                const allowed = getTagAccessForCharger(tag, selectedChargerId);
+        <div className="record-list registry-list tag-access-list">
+          {tags.map((tag) => {
+            const allowed = getTagAccessForCharger(tag, selectedChargerId);
 
-                return (
-                  <tr key={tag.id}>
-                    <td className="mono" data-label="Tag UUID">{tag.uuid}</td>
-                    <td data-label="Label">{tag.label || "Unlabeled"}</td>
-                    <td data-label="Global status">
-                      <span className={`pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>
-                        {tag.enabled ? "Enabled" : "Disabled"}
-                      </span>
-                    </td>
-                    <td data-label="Charger access">
-                      <span className={`pill ${allowed ? "pill-good" : "pill-warning"}`}>
-                        {allowed ? "Allowed" : "Blocked"}
-                      </span>
-                    </td>
-                    <td data-label="Created">{formatDateTime(tag.createdAt)}</td>
-                    <td data-label="Actions">
-                      <Button
-                        type="button"
-                        className="button-secondary icon-button"
-                        onClick={() => onToggleAccess(tag)}
-                        disabled={busy}
-                        title={allowed ? "Revoke access" : "Grant access"}
-                        aria-label={allowed ? "Revoke access" : "Grant access"}
-                      >
-                        {allowed ? <ShieldX aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+            return (
+              <article className="record-card registry-card tag-access-card" key={tag.id}>
+                <div className="record-card__summary">
+                  <div>
+                    <div className="record-card__title">{tag.label || "Unlabeled"}</div>
+                    <div className="record-card__subtitle mono">{tag.uuid}</div>
+                  </div>
+                  <div className="pill-stack">
+                    <span className={`pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>
+                      {tag.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <span className={`pill ${allowed ? "pill-good" : "pill-warning"}`}>
+                      {allowed ? "Allowed" : "Blocked"}
+                    </span>
+                  </div>
+                </div>
+                <dl className="detail-grid compact-detail-grid">
+                  <div>
+                    <dt>Created</dt>
+                    <dd>{formatDateTime(tag.createdAt)}</dd>
+                  </div>
+                </dl>
+                <div className="record-card__actions">
+                  <Button
+                    type="button"
+                    className="button-secondary icon-button"
+                    onClick={() => onToggleAccess(tag)}
+                    disabled={busy}
+                    title={allowed ? "Revoke access" : "Grant access"}
+                    aria-label={allowed ? "Revoke access" : "Grant access"}
+                  >
+                    {allowed ? <ShieldX aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>

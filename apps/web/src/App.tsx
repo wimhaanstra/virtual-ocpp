@@ -2345,76 +2345,80 @@ export default function App() {
                 {proxyTargets.length === 0 ? (
                   <p>No proxy targets configured yet.</p>
                 ) : (
-                  <div className="table-wrap">
-                    <table className="mobile-card-table proxy-target-table">
-                      <thead>
-                        <tr>
-                          <th>Name</th>
-                          <th>URL</th>
-                          <th>Station ID</th>
-                          <th>Mode</th>
-                          <th>Outage</th>
-                          <th>Recovery</th>
-                          <th>Status</th>
-                          <th>Credentials</th>
-                          <th>Tag mappings</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {proxyTargets.map((target) => (
-                          <tr key={target.id}>
-                            <td data-label="Name">{target.name}</td>
-                            <td className="mono" data-label="URL">{target.url}</td>
-                            <td className="mono" data-label="Station ID">{target.stationId || "Default"}</td>
-                            <td data-label="Mode">{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</td>
-                            <td data-label="Outage">{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</td>
-                            <td data-label="Recovery">{target.allowRecoverySubmissions ? "Allowed" : "Off"}</td>
-                            <td data-label="Status">
-                              <span className={`pill ${target.enabled ? "pill-good" : "pill-warning"}`}>
-                                {target.enabled ? "Enabled" : "Disabled"}
-                              </span>
-                            </td>
-                            <td data-label="Credentials">{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</td>
-                            <td data-label="Tag mappings">{formatTagMappingCount(target.tagMappings?.length ?? 0)}</td>
-                            <td data-label="Actions">
-                              <div className="action-row compact-action-row">
-                                <Button
-                                  type="button"
-                                  className="button-secondary icon-button"
-                                  onClick={() => startProxyTargetEdit(target)}
-                                  disabled={busy}
-                                  title="Edit proxy target"
-                                  aria-label="Edit"
-                                >
-                                  <Pencil aria-hidden="true" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  className="icon-button"
-                                  onClick={() => void toggleProxyTarget(target)}
-                                  disabled={busy || (!target.enabled && proxyTargetEnabledLimitReached)}
-                                  title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
-                                  aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
-                                >
-                                  {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  className="button-ghost icon-button"
-                                  onClick={() => void deleteProxyTarget(target)}
-                                  disabled={busy}
-                                  title="Delete proxy target"
-                                  aria-label="Delete"
-                                >
-                                  <Trash2 aria-hidden="true" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="record-list registry-list proxy-target-list">
+                    {proxyTargets.map((target) => (
+                      <article className="record-card registry-card proxy-target-card" key={target.id}>
+                        <div className="record-card__summary">
+                          <div>
+                            <div className="record-card__title">{target.name}</div>
+                            <div className="record-card__subtitle mono">{target.url}</div>
+                          </div>
+                          <span className={`pill ${target.enabled ? "pill-good" : "pill-warning"}`}>
+                            {target.enabled ? "Enabled" : "Disabled"}
+                          </span>
+                        </div>
+                        <dl className="detail-grid compact-detail-grid">
+                          <div>
+                            <dt>Station ID</dt>
+                            <dd className="mono">{target.stationId || "Default"}</dd>
+                          </div>
+                          <div>
+                            <dt>Mode</dt>
+                            <dd>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</dd>
+                          </div>
+                          <div>
+                            <dt>Outage</dt>
+                            <dd>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</dd>
+                          </div>
+                          <div>
+                            <dt>Recovery</dt>
+                            <dd>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</dd>
+                          </div>
+                          <div>
+                            <dt>Credentials</dt>
+                            <dd>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</dd>
+                          </div>
+                          <div>
+                            <dt>Tag mappings</dt>
+                            <dd>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</dd>
+                          </div>
+                        </dl>
+                        <div className="record-card__actions">
+                          <div className="action-row compact-action-row">
+                            <Button
+                              type="button"
+                              className="button-secondary icon-button"
+                              onClick={() => startProxyTargetEdit(target)}
+                              disabled={busy}
+                              title="Edit proxy target"
+                              aria-label="Edit"
+                            >
+                              <Pencil aria-hidden="true" />
+                            </Button>
+                            <Button
+                              type="button"
+                              className="icon-button"
+                              onClick={() => void toggleProxyTarget(target)}
+                              disabled={busy || (!target.enabled && proxyTargetEnabledLimitReached)}
+                              title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
+                              aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
+                            >
+                              {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
+                            </Button>
+                            <Button
+                              type="button"
+                              className="button-ghost icon-button"
+                              onClick={() => void deleteProxyTarget(target)}
+                              disabled={busy}
+                              title="Delete proxy target"
+                              aria-label="Delete"
+                            >
+                              <Trash2 aria-hidden="true" />
+                            </Button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
                   </div>
                 )}
               </section>
