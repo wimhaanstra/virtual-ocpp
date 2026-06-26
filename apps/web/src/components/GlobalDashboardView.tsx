@@ -153,13 +153,20 @@ export function GlobalDashboardView({
                     </div>
                     {warning ? <p className="notice notice-warning compact-notice">{warning}</p> : null}
                     <dl className="overview-stat-grid">
-                      <div>
+                      <div
+                        className="overview-stat-chip-clickable"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => onOpenSessions(chargerId)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onOpenSessions(chargerId);
+                          }
+                        }}
+                      >
                         <dt>Active</dt>
-                        <dd>
-                          <button className="inline-drilldown" type="button" onClick={() => onOpenSessions(chargerId)}>
-                            {sessions.length}
-                          </button>
-                        </dd>
+                        <dd>{sessions.length}</dd>
                       </div>
                       <div>
                         <dt>Live charge</dt>

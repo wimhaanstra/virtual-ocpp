@@ -94,6 +94,7 @@
   border-radius: var(--wa-border-radius-pill);
   background: var(--wa-color-neutral-fill-quiet);
   padding: 5px 9px;
+  white-space: nowrap;
 }
 
 .overview-stat-grid dt {
@@ -113,15 +114,23 @@
   font-weight: var(--wa-font-weight-semibold);
   line-height: var(--wa-line-height-condensed);
   overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
-.overview-stat-grid .inline-drilldown {
+.overview-stat-chip-clickable {
   color: var(--wa-color-brand-on-quiet);
-  font: inherit;
-  font-weight: var(--wa-font-weight-semibold);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+}
+
+.overview-stat-chip-clickable:hover,
+.overview-stat-chip-clickable:focus-visible {
+  border-color: var(--wa-color-brand-border-normal);
+  background: var(--wa-color-brand-fill-quiet);
+}
+
+.overview-stat-chip-clickable:focus-visible {
+  outline: 2px solid var(--wa-color-focus);
+  outline-offset: 2px;
 }
 
 .global-active-sessions {
