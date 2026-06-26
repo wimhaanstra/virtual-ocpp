@@ -312,12 +312,13 @@ export function ChargerDiagnosticsPanel({
               <p className="status-copy">Only allowlisted operational keys are accepted by the backend.</p>
               <Button
                 type="submit"
-                className="button-secondary icon-button overview-icon-action"
+                className="button-secondary compact-text-button overview-section-action command-action-button"
                 disabled={busy || !resolvedChangeKey.trim()}
                 title="Apply configuration"
                 aria-label="Apply"
               >
                 <CheckCircle2 aria-hidden="true" />
+                <span>Apply</span>
               </Button>
             </div>
             {changeCommandState.status !== "idle" ? (
@@ -360,12 +361,13 @@ export function ChargerDiagnosticsPanel({
               <p className="status-copy">The charger may return Accepted, Rejected, or NotImplemented depending on firmware support.</p>
               <Button
                 type="submit"
-                className="button-secondary icon-button overview-icon-action"
+                className="button-secondary compact-text-button overview-section-action command-action-button"
                 disabled={busy}
                 title="Trigger message"
                 aria-label="Trigger"
               >
                 <Send aria-hidden="true" />
+                <span>Trigger</span>
               </Button>
             </div>
             {triggerCommandState.status !== "idle" ? (
