@@ -184,12 +184,24 @@
     inline-size: 38px;
     min-inline-size: 38px;
     min-height: 38px;
+    block-size: 38px;
+    display: grid;
+    place-items: center;
     justify-content: center;
     border: 0;
     border-radius: 10px;
     background: transparent;
     color: var(--wa-color-text-quiet);
     padding-inline: 0;
+    cursor: pointer;
+  }
+
+  wa-button.sidebar-footer-button::part(label) {
+    display: grid;
+    place-items: center;
+    inline-size: 100%;
+    block-size: 100%;
+    line-height: 0;
   }
 
   wa-button.sidebar-footer-button::part(base):hover {
@@ -197,9 +209,17 @@
     color: var(--wa-color-brand-on-quiet);
   }
 
+  wa-button.sidebar-footer-button {
+    inline-size: 38px;
+    min-inline-size: 38px;
+    cursor: pointer;
+  }
+
   .sidebar-footer-button svg {
+    display: block;
     width: 17px;
     height: 17px;
+    pointer-events: none;
   }
 
   .app-version {

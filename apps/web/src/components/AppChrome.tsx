@@ -163,7 +163,7 @@ export function AppChrome({
           <div className="sidebar-footer-actions">
             <Button
               type="button"
-              className="button-secondary sidebar-footer-button"
+              className="button-ghost icon-button sidebar-footer-button"
               onClick={onThemeToggle}
               disabled={busy}
               title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
@@ -173,7 +173,7 @@ export function AppChrome({
             </Button>
             <Button
               type="button"
-              className="button-secondary sidebar-footer-button"
+              className="button-ghost icon-button sidebar-footer-button"
               onClick={onLogout}
               disabled={busy}
               title="Sign out"
