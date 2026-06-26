@@ -56,9 +56,19 @@
   gap: 14px;
 }
 
-.global-dashboard-main > .panel {
-  border-radius: var(--wa-border-radius-l);
-  background: color-mix(in srgb, var(--wa-color-surface-default) 92%, var(--wa-color-surface-raised));
+.overview-section {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.overview-section > .page-section-header {
+  padding-inline: 2px;
+}
+
+.overview-section > .page-section-header h2 {
+  margin-bottom: 0;
 }
 
 .runtime-status-list {
@@ -68,7 +78,9 @@
 .runtime-status-card {
   gap: 12px;
   padding: 14px;
-  background: var(--wa-color-surface-default);
+  border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
 }
 
 .runtime-status-card__header {
@@ -154,9 +166,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
-  border-color: var(--wa-color-surface-border);
-  border-radius: var(--wa-border-radius-m);
-  background: var(--wa-color-surface-default);
+  border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
   padding: 12px;
 }
 

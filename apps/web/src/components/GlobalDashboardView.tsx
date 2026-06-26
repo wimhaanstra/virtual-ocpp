@@ -94,7 +94,7 @@ export function GlobalDashboardView({
       </section>
 
       <section className="global-dashboard-main">
-        <section className="panel table-panel">
+        <section className="overview-section overview-runtime-section">
           <div className="topbar-actions page-section-header">
             <div>
               <p className="eyebrow">Chargers</p>
@@ -184,7 +184,7 @@ export function GlobalDashboardView({
           )}
         </section>
 
-        <section className="panel table-panel global-active-sessions">
+        <section className="overview-section global-active-sessions">
           <div className="topbar-actions page-section-header">
             <div>
               <p className="eyebrow">Charging</p>
