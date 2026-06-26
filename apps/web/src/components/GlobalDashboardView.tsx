@@ -90,15 +90,17 @@ export function GlobalDashboardView({
 
       <section className="global-dashboard-main">
         <section className="overview-section overview-runtime-section">
-          <div className="topbar-actions page-section-header">
+          <div className="dashboard-section-header">
             <div>
               <p className="eyebrow">Chargers</p>
               <h2>Runtime status</h2>
             </div>
-            <Button type="button" className="button-secondary overview-section-action" onClick={() => onNavigate("Chargers")}>
-              Manage
-              <ArrowRight aria-hidden="true" />
-            </Button>
+            <div className="dashboard-section-header__actions">
+              <Button type="button" className="button-secondary overview-section-action" onClick={() => onNavigate("Chargers")}>
+                Manage
+                <ArrowRight aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           {orderedChargers.length === 0 ? (
             <p>No chargers have connected yet.</p>
@@ -183,15 +185,17 @@ export function GlobalDashboardView({
         </section>
 
         <section className="overview-section global-active-sessions">
-          <div className="topbar-actions page-section-header">
+          <div className="dashboard-section-header">
             <div>
               <p className="eyebrow">Charging</p>
               <h2>Active sessions</h2>
             </div>
-            <Button type="button" className="button-secondary overview-section-action" onClick={() => onNavigate("Sessions")}>
-              Sessions
-              <ArrowRight aria-hidden="true" />
-            </Button>
+            <div className="dashboard-section-header__actions">
+              <Button type="button" className="button-secondary overview-section-action" onClick={() => onNavigate("Sessions")}>
+                Sessions
+                <ArrowRight aria-hidden="true" />
+              </Button>
+            </div>
           </div>
           {activeSessions.length === 0 ? (
             <p>No active sessions.</p>

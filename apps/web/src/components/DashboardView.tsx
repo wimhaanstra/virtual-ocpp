@@ -143,10 +143,10 @@ export function DashboardView({
 
       <section className="charger-live-panel">
         <section className="charging-stats-panel charging-stats-panel-standalone" aria-label="Live charging stats">
-            <div className="current-state__header">
+            <div className="dashboard-section-header">
               <div>
                 <p className="eyebrow">Live charging</p>
-                <h3>
+                <h2>
                   {chargingStatsStatus === "error"
                     ? "Stats unavailable"
                     : chargingStats.length > 1
@@ -158,7 +158,7 @@ export function DashboardView({
                         : chargingStatsStatus === "loading"
                           ? "Loading stats"
                           : "No active session"}
-                </h3>
+                </h2>
               </div>
               <Gauge aria-hidden="true" />
             </div>
@@ -251,19 +251,21 @@ export function DashboardView({
       </section>
 
       <section className="charger-proxy-section">
-        <div className="topbar-actions page-section-header">
+        <div className="dashboard-section-header">
           <div>
             <p className="eyebrow">Proxy health</p>
             <h2>Upstream targets</h2>
           </div>
-          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onNavigate("Proxy targets")} title="Proxy targets" aria-label="Proxy targets">
-            <ArrowRight aria-hidden="true" />
-          </Button>
+          <div className="dashboard-section-header__actions">
+            <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onNavigate("Proxy targets")} title="Proxy targets" aria-label="Proxy targets">
+              <ArrowRight aria-hidden="true" />
+            </Button>
+          </div>
         </div>
         {!selectedChargerId ? (
-          <p>Select a charger context to view upstream proxy health.</p>
+          <p className="dashboard-empty-state">Select a charger context to view upstream proxy health.</p>
         ) : proxyTargetHealth.length === 0 ? (
-          <p>No proxy targets configured for this charger.</p>
+          <p className="dashboard-empty-state">No proxy targets configured for this charger.</p>
         ) : (
           <div className="proxy-health-list">
             {proxyTargetHealth.map(({ target, health, connectionUrl }) => (

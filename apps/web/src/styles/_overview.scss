@@ -63,14 +63,6 @@
   min-width: 0;
 }
 
-.overview-section > .page-section-header {
-  padding-inline: 2px;
-}
-
-.overview-section > .page-section-header h2 {
-  margin-bottom: 0;
-}
-
 wa-button.overview-section-action::part(base) {
   min-height: 36px;
   border-color: var(--wa-color-surface-border);
