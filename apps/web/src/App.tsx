@@ -2138,18 +2138,13 @@ export default function App() {
           />
         ) : activeView === "Charger dashboard" ? (
           <DashboardView
-            busy={busy}
             chargingStats={chargingStats}
             chargingStatsStatus={chargingStatsStatus}
-            dashboardConfig={dashboardConfig}
             proxyTargetHealth={proxyTargetHealth}
-            sessionSummary={sessionSummary}
             selectedChargerId={selectedChargerId}
-            selectedChargerLabel={selectedChargerLabel}
             onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
             onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
             onNavigate={navigateToView}
-            onRefresh={() => void loadScopedData(selectedChargerId)}
           />
         ) : activeView === "Diagnostics" ? (
           <>

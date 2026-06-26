@@ -1,14 +1,11 @@
-import { useState } from "react";
-import { ArrowRight, Gauge, Info, MessageSquareText, RefreshCcw, X } from "lucide-react";
+import { ArrowRight, Gauge, MessageSquareText } from "lucide-react";
 import { Button } from "./ui/button";
 import type {
   ActiveView,
   ChargingStats,
   CommunicationJournalFilters,
-  DashboardConfig,
   ProxyHealthTarget,
-  ProxyTarget,
-  SessionSummary
+  ProxyTarget
 } from "../types";
 import { formatDateTime, formatDecimalUnit, formatDuration, formatEnergyWh, formatPowerW, formatProxyHealthState, proxyHealthTone } from "../app-helpers";
 
@@ -19,128 +16,29 @@ type ProxyTargetHealthEntry = {
 };
 
 type DashboardViewProps = {
-  busy: boolean;
   chargingStats: ChargingStats[];
   chargingStatsStatus: "idle" | "loading" | "ready" | "error";
-  dashboardConfig: DashboardConfig | null;
   proxyTargetHealth: ProxyTargetHealthEntry[];
-  sessionSummary: SessionSummary | null;
   selectedChargerId: string;
-  selectedChargerLabel: string;
   onNavigate: (view: ActiveView) => void;
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
   onOpenSessions: () => void;
-  onRefresh: () => void;
 };
 
 export function DashboardView({
-  busy,
   chargingStats,
   chargingStatsStatus,
-  dashboardConfig,
   proxyTargetHealth,
-  sessionSummary,
   selectedChargerId,
-  selectedChargerLabel,
   onNavigate,
   onOpenCommunication,
-  onOpenSessions,
-  onRefresh
+  onOpenSessions
 }: DashboardViewProps) {
-  const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const primaryActiveSession = chargingStats[0] ?? null;
   const primarySessionAwaitingMeterValues = primaryActiveSession?.latestSampleAt === null;
-  const activeSessionCount = selectedChargerId ? (sessionSummary?.activeSessions ?? chargingStats.length) : 0;
-  const hasFailingProxy = proxyTargetHealth.some(({ health }) => health.state === "backoff" || health.state === "disconnected");
 
   return (
     <section className="home-stack charger-dashboard-stack">
-      <section className="charger-dashboard-hero dashboard-item" aria-label="Charger summary">
-        <div className="charger-dashboard-hero__header dashboard-item__header">
-          <div className="dashboard-item__identity">
-            <p className="eyebrow">Selected charger</p>
-            <h2>{selectedChargerLabel}</h2>
-            <p className="status-copy mono">{selectedChargerId || "Select a charger context"}</p>
-          </div>
-          <div className="topbar-actions dashboard-item__actions">
-            <Button
-              type="button"
-              className="button-secondary icon-button overview-icon-action"
-              onClick={() => setConnectionDialogOpen(true)}
-              disabled={!selectedChargerId}
-              title="Show OCPP connection info"
-              aria-label="Show OCPP connection info"
-            >
-              <Info aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              className="button-secondary icon-button overview-icon-action"
-              onClick={onRefresh}
-              disabled={busy}
-              title="Refresh dashboard"
-              aria-label="Refresh dashboard"
-            >
-              <RefreshCcw aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="charger-dashboard-metrics dashboard-item__badges">
-          <article>
-            <span>Total sessions</span>
-            <strong>{sessionSummary ? sessionSummary.totalSessions : "-"}</strong>
-          </article>
-          <article>
-            <span>Total energy</span>
-            <strong>{formatEnergyWh(sessionSummary?.totalEnergyWh ?? null)}</strong>
-          </article>
-          <article>
-            <span>Last session</span>
-            <strong>{formatEnergyWh(sessionSummary?.lastSession?.energyWh ?? null)}</strong>
-          </article>
-          <article>
-            <span>Session active</span>
-            <strong>{activeSessionCount > 0 ? "Yes" : "No"}</strong>
-          </article>
-          <article>
-            <span>Proxy health</span>
-            <strong>{hasFailingProxy ? "Review" : `${proxyTargetHealth.filter(({ health }) => health.connected).length}/${proxyTargetHealth.length}`}</strong>
-          </article>
-        </div>
-      </section>
-
-      {connectionDialogOpen ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="panel modal-panel" role="dialog" aria-modal="true" aria-labelledby="charger-connection-title">
-            <div className="modal-header">
-              <div>
-                <p className="eyebrow">Selected charger</p>
-                <h2 id="charger-connection-title">OCPP connection</h2>
-                <p className="status-copy mono">{selectedChargerId}</p>
-              </div>
-              <Button type="button" className="button-ghost icon-button" onClick={() => setConnectionDialogOpen(false)} aria-label="Close OCPP connection info">
-                <X aria-hidden="true" />
-              </Button>
-            </div>
-            <div className="charger-connection-details">
-              <div>
-                <p className="eyebrow">OCPP URL</p>
-                <p className="mono connection-url">{dashboardConfig?.ocppWebSocketUrl ?? "Loading connection URL..."}</p>
-              </div>
-              <div>
-                <p className="eyebrow">Protocol</p>
-                <p className="mono">{dashboardConfig?.ocppProtocol ?? "ocpp1.6"}</p>
-              </div>
-              <div>
-                <p className="eyebrow">Authentication</p>
-                <p>{dashboardConfig?.ocppBasicAuthRequired ? `Basic Auth: ${dashboardConfig.ocppBasicAuthUsername ?? "charger id"}` : "No charger Basic Auth"}</p>
-              </div>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
       <section className="charger-live-panel">
         <section className="charging-stats-panel charging-stats-panel-standalone" aria-label="Live charging stats">
             <div className="dashboard-section-header">

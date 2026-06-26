@@ -468,22 +468,11 @@ describe("App", () => {
 
     fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Charger summary" })).getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
-    expect(screen.getByText("Total sessions")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("Total energy")).toBeInTheDocument();
-    expect(screen.getByText("12.45 kWh")).toBeInTheDocument();
-    expect(screen.getByText("Last session")).toBeInTheDocument();
-    expect(screen.getByText("Session active")).toBeInTheDocument();
-    expect(screen.getByText("Yes")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Charger summary" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Selected charger")).not.toBeInTheDocument();
+    expect(screen.queryByText("Total sessions")).not.toBeInTheDocument();
     expect(screen.queryByText("ws://localhost:8797/ocpp/:chargerId")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Show OCPP connection info" }));
-    const connectionDialog = await screen.findByRole("dialog", { name: "OCPP connection" });
-    expect(within(connectionDialog).getByText("ws://localhost:8797/ocpp/:chargerId")).toBeInTheDocument();
-    expect(within(connectionDialog).getByText("ocpp1.6")).toBeInTheDocument();
-    expect(within(connectionDialog).getByText("Basic Auth: charger id")).toBeInTheDocument();
-    fireEvent.click(within(connectionDialog).getByRole("button", { name: "Close OCPP connection info" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "OCPP connection" })).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Show OCPP connection info" })).not.toBeInTheDocument();
     expect(screen.queryByText("Charging ingress")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Charger connection" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Dashboard quick links")).not.toBeInTheDocument();
@@ -1309,7 +1298,7 @@ describe("App", () => {
     ).toBe(false);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
     await screen.findByRole("heading", { name: "Charger dashboard" });
-    expect(within(screen.getByRole("region", { name: "Charger summary" })).getAllByText("SMART-EVSE-NEW").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("region", { name: "Charger summary" })).not.toBeInTheDocument();
     expect(window.location.pathname).toBe("/charger-dashboard");
     await waitFor(() => expect(window.location.search).toContain("chargerId=SMART-EVSE-NEW"));
   });
