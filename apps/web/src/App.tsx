@@ -1,9 +1,6 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Pencil,
   Plus,
-  Power,
-  PowerOff,
   Trash2,
   X
 } from "lucide-react";
@@ -24,6 +21,7 @@ import { DiagnosticsView } from "./components/DiagnosticsView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
 import { GlobalDashboardView } from "./components/GlobalDashboardView";
 import { ProxyStopRecoveryModal } from "./components/ProxyStopRecoveryModal";
+import { ProxyTargetsView } from "./components/ProxyTargetsView";
 import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
 import { SettingsView } from "./components/SettingsView";
 import { TagAccessView } from "./components/TagAccessView";
@@ -77,7 +75,6 @@ import {
   emptyCommunicationJournalFilters,
   emptyProxyTargetForm,
   emptyTagForm,
-  formatTagMappingCount,
   getChargerContextId,
   getChargerDisplayLabel,
   getInitialSidebarCollapsed,
@@ -2316,135 +2313,39 @@ export default function App() {
           </>
         ) : (
           <>
-            <ChargerContextSwitcher
-              chargers={chargers}
-              selectedChargerId={selectedChargerId}
-              selectedChargerLabel={selectedChargerLabel}
-              status={selectedConnectionStatus}
-              statusTone={selectedConnectionTone}
-              onSelectCharger={setSelectedChargerId}
-            />
             <section className="proxy-target-layout">
-            <section className="panel table-panel">
-                <div className="topbar-actions page-section-header">
-                  <div>
-                  <p className="eyebrow">Routing</p>
-                  <h2>Configured targets</h2>
-                  <p className="status-copy">
-                    Targets are listed for the selected charger context. {enabledProxyTargetCount}/{MAX_ENABLED_PROXY_TARGETS_PER_CHARGER} enabled.
-                  </p>
-                  </div>
-                  <Button
-                    type="button"
-                    className="button-secondary icon-button"
-                    onClick={startProxyTargetCreate}
-                    disabled={busy || !selectedChargerId}
-                    title="Add target"
-                    aria-label="Add target"
-                  >
-                    <Plus aria-hidden="true" />
-                  </Button>
-                </div>
-                {proxyTargets.length === 0 ? (
-                  <p>No proxy targets configured yet.</p>
-                ) : (
-                  <div className="record-list registry-list proxy-target-list">
-                    {proxyTargets.map((target) => (
-                      <article className="record-card registry-card proxy-target-card" key={target.id}>
-                        <div className="record-card__summary">
-                          <div>
-                            <div className="record-card__title">{target.name}</div>
-                            <div className="record-card__subtitle mono">{target.url}</div>
-                          </div>
-                          <span className={`pill ${target.enabled ? "pill-good" : "pill-warning"}`}>
-                            {target.enabled ? "Enabled" : "Disabled"}
-                          </span>
-                        </div>
-                        <dl className="detail-grid compact-detail-grid">
-                          <div>
-                            <dt>Station ID</dt>
-                            <dd className="mono">{target.stationId || "Default"}</dd>
-                          </div>
-                          <div>
-                            <dt>Mode</dt>
-                            <dd>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</dd>
-                          </div>
-                          <div>
-                            <dt>Outage</dt>
-                            <dd>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</dd>
-                          </div>
-                          <div>
-                            <dt>Recovery</dt>
-                            <dd>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</dd>
-                          </div>
-                          <div>
-                            <dt>Credentials</dt>
-                            <dd>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</dd>
-                          </div>
-                          <div>
-                            <dt>Tag mappings</dt>
-                            <dd>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</dd>
-                          </div>
-                        </dl>
-                        <div className="record-card__actions">
-                          <div className="action-row compact-action-row">
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button"
-                              onClick={() => startProxyTargetEdit(target)}
-                              disabled={busy}
-                              title="Edit proxy target"
-                              aria-label="Edit"
-                            >
-                              <Pencil aria-hidden="true" />
-                            </Button>
-                            <Button
-                              type="button"
-                              className="icon-button"
-                              onClick={() => void toggleProxyTarget(target)}
-                              disabled={busy || (!target.enabled && proxyTargetEnabledLimitReached)}
-                              title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
-                              aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
-                            >
-                              {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
-                            </Button>
-                            <Button
-                              type="button"
-                              className="button-ghost icon-button"
-                              onClick={() => void deleteProxyTarget(target)}
-                              disabled={busy}
-                              title="Delete proxy target"
-                              aria-label="Delete"
-                            >
-                              <Trash2 aria-hidden="true" />
-                            </Button>
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
+              <ProxyTargetsView
+                busy={busy}
+                enabledCount={enabledProxyTargetCount}
+                enabledLimit={MAX_ENABLED_PROXY_TARGETS_PER_CHARGER}
+                enabledLimitReached={proxyTargetEnabledLimitReached}
+                proxyTargets={proxyTargets}
+                selectedChargerId={selectedChargerId}
+                onAdd={startProxyTargetCreate}
+                onDelete={(target) => void deleteProxyTarget(target)}
+                onEdit={startProxyTargetEdit}
+                onToggle={(target) => void toggleProxyTarget(target)}
+              />
 
-            {proxyTargetModalOpen ? (
-              <div className="modal-backdrop" role="presentation">
-                <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="proxy-target-modal-title">
-                  <div className="topbar-actions page-section-header">
-                    <div>
-                      <p className="eyebrow">Upstream CSMS</p>
-                      <h2 id="proxy-target-modal-title">{isEditingProxyTarget ? "Edit target" : "Add target"}</h2>
-                      <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
-                    </div>
-                    <Button type="button" className="button-ghost" onClick={cancelProxyTargetEdit} disabled={busy} aria-label="Close proxy target modal">
-                      <X aria-hidden="true" />
-                    </Button>
-                  </div>
-                  <form className="modal-section-form" onSubmit={submitProxyTarget}>
-                    <section className="modal-form-section">
+              {proxyTargetModalOpen ? (
+                <div className="modal-backdrop" role="presentation">
+                  <section className="panel modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="proxy-target-modal-title">
+                    <div className="topbar-actions page-section-header">
                       <div>
-                        <h3>Connection</h3>
+                        <p className="eyebrow">Upstream CSMS</p>
+                        <h2 id="proxy-target-modal-title">{isEditingProxyTarget ? "Edit target" : "Add target"}</h2>
+                        <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
                       </div>
-                      <div className="form-grid modal-form-grid">
+                      <Button type="button" className="button-ghost" onClick={cancelProxyTargetEdit} disabled={busy} aria-label="Close proxy target modal">
+                        <X aria-hidden="true" />
+                      </Button>
+                    </div>
+                    <form className="modal-section-form" onSubmit={submitProxyTarget}>
+                      <section className="modal-form-section">
+                        <div>
+                          <h3>Connection</h3>
+                        </div>
+                        <div className="form-grid modal-form-grid">
                         <label className="field">
                           <span>Name</span>
                           <input

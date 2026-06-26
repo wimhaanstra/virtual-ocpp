@@ -1795,7 +1795,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("region", { name: "Selected charger" })).not.toBeInTheDocument();
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
@@ -2667,14 +2667,14 @@ describe("App", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
+    window.history.replaceState({}, "", "/proxy-targets?chargerId=SMART-EVSE-1");
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
-    await chooseChargerFromContextSwitcher("SMART-EVSE-1");
+    expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
     expect(await screen.findByText("Tap Electric")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for proxy target Tap Electric" }));
     expect(screen.getByText("1 mapping")).toBeInTheDocument();
+    expect(screen.getByText("wss://tap.example/ocpp")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     const proxyTargetEditor = within(screen.getByRole("heading", { name: "Edit target" }).closest("section") as HTMLElement);
@@ -2842,16 +2842,11 @@ describe("App", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
+    window.history.replaceState({}, "", `/proxy-targets?chargerId=${selectedChargerId}`);
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-
-    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
-    await chooseChargerFromContextSwitcher(selectedChargerId);
-
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(screen.getByText(/Targets are listed for the selected charger context\./)).toHaveTextContent("0/3 enabled");
+    expect(screen.getByText("0/3 enabled")).toBeInTheDocument();
     expect(screen.getByText("No proxy targets configured yet.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add target" }));
@@ -2953,14 +2948,11 @@ describe("App", () => {
     });
 
     vi.stubGlobal("fetch", fetchMock);
+    window.history.replaceState({}, "", `/proxy-targets?chargerId=${selectedChargerId}`);
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
-    await chooseChargerFromContextSwitcher(selectedChargerId);
-
-    expect(await screen.findByText(/Targets are listed for the selected charger context\./)).toHaveTextContent("3/3 enabled");
+    expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
+    expect(await screen.findByText("3/3 enabled")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable proxy target" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Add target" }));
@@ -3529,7 +3521,6 @@ describe("App", () => {
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
 
     fireEvent.click(sidebar.getByRole("button", { name: "Proxy targets" }));
-    await chooseChargerFromContextSwitcher(selectedChargerId);
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
     expect(screen.getAllByText("Tap Electric").length).toBeGreaterThan(0);
 

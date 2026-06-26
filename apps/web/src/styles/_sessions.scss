@@ -114,11 +114,10 @@
 
 .session-detail-table-row td {
   padding: 0 10px 12px 56px;
-  background: color-mix(in srgb, var(--wa-color-surface-default) 74%, var(--wa-color-neutral-fill-quiet));
 }
 
 .session-detail-table-row .session-audit-row {
-  margin-bottom: 10px;
+  margin: 10px 0;
   border: 1px solid color-mix(in srgb, var(--wa-color-warning-border-normal) 58%, var(--wa-color-surface-border));
   border-radius: 12px;
   background: color-mix(in srgb, var(--wa-color-warning-fill-quiet) 54%, var(--wa-color-surface-default));
@@ -130,10 +129,8 @@
 }
 
 .session-detail-table-row .session-detail-row {
-  border: 1px solid var(--wa-color-surface-border);
-  border-radius: 12px;
-  background: var(--wa-color-surface-default);
-  padding: 12px;
+  background: transparent;
+  padding-block: 10px 4px;
 }
 
 .session-detail-table-row .session-detail-grid {
