@@ -212,7 +212,13 @@
   wa-button.sidebar-footer-button {
     inline-size: 38px;
     min-inline-size: 38px;
+    background: transparent;
     cursor: pointer;
+  }
+
+  wa-button.sidebar-footer-button.button-ghost:hover {
+    background: transparent;
+    color: inherit;
   }
 
   .sidebar-footer-button svg {
