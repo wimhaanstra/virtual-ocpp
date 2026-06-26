@@ -220,6 +220,7 @@ describe("App", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
+      const path = new URL(url, "http://localhost").pathname;
 
       if (url === "/api/auth/session") {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
@@ -467,8 +468,7 @@ describe("App", () => {
 
     fireEvent.click(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" }));
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
-    expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
-    expect(screen.getByLabelText("Charger summary")).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Charger summary" })).getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
     expect(screen.getByText("Total sessions")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("Total energy")).toBeInTheDocument();
@@ -507,8 +507,8 @@ describe("App", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).startsWith("/api/proxy-health?chargerId=SMART-EVSE-1"))).toBe(true);
   });
 
-  it("sends charger diagnostics commands from the charger dashboard", async () => {
-    window.history.replaceState({}, "", "/charger-dashboard?chargerId=SMART-EVSE-1");
+  it("sends charger diagnostics commands from the diagnostics page", async () => {
+    window.history.replaceState({}, "", "/diagnostics?chargerId=SMART-EVSE-1");
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -836,6 +836,8 @@ describe("App", () => {
     expect(screen.getByText("1.00 kWh")).toBeInTheDocument();
     expect(screen.getByText("Charging", { selector: ".charging-session-status" })).toBeInTheDocument();
     expect(screen.getByText(/Charging, waiting for first MeterValues\./)).toBeInTheDocument();
+    fireEvent.click(sidebar.getByRole("button", { name: "Diagnostics" }));
+    expect(await screen.findByRole("heading", { name: "Diagnostics", level: 1 })).toBeInTheDocument();
     expect(screen.getByText("1.50 kWh gap")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Submit meter gap gap-1" }));
@@ -1306,7 +1308,7 @@ describe("App", () => {
     ).toBe(false);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add charger" })).not.toBeInTheDocument());
     await screen.findByRole("heading", { name: "Charger dashboard" });
-    expect(within(screen.getByRole("region", { name: "Selected charger" })).getAllByText("SMART-EVSE-NEW").length).toBeGreaterThan(0);
+    expect(within(screen.getByRole("region", { name: "Charger summary" })).getAllByText("SMART-EVSE-NEW").length).toBeGreaterThan(0);
     expect(window.location.pathname).toBe("/charger-dashboard");
     await waitFor(() => expect(window.location.search).toContain("chargerId=SMART-EVSE-NEW"));
   });
@@ -1987,7 +1989,7 @@ describe("App", () => {
         return emptyVisibilityResponses(url, method)!;
       }
 
-      if (url === "/api/sessions" && method === "GET") {
+      if (url.startsWith("/api/sessions") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2060,7 +2062,7 @@ describe("App", () => {
         return emptyVisibilityResponses(url, method)!;
       }
 
-      if (url === "/api/sessions" && method === "GET") {
+      if (url.startsWith("/api/sessions") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2982,6 +2984,7 @@ describe("App", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
+      const path = new URL(url, "http://localhost").pathname;
 
       if (url === "/api/auth/session") {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
@@ -2999,7 +3002,7 @@ describe("App", () => {
         return emptyVisibilityResponses(url, method)!;
       }
 
-      if (url === "/api/sessions" && method === "GET") {
+      if (path === "/api/sessions" && method === "GET") {
         return new Response(
           JSON.stringify([
             {
@@ -3021,7 +3024,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/charging-stats" && method === "GET") {
+      if (url.startsWith("/api/charging-stats") && method === "GET") {
         return new Response(
           JSON.stringify([
             {
@@ -3047,7 +3050,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/active-session-audit" && method === "GET") {
+      if (url.startsWith("/api/active-session-audit") && method === "GET") {
         return new Response(
           JSON.stringify({
             summary: { activeSessions: sessionClosed ? 0 : 1, flaggedSessions: sessionClosed ? 0 : 1 },
@@ -3090,7 +3093,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/charging-stats" && method === "GET") {
+      if (url.startsWith("/api/charging-stats") && method === "GET") {
         return new Response(
           JSON.stringify(
             sessionClosed
@@ -3120,7 +3123,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/sessions/session-1/force-close-preview" && method === "GET") {
+      if (path === "/api/sessions/session-1/force-close-preview" && method === "GET") {
         return new Response(
           JSON.stringify({
             session: {
@@ -3174,7 +3177,7 @@ describe("App", () => {
         );
       }
 
-      if (url === "/api/sessions/session-1/force-close" && method === "POST") {
+      if (path === "/api/sessions/session-1/force-close" && method === "POST") {
         sessionClosed = true;
         return new Response(
           JSON.stringify({
@@ -3324,8 +3327,8 @@ describe("App", () => {
     expect(screen.getAllByText(/1550/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Force close" }));
     await screen.findByText("Force closed session 42.");
-    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/force-close-preview" && (init?.method ?? "GET") === "GET")).toBe(true);
-    expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/sessions/session-1/force-close" && init?.method === "POST")).toBe(true);
+    expect(fetchMock.mock.calls.some(([input, init]) => new URL(String(input), "http://localhost").pathname === "/api/sessions/session-1/force-close-preview" && (init?.method ?? "GET") === "GET")).toBe(true);
+    expect(fetchMock.mock.calls.some(([input, init]) => new URL(String(input), "http://localhost").pathname === "/api/sessions/session-1/force-close" && init?.method === "POST")).toBe(true);
     expect(await screen.findByText("OperatorForceClosed")).toBeInTheDocument();
 
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));

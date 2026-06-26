@@ -443,7 +443,7 @@ export type OnboardingState = "unknown" | "pending" | "completed" | "skipped";
 
 export type OnboardingSettingsStatus = "idle" | "loading" | "ready" | "unavailable" | "error";
 
-export type ActiveView = "Home" | "Settings" | "Charger dashboard" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
+export type ActiveView = "Home" | "Settings" | "Charger dashboard" | "Diagnostics" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
 export type ThemeMode = "dark" | "light";
 export type TimeFormatPreference = "24h" | "12h";
 

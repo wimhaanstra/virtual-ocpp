@@ -14,8 +14,9 @@ type ForceClosePreviewModalProps = {
 export function ForceClosePreviewModal({ busy, forceCloseLoading, forceClosePreview, onCancel, onExecute }: ForceClosePreviewModalProps) {
   if (!forceClosePreview) return null;
 
-  const enabledProxyPayloads = forceClosePreview.proxyPayloads.filter((entry) => entry.proxyTargetEnabled);
-  const disabledProxyPayloads = forceClosePreview.proxyPayloads.length - enabledProxyPayloads.length;
+  const proxyPayloads = forceClosePreview.proxyPayloads ?? [];
+  const enabledProxyPayloads = proxyPayloads.filter((entry) => entry.proxyTargetEnabled);
+  const disabledProxyPayloads = proxyPayloads.length - enabledProxyPayloads.length;
 
   return (
     <div className="modal-backdrop" role="presentation">

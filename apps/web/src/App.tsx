@@ -20,6 +20,7 @@ import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
 import { CommunicationPurgeModal } from "./components/CommunicationPurgeModal";
 import { CommunicationView } from "./components/CommunicationView";
 import { DashboardView } from "./components/DashboardView";
+import { DiagnosticsView } from "./components/DiagnosticsView";
 import { ForceClosePreviewModal } from "./components/ForceClosePreviewModal";
 import { GlobalDashboardView } from "./components/GlobalDashboardView";
 import { ProxyStopRecoveryModal } from "./components/ProxyStopRecoveryModal";
@@ -90,6 +91,7 @@ import {
   proxyUrlIncludesStationId,
   setTimeFormatPreference,
   setStoredPreference,
+  sortChargers,
   withChargerContext
 } from "./app-helpers";
 
@@ -106,6 +108,7 @@ type LiveRefreshTopic =
 type ChargerWizardMode = "add-charger" | "manual-onboarding" | "first-run-onboarding";
 type OnboardingTagMode = "skip" | "existing" | "create";
 const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 3;
+const chargerScopedViews = new Set<ActiveView>(["Charger dashboard", "Diagnostics", "Sessions", "Proxy targets", "Tag access"]);
 type OnboardingProxyDraft = {
   enabled: boolean;
   name: string;
@@ -361,6 +364,16 @@ export default function App() {
     const timeout = window.setTimeout(() => setMessage(""), 5_000);
     return () => window.clearTimeout(timeout);
   }, [authenticated, message]);
+
+  useEffect(() => {
+    if (!authenticated || chargers.length === 0 || !chargerScopedViews.has(activeView)) return;
+    if (selectedCharger) return;
+
+    const firstCharger = sortChargers(chargers)[0];
+    if (firstCharger) {
+      setSelectedChargerId(getChargerContextId(firstCharger));
+    }
+  }, [activeView, authenticated, chargers, selectedCharger]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -2124,6 +2137,21 @@ export default function App() {
             onSelectCharger={setSelectedChargerId}
           />
         ) : activeView === "Charger dashboard" ? (
+          <DashboardView
+            busy={busy}
+            chargingStats={chargingStats}
+            chargingStatsStatus={chargingStatsStatus}
+            dashboardConfig={dashboardConfig}
+            proxyTargetHealth={proxyTargetHealth}
+            sessionSummary={sessionSummary}
+            selectedChargerId={selectedChargerId}
+            selectedChargerLabel={selectedChargerLabel}
+            onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
+            onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
+            onNavigate={navigateToView}
+            onRefresh={() => void loadScopedData(selectedChargerId)}
+          />
+        ) : activeView === "Diagnostics" ? (
           <>
             <ChargerContextSwitcher
               chargers={chargers}
@@ -2133,27 +2161,19 @@ export default function App() {
               statusTone={selectedConnectionTone}
               onSelectCharger={setSelectedChargerId}
             />
-            <DashboardView
+            <DiagnosticsView
               activeSessionAudit={activeSessionAudit}
               busy={busy}
-              chargingStats={chargingStats}
-              chargingStatsStatus={chargingStatsStatus}
-              dashboardConfig={dashboardConfig}
               meterGapEvents={meterGapEvents}
-              proxyTargetHealth={proxyTargetHealth}
-              sessionSummary={sessionSummary}
               selectedChargerId={selectedChargerId}
               selectedChargerLabel={selectedChargerLabel}
               onChangeConfiguration={(chargerId, key, value) => changeChargerConfiguration(chargerId, key, value)}
-              onGetConfiguration={(chargerId, keys) => getChargerConfiguration(chargerId, keys)}
-              onOpenCommunication={(filters) => openCommunicationForFilters(filters)}
-              onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
-              onNavigate={navigateToView}
-              onTriggerMessage={(chargerId, requestedMessage, connectorId) => triggerChargerMessage(chargerId, requestedMessage, connectorId)}
-              onRefresh={() => void loadScopedData(selectedChargerId)}
               onDismissMeterGap={(event) => void dismissMeterGap(event)}
+              onGetConfiguration={(chargerId, keys) => getChargerConfiguration(chargerId, keys)}
+              onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
               onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
               onSubmitMeterGap={(event) => void openMeterGapSubmit(event)}
+              onTriggerMessage={(chargerId, requestedMessage, connectorId) => triggerChargerMessage(chargerId, requestedMessage, connectorId)}
             />
           </>
         ) : activeView === "Chargers" ? (

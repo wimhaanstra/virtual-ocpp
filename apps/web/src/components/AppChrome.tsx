@@ -12,7 +12,8 @@ import {
   Settings2,
   SunMoon,
   Tags as TagsIcon,
-  type LucideIcon
+  type LucideIcon,
+  Wrench
 } from "lucide-react";
 import type { ActiveView, LiveStatus, ThemeMode } from "../types";
 import { Button } from "./ui/button";
@@ -21,7 +22,8 @@ const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: Luci
   { view: "Charger dashboard", label: "Dashboard", icon: LayoutDashboard },
   { view: "Sessions", label: "Sessions", icon: ListChecks },
   { view: "Proxy targets", label: "Proxy targets", icon: PlugZap },
-  { view: "Tag access", label: "Tag access", icon: TagsIcon }
+  { view: "Tag access", label: "Tag access", icon: TagsIcon },
+  { view: "Diagnostics", label: "Diagnostics", icon: Wrench }
 ];
 
 const globalNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
@@ -40,6 +42,7 @@ const mobilePrimaryNavItems: Array<{ view: ActiveView; label: string; icon: Luci
 
 const mobileMoreNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
   { view: "Tag access", label: "Tag access", icon: TagsIcon },
+  { view: "Diagnostics", label: "Diagnostics", icon: Wrench },
   ...globalNavItems
 ];
 

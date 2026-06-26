@@ -61,6 +61,7 @@ export const viewPaths: Record<ActiveView, string> = {
   Home: "/",
   Settings: "/settings",
   "Charger dashboard": "/charger-dashboard",
+  Diagnostics: "/diagnostics",
   Chargers: "/chargers",
   "Proxy targets": "/proxy-targets",
   Tags: "/tags",

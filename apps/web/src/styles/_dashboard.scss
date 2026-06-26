@@ -1,0 +1,168 @@
+.charger-dashboard-stack {
+  gap: 18px;
+}
+
+.charger-dashboard-stack .charger-dashboard-hero {
+  gap: 14px;
+  border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-brand-fill-quiet));
+  box-shadow: none;
+  padding: 14px;
+}
+
+.charger-dashboard-stack .charger-dashboard-hero__header {
+  align-items: center;
+}
+
+.charger-dashboard-stack .charger-dashboard-hero h2 {
+  margin-block: 2px 3px;
+  font-size: clamp(24px, 2vw, 30px);
+  letter-spacing: 0;
+}
+
+.charger-dashboard-stack .charger-dashboard-metrics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.charger-dashboard-stack .charger-dashboard-metrics article {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border-color: var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.charger-dashboard-stack .charger-dashboard-metrics span,
+.charger-dashboard-stack .charger-dashboard-metrics strong {
+  display: inline;
+  line-height: var(--wa-line-height-condensed);
+}
+
+.charger-dashboard-stack .charger-dashboard-metrics span {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.04em;
+}
+
+.charger-dashboard-stack .charger-dashboard-metrics strong {
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+  font-weight: var(--wa-font-weight-semibold);
+}
+
+.charger-live-panel,
+.charger-proxy-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.charger-live-panel .charging-stats-panel {
+  gap: 12px;
+  padding: 0;
+  border: 0;
+}
+
+.charger-live-panel .current-state__header {
+  align-items: center;
+}
+
+.charger-live-panel .current-state__header h3,
+.charger-proxy-section .page-section-header h2 {
+  margin-bottom: 0;
+}
+
+.charger-live-panel .charging-session-stack {
+  gap: 10px;
+}
+
+.charger-live-panel .charging-session-card {
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
+  padding: 14px;
+}
+
+.charger-live-panel .charging-session-card + .charging-session-card {
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+}
+
+.charger-live-panel .charging-session-summary,
+.charger-live-panel .charging-stats-grid {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.charger-live-panel .charging-session-summary div,
+.charger-live-panel .charging-stats-grid div {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-color: var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.charger-live-panel .charging-session-summary span,
+.charger-live-panel .charging-stats-grid span {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.04em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
+}
+
+.charger-live-panel .charging-session-summary strong,
+.charger-live-panel .charging-stats-grid strong {
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+  word-break: normal;
+}
+
+.charger-live-panel .charging-session-card > .action-row {
+  justify-content: flex-end;
+}
+
+.charger-proxy-section .page-section-header {
+  padding-inline: 2px;
+}
+
+.charger-proxy-section .proxy-health-list-item {
+  border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
+  padding: 12px;
+}
+
+@media (max-width: 720px) {
+  .charger-dashboard-stack .charger-dashboard-hero__header {
+    align-items: flex-start;
+  }
+
+  .charger-dashboard-stack .charger-dashboard-metrics article,
+  .charger-live-panel .charging-session-summary div,
+  .charger-live-panel .charging-stats-grid div {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+}

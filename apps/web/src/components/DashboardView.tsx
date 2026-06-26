@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { ArrowRight, CheckCircle2, Gauge, Info, MessageSquareText, RefreshCcw, X } from "lucide-react";
-import { ChargerDiagnosticsPanel } from "./ChargerDiagnosticsPanel";
+import { ArrowRight, Gauge, Info, MessageSquareText, RefreshCcw, X } from "lucide-react";
 import { Button } from "./ui/button";
 import type {
-  ActiveSessionAuditResponse,
   ActiveView,
   ChargingStats,
   CommunicationJournalFilters,
   DashboardConfig,
-  MeterGapEvent,
   ProxyHealthTarget,
   ProxyTarget,
   SessionSummary
@@ -22,12 +19,10 @@ type ProxyTargetHealthEntry = {
 };
 
 type DashboardViewProps = {
-  activeSessionAudit: ActiveSessionAuditResponse | null;
   busy: boolean;
   chargingStats: ChargingStats[];
   chargingStatsStatus: "idle" | "loading" | "ready" | "error";
   dashboardConfig: DashboardConfig | null;
-  meterGapEvents: MeterGapEvent[];
   proxyTargetHealth: ProxyTargetHealthEntry[];
   sessionSummary: SessionSummary | null;
   selectedChargerId: string;
@@ -35,22 +30,14 @@ type DashboardViewProps = {
   onNavigate: (view: ActiveView) => void;
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>) => void;
   onOpenSessions: () => void;
-  onGetConfiguration: (chargerId: string, keys: string[]) => Promise<unknown>;
-  onChangeConfiguration: (chargerId: string, key: string, value: string) => Promise<unknown>;
-  onTriggerMessage: (chargerId: string, requestedMessage: string, connectorId: number | null) => Promise<unknown>;
   onRefresh: () => void;
-  onDismissMeterGap: (event: MeterGapEvent) => void;
-  onScanMeterGaps: () => void;
-  onSubmitMeterGap: (event: MeterGapEvent) => void;
 };
 
 export function DashboardView({
-  activeSessionAudit,
   busy,
   chargingStats,
   chargingStatsStatus,
   dashboardConfig,
-  meterGapEvents,
   proxyTargetHealth,
   sessionSummary,
   selectedChargerId,
@@ -58,13 +45,7 @@ export function DashboardView({
   onNavigate,
   onOpenCommunication,
   onOpenSessions,
-  onGetConfiguration,
-  onChangeConfiguration,
-  onTriggerMessage,
-  onRefresh,
-  onDismissMeterGap,
-  onScanMeterGaps,
-  onSubmitMeterGap
+  onRefresh
 }: DashboardViewProps) {
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const primaryActiveSession = chargingStats[0] ?? null;
@@ -73,7 +54,7 @@ export function DashboardView({
   const hasFailingProxy = proxyTargetHealth.some(({ health }) => health.state === "backoff" || health.state === "disconnected");
 
   return (
-    <section className="home-stack">
+    <section className="home-stack charger-dashboard-stack">
       <section className="charger-dashboard-hero" aria-label="Charger summary">
         <div className="charger-dashboard-hero__header">
           <div>
@@ -84,7 +65,7 @@ export function DashboardView({
           <div className="topbar-actions">
             <Button
               type="button"
-              className="button-secondary icon-button"
+              className="button-secondary icon-button overview-icon-action"
               onClick={() => setConnectionDialogOpen(true)}
               disabled={!selectedChargerId}
               title="Show OCPP connection info"
@@ -94,7 +75,7 @@ export function DashboardView({
             </Button>
             <Button
               type="button"
-              className="button-secondary icon-button"
+              className="button-secondary icon-button overview-icon-action"
               onClick={onRefresh}
               disabled={busy}
               title="Refresh dashboard"
@@ -160,7 +141,7 @@ export function DashboardView({
         </div>
       ) : null}
 
-      <section className="panel home-panel">
+      <section className="charger-live-panel">
         <section className="charging-stats-panel charging-stats-panel-standalone" aria-label="Live charging stats">
             <div className="current-state__header">
               <div>
@@ -247,7 +228,7 @@ export function DashboardView({
                         : `Charging. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}; last meter sample ${formatDateTime(stats.latestSampleAt)} (${formatSampleAssociation(stats.sampleAssociation)}).`}
                     </p>
                     <div className="action-row compact-action-row">
-                      <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
+                      <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
                         <ArrowRight aria-hidden="true" />
                       </Button>
                     </div>
@@ -260,13 +241,13 @@ export function DashboardView({
         </section>
       </section>
 
-      <section className="panel table-panel">
+      <section className="charger-proxy-section">
         <div className="topbar-actions page-section-header">
           <div>
             <p className="eyebrow">Proxy health</p>
             <h2>Upstream targets</h2>
           </div>
-          <Button type="button" className="button-secondary icon-button" onClick={() => onNavigate("Proxy targets")} title="Proxy targets" aria-label="Proxy targets">
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onNavigate("Proxy targets")} title="Proxy targets" aria-label="Proxy targets">
             <ArrowRight aria-hidden="true" />
           </Button>
         </div>
@@ -295,108 +276,6 @@ export function DashboardView({
                     aria-label={`Show communication for ${health.name}`}
                   >
                     <MessageSquareText aria-hidden="true" />
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <ChargerDiagnosticsPanel
-        busy={busy}
-        selectedChargerId={selectedChargerId}
-        onGetConfiguration={onGetConfiguration}
-        onChangeConfiguration={onChangeConfiguration}
-        onTriggerMessage={onTriggerMessage}
-      />
-
-      <section className="panel table-panel">
-        <div className="topbar-actions page-section-header">
-          <div>
-            <p className="eyebrow">Recovery</p>
-            <h2>Meter gaps</h2>
-            <p className="status-copy">Possible missed charging between a previous stop meter and a later session start meter.</p>
-          </div>
-          <Button type="button" className="button-secondary" onClick={onScanMeterGaps} disabled={busy || !selectedChargerId}>
-            Scan
-            <RefreshCcw aria-hidden="true" />
-          </Button>
-        </div>
-        {meterGapEvents.length > 0 ? (
-          <div className="meter-gap-list">
-            {meterGapEvents.slice(0, 3).map((event) => (
-              <article key={event.id}>
-                <div>
-                  <strong>{formatEnergyWh(event.deltaWh)} gap</strong>
-                  <p className="status-copy">
-                    Connector {event.connectorId} · {formatDateTime(event.previousStoppedAt)} to {formatDateTime(event.newStartedAt)}
-                  </p>
-                </div>
-                <div className="action-row compact-action-row">
-                  <span className="pill pill-warning">{event.status}</span>
-                  <Button
-                    type="button"
-                    className="button-secondary icon-button"
-                    onClick={() => onSubmitMeterGap(event)}
-                    disabled={busy}
-                    title="Submit recovery"
-                    aria-label={`Submit meter gap ${event.id}`}
-                  >
-                    <CheckCircle2 aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    className="button-ghost icon-button"
-                    onClick={() => onDismissMeterGap(event)}
-                    disabled={busy}
-                    title="Dismiss gap"
-                    aria-label={`Dismiss meter gap ${event.id}`}
-                  >
-                    <X aria-hidden="true" />
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p>No pending meter gaps.</p>
-        )}
-      </section>
-
-      <section className="panel table-panel">
-        <div className="topbar-actions page-section-header">
-          <div>
-            <p className="eyebrow">Session audit</p>
-            <h2>Missing stop checks</h2>
-            <p className="status-copy">Flagged active sessions scoped to {selectedChargerLabel}.</p>
-          </div>
-          <Button type="button" className="button-secondary" onClick={() => onNavigate("Sessions")}>
-            Sessions
-            <ArrowRight aria-hidden="true" />
-          </Button>
-        </div>
-        {!activeSessionAudit || activeSessionAudit.items.filter((item) => item.warnings.length > 0).length === 0 ? (
-          <p>No active sessions need attention.</p>
-        ) : (
-          <div className="session-audit-list">
-            {activeSessionAudit.items.filter((item) => item.warnings.length > 0).map((item) => (
-              <article className="session-audit-item" key={item.sessionId}>
-                <div className="proxy-health-item__header">
-                  <div>
-                    <h3>Transaction {item.transactionId}</h3>
-                    <p className="status-copy">
-                      Connector {item.connectorId}
-                      {item.latestMeterWh !== null ? `; latest meter ${formatEnergyWh(item.latestMeterWh)}` : ""}
-                      {item.latestStatus ? `; status ${item.latestStatus}` : ""}
-                    </p>
-                  </div>
-                  <span className="pill pill-warning">Needs review</span>
-                </div>
-                <p className="status-copy">{item.warnings[0]?.message}</p>
-                <div className="action-row compact-action-row">
-                  <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open sessions" aria-label={`Open session ${item.transactionId}`}>
-                    <ArrowRight aria-hidden="true" />
                   </Button>
                 </div>
               </article>
