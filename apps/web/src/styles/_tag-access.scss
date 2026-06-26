@@ -81,8 +81,16 @@
 
 .tag-access-table-cell--actions,
 .tag-access-table__actions-heading {
-  width: 86px;
+  width: 118px;
   text-align: right;
+}
+
+.tag-access-table-cell--actions {
+  padding-right: 16px;
+}
+
+.tag-access-table__actions-heading {
+  padding-right: 16px;
 }
 
 .tag-access-table-primary {
@@ -97,7 +105,9 @@
 }
 
 .tag-access-table-actions {
+  gap: 12px;
   justify-content: flex-end;
+  margin-right: 10px;
 }
 
 .tag-access-detail-table-row td {
@@ -150,5 +160,91 @@
 
   .tag-access-detail-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1120px) {
+  .tag-access-table-wrap {
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .tag-access-table,
+  .tag-access-table thead,
+  .tag-access-table tbody,
+  .tag-access-table tr,
+  .tag-access-table th,
+  .tag-access-table td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .tag-access-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .tag-access-table-row,
+  .tag-access-detail-table-row {
+    border: 1px solid var(--wa-color-surface-border);
+    background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
+  }
+
+  .tag-access-table-row {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 8px;
+    border-radius: 14px;
+    padding: 10px;
+  }
+
+  .tag-access-table-row:has(+ .tag-access-detail-table-row) {
+    border-radius: 14px 14px 0 0;
+  }
+
+  .tag-access-table-row + .tag-access-table-row {
+    margin-top: 8px;
+  }
+
+  .tag-access-table-row td {
+    border: 0;
+    padding: 0;
+  }
+
+  .tag-access-table-row td:nth-child(3),
+  .tag-access-table-row td:nth-child(4),
+  .tag-access-table-row td:nth-child(5),
+  .tag-access-table-cell--actions {
+    grid-column: 2 / -1;
+  }
+
+  .tag-access-table-row td:nth-child(4),
+  .tag-access-table-row td:nth-child(5) {
+    justify-self: start;
+  }
+
+  .tag-access-table-cell--actions {
+    justify-self: end;
+    padding-right: 0;
+  }
+
+  .tag-access-table-actions {
+    margin-right: 0;
+  }
+
+  .tag-access-detail-table-row {
+    margin-bottom: 8px;
+    border-top: 0;
+    border-radius: 0 0 14px 14px;
+  }
+
+  .tag-access-detail-table-row td {
+    border: 0;
+    padding: 10px;
   }
 }

@@ -1,15 +1,21 @@
 .global-dashboard {
+  display: grid;
   gap: 18px;
+  min-width: 0;
 }
 
 .global-dashboard-hero {
+  display: flex;
   align-items: center;
   padding: 6px 0 2px;
 }
 
 .global-dashboard-hero h2 {
   margin-block: 2px 4px;
+  color: var(--wa-color-text-normal);
   font-size: clamp(24px, 2.2vw, 32px);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
   letter-spacing: 0;
 }
 
@@ -52,14 +58,16 @@
 }
 
 .global-dashboard-main {
+  display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.72fr);
   gap: 20px;
+  min-width: 0;
 }
 
 .overview-section {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -132,6 +140,23 @@ wa-button.overview-icon-action::part(base):hover {
   border-color: var(--wa-color-brand-border-normal);
   background: var(--wa-color-brand-fill-quiet);
   color: var(--wa-color-brand-on-quiet);
+}
+
+wa-button.overview-icon-action.button-danger::part(base) {
+  border-color: color-mix(in srgb, var(--wa-color-danger-border-normal) 76%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-danger-fill-quiet) 78%, var(--wa-color-surface-default));
+  color: var(--wa-color-danger-on-quiet);
+}
+
+wa-button.overview-icon-action.button-danger::part(base):hover {
+  border-color: var(--wa-color-danger-border-normal);
+  background: color-mix(in srgb, var(--wa-color-danger-fill-quiet) 88%, var(--wa-color-surface-default));
+  color: var(--wa-color-danger-on-quiet);
+}
+
+.overview-icon-action.button-danger svg {
+  color: var(--wa-color-danger-on-quiet);
+  stroke-width: 2.35;
 }
 
 .overview-icon-action svg {
@@ -251,6 +276,7 @@ wa-button.overview-icon-action::part(base):hover {
 }
 
 .global-session-list {
+  display: grid;
   gap: 10px;
 }
 
@@ -259,6 +285,8 @@ wa-button.overview-icon-action::part(base):hover {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: 12px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
   border-color: color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
   border-radius: 16px;
   background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
@@ -266,22 +294,51 @@ wa-button.overview-icon-action::part(base):hover {
 }
 
 .global-session-card__body {
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
 .global-session-card__body strong {
   display: block;
   color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.global-session-card__body .status-copy {
+  margin: 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
   line-height: var(--wa-line-height-condensed);
 }
 
 .global-session-actions {
-  justify-items: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  white-space: nowrap;
+}
+
+.global-session-actions > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
   color: var(--wa-color-text-normal);
+  padding: 5px 9px;
   font-size: var(--wa-font-size-s);
   font-weight: var(--wa-font-weight-semibold);
-  white-space: nowrap;
+  line-height: var(--wa-line-height-condensed);
+}
+
+.global-session-actions .action-row {
+  display: inline-flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1120px) {

@@ -2,13 +2,15 @@ import WaInput from "@awesome.me/webawesome/dist/react/input/index.js";
 import WaNumberInput from "@awesome.me/webawesome/dist/react/number-input/index.js";
 import WaRadio from "@awesome.me/webawesome/dist/react/radio/index.js";
 import WaRadioGroup from "@awesome.me/webawesome/dist/react/radio-group/index.js";
-import { RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
+import { KeyRound, RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatDateTime, getOnboardingState, getOnboardingStateLabel, getOnboardingStateTone } from "../app-helpers";
-import type { CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
+import type { ActiveView, CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
 import { Button } from "./ui/button";
 
 type SettingsViewProps = {
+  apiTokenCount: number;
+  apiTokensStatus: OnboardingSettingsStatus;
   busy: boolean;
   communicationSettings: CommunicationSettings | null;
   communicationSettingsStatus: OnboardingSettingsStatus;
@@ -16,6 +18,7 @@ type SettingsViewProps = {
   onboardingSettingsStatus: OnboardingSettingsStatus;
   timeFormat: TimeFormatPreference;
   onCommunicationRetentionChange: (value: number) => void;
+  onNavigate: (view: ActiveView) => void;
   onPurgeExpiredCommunication: () => void;
   onRefreshCommunicationSettings: () => void;
   onRefreshOnboarding: () => void;
@@ -24,6 +27,8 @@ type SettingsViewProps = {
 };
 
 export function SettingsView({
+  apiTokenCount,
+  apiTokensStatus,
   busy,
   communicationSettings,
   communicationSettingsStatus,
@@ -31,6 +36,7 @@ export function SettingsView({
   onboardingSettingsStatus,
   timeFormat,
   onCommunicationRetentionChange,
+  onNavigate,
   onPurgeExpiredCommunication,
   onRefreshCommunicationSettings,
   onRefreshOnboarding,
@@ -68,6 +74,16 @@ export function SettingsView({
   const storage = communicationSettings?.storage ?? null;
   const lastPurge = communicationSettings?.lastPurge ?? null;
   const canPurgeExpired = purgeConfirmation.trim() === "PURGE";
+  const tokenStatusLabel =
+    apiTokensStatus === "loading"
+      ? "Loading"
+      : apiTokensStatus === "ready"
+        ? "Connected"
+        : apiTokensStatus === "unavailable"
+          ? "Unavailable"
+          : apiTokensStatus === "error"
+            ? "Load failed"
+            : "Idle";
 
   useEffect(() => {
     if (communicationSettings) {
@@ -139,6 +155,37 @@ export function SettingsView({
               </Button>
             </div>
             <SettingsDetailList items={onboardingDetails} />
+          </article>
+        </div>
+      </section>
+
+      <section className="settings-section settings-section-tokens">
+        <div className="dashboard-section-header settings-section-header">
+          <div>
+            <p className="eyebrow">API access</p>
+            <h2>Tokens</h2>
+          </div>
+          <div className="dashboard-section-header__actions">
+            <span className="pill overview-status-pill pill-neutral">{tokenStatusLabel}</span>
+          </div>
+        </div>
+
+        <div className="settings-card-grid">
+          <article className="settings-card">
+            <div className="settings-card__header">
+              <div>
+                <h3>Token management</h3>
+                <p>Create, rotate, and revoke API tokens on a dedicated page.</p>
+              </div>
+              <KeyRound aria-hidden="true" className="settings-card__icon" />
+            </div>
+            <SettingsDetailList items={[{ label: "Tokens", value: apiTokenCount }, { label: "Endpoint", value: tokenStatusLabel }]} />
+            <div className="settings-action-row">
+              <Button type="button" className="compact-text-button overview-section-action" onClick={() => onNavigate("Access tokens")} disabled={busy}>
+                <KeyRound aria-hidden="true" />
+                Manage tokens
+              </Button>
+            </div>
           </article>
         </div>
       </section>

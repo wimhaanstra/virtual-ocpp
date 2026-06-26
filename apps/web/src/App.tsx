@@ -13,6 +13,7 @@ import {
 } from "./api/charger-commands";
 import { AppChrome } from "./components/AppChrome";
 import { AuthPage } from "./components/AuthPage";
+import { AccessTokensView } from "./components/AccessTokensView";
 import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
 import { CommunicationPurgeModal } from "./components/CommunicationPurgeModal";
 import { CommunicationView } from "./components/CommunicationView";
@@ -26,13 +27,14 @@ import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
 import { SettingsView } from "./components/SettingsView";
 import { TagAccessView } from "./components/TagAccessView";
 import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
-import { ChargerContextSwitcher } from "./components/ChargerContextSwitcher";
 import { ChargerLabelModal } from "./components/ChargerLabelModal";
 import { ChargersView } from "./components/ChargersView";
 import { SessionsView } from "./components/SessionsView";
 import { TagsView } from "./components/TagsView";
 import type {
   ActiveSessionAuditResponse,
+  ApiToken,
+  ApiTokenScope,
   ActiveView,
   ChargerRegistryRow,
   ChargingSession,
@@ -43,6 +45,7 @@ import type {
   CommunicationJournalResponse,
   CommunicationJournalStorageSummary,
   DashboardConfig,
+  CreatedApiToken,
   ForceClosePreview,
   LiveStatus,
   LiveUpdateEnvelope,
@@ -60,6 +63,8 @@ import type {
   ProxyTagMapping,
   ProxyTarget,
   ProxyTargetFormState,
+  SessionSearchFilters,
+  SessionSearchResponse,
   SessionSummary,
   Tag,
   TagFormState,
@@ -70,9 +75,12 @@ import {
   buildCommunicationJournalQuery,
   buildCommunicationJournalExportQuery,
   buildCommunicationViewUrl,
+  buildSessionSearchQuery,
+  buildSessionViewUrl,
   buildProxyTargetConnectionUrl,
   buildViewUrl,
   emptyCommunicationJournalFilters,
+  emptySessionSearchFilters,
   emptyProxyTargetForm,
   emptyTagForm,
   getChargerContextId,
@@ -81,6 +89,7 @@ import {
   getInitialTheme,
   getInitialTimeFormat,
   getCommunicationFiltersFromSearch,
+  getSessionFiltersFromSearch,
   getSearchParam,
   getTagAccessForCharger,
   getViewFromPath,
@@ -137,6 +146,10 @@ export default function App() {
   const [proxyTargets, setProxyTargets] = useState<ProxyTarget[]>([]);
   const [chargers, setChargers] = useState<ChargerRegistryRow[]>([]);
   const [chargingSessions, setChargingSessions] = useState<ChargingSession[]>([]);
+  const [sessionFilters, setSessionFilters] = useState<SessionSearchFilters>(() => getSessionFiltersFromSearch());
+  const [sessionNextCursor, setSessionNextCursor] = useState<string | null>(null);
+  const [sessionHasMore, setSessionHasMore] = useState(false);
+  const [sessionLoadingMore, setSessionLoadingMore] = useState(false);
   const [chargingStats, setChargingStats] = useState<ChargingStats[]>([]);
   const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
   const [meterGapEvents, setMeterGapEvents] = useState<MeterGapEvent[]>([]);
@@ -179,6 +192,8 @@ export default function App() {
   const [onboardingSettingsStatus, setOnboardingSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
   const [communicationSettings, setCommunicationSettings] = useState<CommunicationSettings | null>(null);
   const [communicationSettingsStatus, setCommunicationSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
+  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
+  const [apiTokensStatus, setApiTokensStatus] = useState<OnboardingSettingsStatus>("idle");
   const [tagForm, setTagForm] = useState<TagFormState>(() => emptyTagForm());
   const [proxyTargetForm, setProxyTargetForm] = useState<ProxyTargetFormState>(() => emptyProxyTargetForm());
   const [tagModalOpen, setTagModalOpen] = useState(false);
@@ -203,6 +218,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const onboardingSettingsRequestId = useRef(0);
   const communicationSettingsRequestId = useRef(0);
+  const apiTokensRequestId = useRef(0);
   const liveRefreshTimerRef = useRef<number | null>(null);
   const liveRefreshInFlightRef = useRef(false);
   const pendingLiveRefreshTopicsRef = useRef(new Set<LiveRefreshTopic>());
@@ -325,6 +341,9 @@ export default function App() {
       if (nextView === "Communication") {
         setCommunicationFilters(getCommunicationFiltersFromSearch());
       }
+      if (nextView === "Sessions") {
+        setSessionFilters(getSessionFiltersFromSearch());
+      }
       setTagModalOpen(false);
       setProxyTargetModalOpen(false);
       setChargerWizardOpen(false);
@@ -343,9 +362,14 @@ export default function App() {
   useEffect(() => {
     if (!authenticated) return;
 
-    const nextUrl = activeView === "Communication" ? buildCommunicationViewUrl(selectedChargerId, communicationFilters) : buildViewUrl(activeView, selectedChargerId);
+    const nextUrl =
+      activeView === "Communication"
+        ? buildCommunicationViewUrl(selectedChargerId, communicationFilters)
+        : activeView === "Sessions"
+          ? buildSessionViewUrl(selectedChargerId, sessionFilters)
+          : buildViewUrl(activeView, selectedChargerId);
     window.history.replaceState({}, "", nextUrl);
-  }, [activeView, selectedChargerId, communicationFilters, authenticated]);
+  }, [activeView, selectedChargerId, communicationFilters, sessionFilters, authenticated]);
 
   useEffect(() => {
     if (!authenticated || activeView !== "Communication") return;
@@ -354,6 +378,14 @@ export default function App() {
     }, 150);
     return () => window.clearTimeout(timeout);
   }, [activeView, authenticated, selectedChargerId, communicationFilters]);
+
+  useEffect(() => {
+    if (!authenticated || activeView !== "Sessions") return;
+    const timeout = window.setTimeout(() => {
+      void loadChargingSessions(selectedChargerId, sessionFilters, { mode: "replace" });
+    }, 150);
+    return () => window.clearTimeout(timeout);
+  }, [activeView, authenticated, selectedChargerId, sessionFilters]);
 
   useEffect(() => {
     if (!authenticated || !message) return;
@@ -443,6 +475,19 @@ export default function App() {
     window.history.pushState({}, "", buildViewUrl(view, selectedChargerId));
   }
 
+  function selectChargerContext(chargerId: string) {
+    setSelectedChargerId(chargerId);
+    if (!chargerScopedViews.has(activeView) && activeView !== "Communication" && activeView !== "Sessions") return;
+
+    const nextUrl =
+      activeView === "Communication"
+        ? buildCommunicationViewUrl(chargerId, communicationFilters)
+        : activeView === "Sessions"
+          ? buildSessionViewUrl(chargerId, sessionFilters)
+          : buildViewUrl(activeView, chargerId);
+    window.history.pushState({}, "", nextUrl);
+  }
+
   function toggleTheme() {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
   }
@@ -454,6 +499,10 @@ export default function App() {
     setProxyTargets([]);
     setChargers([]);
     setChargingSessions([]);
+    setSessionFilters(emptySessionSearchFilters());
+    setSessionNextCursor(null);
+    setSessionHasMore(false);
+    setSessionLoadingMore(false);
     setChargingStats([]);
     setSessionSummary(null);
     setChargingStatsStatus("idle");
@@ -493,6 +542,8 @@ export default function App() {
     setOnboardingSettingsStatus("idle");
     setCommunicationSettings(null);
     setCommunicationSettingsStatus("idle");
+    setApiTokens([]);
+    setApiTokensStatus("idle");
     setSelectedChargerId("");
     setActiveView("Home");
     setLiveStatus("connecting");
@@ -609,7 +660,7 @@ export default function App() {
     if (topics.has("proxy-targets")) addTask(loadProxyTargets(selectedChargerId));
     if (topics.has("proxy-health")) addTask(loadProxyHealth(selectedChargerId));
     if (topics.has("sessions")) {
-      addTask(loadChargingSessions(selectedChargerId));
+      addTask(loadChargingSessions(selectedChargerId, activeView === "Sessions" ? sessionFilters : emptySessionSearchFilters()));
       addTask(loadSessionSummary(selectedChargerId));
       addTask(loadActiveSessionAudit(selectedChargerId));
       addTask(loadMeterGapEvents(selectedChargerId));
@@ -630,7 +681,7 @@ export default function App() {
   }
 
   async function loadAdminData(chargerId = selectedChargerId) {
-    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings({ autoOpen: true }), loadCommunicationSettings()]);
+    await Promise.all([loadDashboardConfig(), loadChargers(), loadOnboardingSettings({ autoOpen: true }), loadCommunicationSettings(), loadApiTokens()]);
   }
 
   async function loadScopedData(chargerId = selectedChargerId) {
@@ -641,7 +692,7 @@ export default function App() {
       loadActiveSessionAudit(chargerId),
       loadMeterGapEvents(chargerId),
       loadTags(),
-      loadChargingSessions(chargerId),
+      loadChargingSessions(chargerId, activeView === "Sessions" ? sessionFilters : emptySessionSearchFilters()),
       loadSessionSummary(chargerId),
       loadChargingStats(chargerId),
       loadLogs(chargerId)
@@ -816,6 +867,103 @@ export default function App() {
       ]);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function loadApiTokens() {
+    const requestId = apiTokensRequestId.current + 1;
+    apiTokensRequestId.current = requestId;
+    setApiTokensStatus("loading");
+
+    const response = await fetch("/api/access-tokens", { credentials: "include" });
+    if (handleUnauthorized(response)) return;
+    if (requestId !== apiTokensRequestId.current) return;
+    if (!response.ok) {
+      setApiTokens([]);
+      setApiTokensStatus("error");
+      return;
+    }
+
+    const data = (await response.json()) as ApiToken[];
+    setApiTokens(data);
+    setApiTokensStatus("ready");
+  }
+
+  async function createApiToken(input: { name: string; scope: ApiTokenScope; expiresAt: string | null }): Promise<CreatedApiToken | null> {
+    setBusy(true);
+    try {
+      const response = await fetch("/api/access-tokens", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input)
+      });
+      if (handleUnauthorized(response)) return null;
+      if (!response.ok) {
+        const error = await readErrorResponse(response);
+        setMessage(error === "api_token_expiry_in_past" ? "Token expiry must be in the future." : "Could not create API token.");
+        return null;
+      }
+
+      const token = (await response.json()) as CreatedApiToken;
+      setMessage("API token created. Copy it now; it will not be shown again.");
+      await loadApiTokens();
+      return token;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeApiToken(tokenId: string) {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/access-tokens/${encodeURIComponent(tokenId)}/revoke`, {
+        method: "POST",
+        credentials: "include"
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        setMessage("Could not revoke API token.");
+        return;
+      }
+
+      setMessage("API token revoked.");
+      await loadApiTokens();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rotateApiToken(tokenId: string): Promise<CreatedApiToken | null> {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/access-tokens/${encodeURIComponent(tokenId)}/rotate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+      if (handleUnauthorized(response)) return null;
+      if (!response.ok) {
+        setMessage("Could not rotate API token.");
+        return null;
+      }
+
+      const token = (await response.json()) as CreatedApiToken;
+      setMessage("API token rotated. Copy the new token now; the previous secret no longer works.");
+      await loadApiTokens();
+      return token;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyApiToken(value: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage("API token copied.");
+    } catch {
+      setMessage("Could not copy API token.");
     }
   }
 
@@ -1168,14 +1316,32 @@ export default function App() {
     return true;
   }
 
-  async function loadChargingSessions(chargerId = selectedChargerId) {
-    const data = await fetchAdminJson<ChargingSession[]>(withChargerContext("/api/sessions", chargerId));
+  async function loadChargingSessions(
+    chargerId = selectedChargerId,
+    filters = sessionFilters,
+    options: { mode?: "replace" | "append"; cursor?: string } = {}
+  ) {
+    const mode = options.mode ?? "replace";
+    const data = await fetchAdminJson<SessionSearchResponse | ChargingSession[]>(buildSessionSearchQuery(filters, chargerId, options.cursor ?? ""));
     if (data === null) return;
     if (data === undefined) {
       setMessage("Could not load charging sessions.");
       return;
     }
-    setChargingSessions(data);
+    const response = Array.isArray(data) ? { items: data, nextCursor: null, hasMore: false } : data;
+    setChargingSessions((current) => (mode === "append" ? mergeChargingSessions(current, response.items) : response.items));
+    setSessionNextCursor(response.nextCursor);
+    setSessionHasMore(response.hasMore);
+  }
+
+  async function loadMoreChargingSessions() {
+    if (!sessionNextCursor || sessionLoadingMore) return;
+    setSessionLoadingMore(true);
+    try {
+      await loadChargingSessions(selectedChargerId, sessionFilters, { mode: "append", cursor: sessionNextCursor });
+    } finally {
+      setSessionLoadingMore(false);
+    }
   }
 
   async function loadSessionSummary(chargerId = selectedChargerId) {
@@ -1682,6 +1848,17 @@ export default function App() {
     }
   }
 
+  function resetSessionFilters() {
+    updateSessionFilters(emptySessionSearchFilters());
+  }
+
+  function updateSessionFilters(nextFilters: SessionSearchFilters) {
+    setSessionFilters(nextFilters);
+    if (activeView === "Sessions") {
+      window.history.pushState({}, "", buildSessionViewUrl(selectedChargerId, nextFilters));
+    }
+  }
+
   function openCommunicationForFilters(filters: Partial<CommunicationJournalFilters>, chargerId = selectedChargerId) {
     const nextFilters = { ...emptyCommunicationJournalFilters(), chargerId, ...filters };
     setCommunicationFilters(nextFilters);
@@ -1693,7 +1870,7 @@ export default function App() {
   function openSessionsForCharger(chargerId = selectedChargerId) {
     setSelectedChargerId(chargerId);
     setActiveView("Sessions");
-    window.history.pushState({}, "", buildViewUrl("Sessions", chargerId));
+    window.history.pushState({}, "", buildSessionViewUrl(chargerId, sessionFilters));
   }
 
   async function logout() {
@@ -2110,12 +2287,18 @@ export default function App() {
       activeView={activeView}
       appVersion={dashboardConfig?.appVersion ?? null}
       busy={busy}
+      chargers={chargers}
       message={message}
+      selectedChargerId={selectedChargerId}
+      selectedChargerLabel={selectedChargerLabel}
+      selectedConnectionStatus={selectedConnectionStatus}
+      selectedConnectionTone={selectedConnectionTone}
       sidebarCollapsed={sidebarCollapsed}
       theme={theme}
       liveStatus={liveStatus}
       onLogout={() => void logout()}
       onNavigate={navigateToView}
+      onSelectCharger={selectChargerContext}
       onSidebarCollapsedChange={setSidebarCollapsed}
       onThemeToggle={toggleTheme}
     >
@@ -2131,7 +2314,7 @@ export default function App() {
             onOpenCommunication={(filters, chargerId) => openCommunicationForFilters(filters, chargerId)}
             onOpenSessions={openSessionsForCharger}
             onNavigate={navigateToView}
-            onSelectCharger={setSelectedChargerId}
+            onSelectCharger={selectChargerContext}
           />
         ) : activeView === "Charger dashboard" ? (
           <DashboardView
@@ -2169,17 +2352,32 @@ export default function App() {
         ) : activeView === "Settings" ? (
           <SettingsView
             busy={busy}
+            apiTokenCount={apiTokens.length}
+            apiTokensStatus={apiTokensStatus}
             communicationSettings={communicationSettings}
             communicationSettingsStatus={communicationSettingsStatus}
             onboardingSettings={onboardingSettings}
             onboardingSettingsStatus={onboardingSettingsStatus}
             timeFormat={timeFormat}
             onCommunicationRetentionChange={(value) => void updateCommunicationRetentionHours(value)}
+            onNavigate={navigateToView}
             onPurgeExpiredCommunication={() => void purgeExpiredCommunicationJournalFromSettings()}
             onRefreshCommunicationSettings={() => void loadCommunicationSettings()}
             onRefreshOnboarding={() => void loadOnboardingSettings()}
             onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
             onTimeFormatChange={updateTimeFormat}
+          />
+        ) : activeView === "Access tokens" ? (
+          <AccessTokensView
+            apiTokens={apiTokens}
+            apiTokensStatus={apiTokensStatus}
+            busy={busy}
+            onBackToSettings={() => navigateToView("Settings")}
+            onCopyToken={(value) => void copyApiToken(value)}
+            onCreateToken={(input) => createApiToken(input)}
+            onRefresh={() => void loadApiTokens()}
+            onRevoke={(tokenId) => void revokeApiToken(tokenId)}
+            onRotate={(tokenId) => rotateApiToken(tokenId)}
           />
         ) : activeView === "Sessions" ? (
           <SessionsView
@@ -2187,9 +2385,16 @@ export default function App() {
             busy={busy}
             chargingSessions={chargingSessions}
             chargingStats={chargingStats}
+            hasMore={sessionHasMore}
+            loadingMore={sessionLoadingMore}
+            sessionFilters={sessionFilters}
+            tags={tags}
             onForceClose={(session) => void previewForceCloseChargingSession(session)}
+            onFiltersChange={updateSessionFilters}
+            onLoadMore={() => void loadMoreChargingSessions()}
             onProxyStopRecovery={startProxyStopRecovery}
-            onRefresh={() => void loadScopedData(selectedChargerId)}
+            onRefresh={() => void loadChargingSessions(selectedChargerId, sessionFilters, { mode: "replace" })}
+            onResetFilters={resetSessionFilters}
             onRemoteStop={startRemoteStopChargingSession}
           />
         ) : activeView === "Communication" ? (
@@ -2785,6 +2990,17 @@ function mergeCommunicationRows(primary: CommunicationJournalItem[], secondary: 
     if (seen.has(item.id)) continue;
     seen.add(item.id);
     merged.push(item);
+  }
+  return merged;
+}
+
+function mergeChargingSessions(primary: ChargingSession[], secondary: ChargingSession[]) {
+  const seen = new Set<string>();
+  const merged: ChargingSession[] = [];
+  for (const session of [...primary, ...secondary]) {
+    if (seen.has(session.id)) continue;
+    seen.add(session.id);
+    merged.push(session);
   }
   return merged;
 }

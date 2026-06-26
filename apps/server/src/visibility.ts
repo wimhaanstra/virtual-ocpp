@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, like, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -21,6 +21,17 @@ const REMOTE_STOP_GRACE_MS = 30_000;
 
 const ChargerScopedQuerySchema = z.object({
   chargerId: z.string().trim().min(1).optional()
+});
+const SessionSearchQuerySchema = ChargerScopedQuerySchema.extend({
+  status: z.enum(['active', 'stopped']).optional(),
+  idTag: z.string().trim().optional(),
+  transactionId: z.coerce.number().int().nonnegative().optional(),
+  connectorId: z.coerce.number().int().positive().optional(),
+  from: z.string().trim().optional(),
+  to: z.string().trim().optional(),
+  minEnergyWh: z.coerce.number().int().nonnegative().optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(200).default(50)
 });
 const MeterGapEventsQuerySchema = ChargerScopedQuerySchema.extend({
   status: z.enum(['pending', 'ignored', 'submitted', 'failed']).optional()
@@ -62,6 +73,62 @@ export function registerVisibilityRoutes(
       : query.orderBy(desc(chargingSessions.startedAt)).limit(RECENT_LIMIT).all();
 
     return rows.map(toPublicChargingSession);
+  });
+
+  app.get('/api/sessions/search', async (request, reply) => {
+    if (await requireAdmin(request, reply, db)) return;
+
+    const parsed = SessionSearchQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_sessions_query', details: parsed.error.flatten() });
+    }
+
+    const cursor = parsed.data.cursor ? decodeSessionSearchCursor(parsed.data.cursor) : null;
+    if (parsed.data.cursor && !cursor) {
+      return reply.code(400).send({ error: 'invalid_sessions_query' });
+    }
+
+    const from = parsed.data.from ? parseSessionSearchDate(parsed.data.from) : null;
+    const to = parsed.data.to ? parseSessionSearchDate(parsed.data.to) : null;
+    if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime())) || (from && to && from.getTime() > to.getTime())) {
+      return reply.code(400).send({ error: 'invalid_sessions_query' });
+    }
+
+    const conditions: SQL[] = [];
+    if (parsed.data.chargerId) conditions.push(eq(chargingSessions.chargerId, parsed.data.chargerId));
+    if (parsed.data.status) conditions.push(eq(chargingSessions.status, parsed.data.status));
+    if (parsed.data.idTag) conditions.push(like(chargingSessions.idTag, `%${escapeLikeValue(parsed.data.idTag)}%`));
+    if (parsed.data.transactionId !== undefined) conditions.push(eq(chargingSessions.transactionId, parsed.data.transactionId));
+    if (parsed.data.connectorId !== undefined) conditions.push(eq(chargingSessions.connectorId, parsed.data.connectorId));
+    if (from) conditions.push(gte(chargingSessions.startedAt, from));
+    if (to) conditions.push(lte(chargingSessions.startedAt, to));
+    if (parsed.data.minEnergyWh !== undefined) {
+      conditions.push(sql`${chargingSessions.startMeterWh} is not null and ${chargingSessions.stopMeterWh} is not null and (${chargingSessions.stopMeterWh} - ${chargingSessions.startMeterWh}) >= ${parsed.data.minEnergyWh}`);
+    }
+    if (cursor) {
+      const cursorCondition = or(
+        lt(chargingSessions.startedAt, cursor.startedAt),
+        and(eq(chargingSessions.startedAt, cursor.startedAt), lt(chargingSessions.id, cursor.id))
+      );
+      if (cursorCondition) {
+        conditions.push(cursorCondition);
+      }
+    }
+
+    const query = db.select().from(chargingSessions);
+    const where = conditions.length === 1 ? conditions[0] : conditions.length > 1 ? and(...conditions) : undefined;
+    const rows = (where ? query.where(where) : query)
+      .orderBy(desc(chargingSessions.startedAt), desc(chargingSessions.id))
+      .limit(parsed.data.limit + 1)
+      .all();
+    const pageRows = rows.slice(0, parsed.data.limit);
+    const lastRow = pageRows.at(-1);
+
+    return {
+      items: pageRows.map(toPublicChargingSession),
+      nextCursor: rows.length > parsed.data.limit && lastRow ? encodeSessionSearchCursor({ startedAt: lastRow.startedAt, id: lastRow.id }) : null,
+      hasMore: rows.length > parsed.data.limit
+    };
   });
 
   app.get('/api/session-summary', async (request, reply) => {
@@ -145,7 +212,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { mappingId: string } }>('/api/proxy-stop-recovery-queue/:mappingId/retry', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     if (!proxyAuthorization) {
       return reply.code(503).send({ error: 'proxy_recovery_unavailable' });
@@ -232,7 +299,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/meter-gap-events/:id/dismiss', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const event = db.select().from(meterGapEvents).where(eq(meterGapEvents.id, request.params.id)).limit(1).get();
     if (!event) return reply.code(404).send({ error: 'meter_gap_not_found' });
@@ -263,7 +330,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/meter-gap-events/:id/submit', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = MeterGapSubmitSchema.safeParse(request.body ?? {});
     if (!body.success) return reply.code(400).send({ error: 'invalid_meter_gap_submit', details: body.error.flatten() });
@@ -321,7 +388,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/sessions/:id/force-close', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
     if (!session) {
@@ -429,7 +496,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/sessions/:id/proxy-stop-recovery', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     if (!proxyAuthorization) {
       return reply.code(503).send({ error: 'proxy_recovery_unavailable' });
@@ -485,7 +552,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/sessions/:id/close', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
     if (!session) {
@@ -548,7 +615,7 @@ export function registerVisibilityRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/sessions/:id/remote-stop', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const session = db.select().from(chargingSessions).where(eq(chargingSessions.id, request.params.id)).limit(1).get();
     if (!session) {
@@ -1083,6 +1150,35 @@ function toPublicProxySessionMapping(mapping: typeof proxySessionMappings.$infer
     createdAt: mapping.createdAt.toISOString(),
     stoppedAt: mapping.stoppedAt?.toISOString() ?? null
   };
+}
+
+type SessionSearchCursor = {
+  startedAt: Date;
+  id: string;
+};
+
+function encodeSessionSearchCursor(cursor: SessionSearchCursor) {
+  return Buffer.from(JSON.stringify({ startedAt: cursor.startedAt.toISOString(), id: cursor.id }), 'utf8').toString('base64url');
+}
+
+function decodeSessionSearchCursor(value: string): SessionSearchCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as { startedAt?: unknown; id?: unknown };
+    if (typeof parsed.id !== 'string' || typeof parsed.startedAt !== 'string') return null;
+    const startedAt = new Date(parsed.startedAt);
+    if (Number.isNaN(startedAt.getTime())) return null;
+    return { startedAt, id: parsed.id };
+  } catch {
+    return null;
+  }
+}
+
+function parseSessionSearchDate(value: string) {
+  return new Date(value);
+}
+
+function escapeLikeValue(value: string) {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
 function getActiveProxyMappings(db: Database, session: typeof chargingSessions.$inferSelect) {

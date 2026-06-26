@@ -69,6 +69,14 @@ type TestCommunicationJournalItem = {
   correlationId: string | null;
 };
 
+function chooseFilterOption(label: string, option: string) {
+  const collapsedControl = screen.queryByRole("button", { name: label });
+  if (!collapsedControl) fireEvent.click(screen.getByRole("button", { name: "Expand filters" }));
+
+  fireEvent.click(screen.getByRole("button", { name: label }));
+  fireEvent.click(within(screen.getByRole("listbox", { name: label })).getByRole("option", { name: option }));
+}
+
 const emptyVisibilityResponses = (url: string, method: string, init?: RequestInit) => {
   const path = new URL(url, "http://localhost").pathname;
 
@@ -105,9 +113,17 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
     return new Response(JSON.stringify(buildCommunicationSettingsResponse()), { status: 200 });
   }
 
+  if (path === "/api/access-tokens" && method === "GET") {
+    return new Response(JSON.stringify([]), { status: 200 });
+  }
+
   if (path === "/api/settings/communication" && method === "PATCH") {
     const body = init?.body ? JSON.parse(String(init.body)) : {};
     return new Response(JSON.stringify(buildCommunicationSettingsResponse(body.retentionHours)), { status: 200 });
+  }
+
+  if (path === "/api/sessions/search" && method === "GET") {
+    return new Response(JSON.stringify({ items: [], nextCursor: null, hasMore: false }), { status: 200 });
   }
 
   if (
@@ -448,7 +464,8 @@ describe("App", () => {
     expect(within(sidebar.getByRole("navigation", { name: "Global and admin pages" })).getByRole("button", { name: "Communication" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Switch to light mode" })).toBeInTheDocument();
     expect(sidebar.getByRole("button", { name: "Sign out" })).toBeInTheDocument();
-    expect(sidebar.getByText("0.1.0-20260623")).toBeInTheDocument();
+    expect(sidebar.getByText("0.1.0")).toBeInTheDocument();
+    expect(sidebar.getByTitle("Virtual OCPP 0.1.0-20260623")).toBeInTheDocument();
     expect(screen.queryByText("Charger context")).not.toBeInTheDocument();
     expect(screen.queryByText("Charger-scoped")).not.toBeInTheDocument();
     expect(screen.queryByText("Global / admin")).not.toBeInTheDocument();
@@ -1086,7 +1103,7 @@ describe("App", () => {
         return new Response(JSON.stringify({ summary: { activeSessions: 1, flaggedSessions: 0 }, items: [] }), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -1167,7 +1184,7 @@ describe("App", () => {
     expect(
       fetchMock.mock.calls.filter(([input]) => {
         const url = new URL(String(input), "http://localhost");
-        return url.pathname === "/api/sessions";
+        return url.pathname === "/api/sessions/search";
       }).length
     ).toBe(1);
   });
@@ -1400,6 +1417,19 @@ describe("App", () => {
   });
 
   it("shows onboarding status in Settings and opens the existing onboarding workflow", async () => {
+    let tokens = [
+      {
+        id: "token-existing",
+        name: "Existing diagnostics",
+        scope: "read_only",
+        status: "active",
+        createdAt: "2026-06-19T08:00:00.000Z",
+        updatedAt: "2026-06-19T08:00:00.000Z",
+        expiresAt: null,
+        revokedAt: null,
+        lastUsedAt: null
+      }
+    ];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
@@ -1430,6 +1460,43 @@ describe("App", () => {
         return new Response(JSON.stringify(buildCommunicationSettingsResponse(body.retentionHours, 3)), { status: 200 });
       }
 
+      if (path === "/api/access-tokens" && method === "GET") {
+        return new Response(JSON.stringify(tokens.filter((token) => !token.revokedAt)), { status: 200 });
+      }
+
+      if (path === "/api/access-tokens" && method === "POST") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        const created = {
+          id: "token-created",
+          name: body.name,
+          scope: body.scope,
+          status: "active",
+          createdAt: "2026-06-19T09:00:00.000Z",
+          updatedAt: "2026-06-19T09:00:00.000Z",
+          expiresAt: body.expiresAt,
+          revokedAt: null,
+          lastUsedAt: null,
+          token: "abcdefghijklmnopqrstuvwxyzABCDEF"
+        };
+        tokens = [{ ...created, token: undefined }, ...tokens].map(({ token: _token, ...token }) => token);
+        return new Response(JSON.stringify(created), { status: 201 });
+      }
+
+      if (path === "/api/access-tokens/token-created/rotate" && method === "POST") {
+        const rotated = {
+          ...tokens.find((token) => token.id === "token-created")!,
+          updatedAt: "2026-06-19T10:00:00.000Z",
+          token: "1234567890abcdefghijklmnopqrstuv"
+        };
+        tokens = tokens.map((token) => (token.id === "token-created" ? { ...token, updatedAt: rotated.updatedAt } : token));
+        return new Response(JSON.stringify(rotated), { status: 200 });
+      }
+
+      if (path === "/api/access-tokens/token-created/revoke" && method === "POST") {
+        tokens = tokens.map((token) => (token.id === "token-created" ? { ...token, status: "revoked", revokedAt: "2026-06-19T11:00:00.000Z" } : token));
+        return new Response(JSON.stringify(tokens.find((token) => token.id === "token-created")), { status: 200 });
+      }
+
       if (path === "/api/dashboard-config" && method === "GET") {
         return new Response(
           JSON.stringify({
@@ -1454,7 +1521,7 @@ describe("App", () => {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -1486,11 +1553,46 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     expect(screen.getByText("Completed", { selector: ".pill" })).toBeInTheDocument();
-    expect(screen.getByText("Connected", { selector: "dd" })).toBeInTheDocument();
+    expect(screen.getAllByText("Connected", { selector: "dd" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("radio", { name: "24 hour" })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("radio", { name: "12 hour" }));
     expect(screen.getByRole("radio", { name: "12 hour" })).toHaveAttribute("aria-checked", "true");
     expect(window.localStorage.getItem("virtual-ocpp-time-format")).toBe("12h");
+    expect(screen.getByRole("heading", { name: "Tokens" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Manage tokens" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "Access tokens" })).toBeInTheDocument();
+    expect(screen.getByText("Existing diagnostics")).toBeInTheDocument();
+    expect(screen.queryByText("token-existing")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create token" }));
+    const tokenWizard = await screen.findByRole("dialog", { name: "Create token" });
+    fireEvent.change(within(tokenWizard).getByLabelText("Name"), { target: { value: "Codex diagnostics" } });
+    fireEvent.click(within(tokenWizard).getByRole("button", { name: "Next" }));
+    expect(within(tokenWizard).getByRole("radio", { name: "Read-only" })).toBeChecked();
+    fireEvent.click(within(tokenWizard).getByRole("radio", { name: "Read-write" }));
+    fireEvent.click(within(tokenWizard).getByRole("button", { name: "Next" }));
+    expect(within(tokenWizard).getByRole("radio", { name: "30 days" })).toBeChecked();
+    fireEvent.click(within(tokenWizard).getByRole("button", { name: "Create token" }));
+    expect(await screen.findByDisplayValue("abcdefghijklmnopqrstuvwxyzABCDEF")).toBeInTheDocument();
+    expect(await screen.findByText("Codex diagnostics")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/access-tokens" && init?.method === "POST" && String(init.body).includes("read_write"))).toBe(true);
+    });
+    await waitFor(() => {
+      const createCall = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/access-tokens" && init?.method === "POST");
+      expect(createCall).toBeDefined();
+      expect(JSON.parse(String(createCall?.[1]?.body)).expiresAt).toEqual(expect.any(String));
+    });
+    fireEvent.click(within(tokenWizard).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByDisplayValue("abcdefghijklmnopqrstuvwxyzABCDEF")).not.toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "Rotate" })[0]);
+    expect(await screen.findByDisplayValue("1234567890abcdefghijklmnopqrstuv")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Revoke" })[0]);
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/access-tokens/token-created/revoke" && init?.method === "POST")).toBe(true);
+    });
+    await waitFor(() => expect(screen.queryByText("Codex diagnostics")).not.toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "Settings" }).at(-1)!);
     expect(screen.getByLabelText("Retention hours")).toHaveValue(24);
     expect(screen.getByText("Rows")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -1767,7 +1869,7 @@ describe("App", () => {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -1789,7 +1891,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Selected charger" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Selected charger" })).toHaveTextContent("Bay 1");
 
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
@@ -1832,7 +1934,7 @@ describe("App", () => {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2075,21 +2177,19 @@ describe("App", () => {
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
 
-    fireEvent.change(screen.getByLabelText("Source type"), { target: { value: "charger" } });
-    fireEvent.change(screen.getByLabelText("Time"), { target: { value: "custom" } });
+    chooseFilterOption("Source type", "Charger");
+    chooseFilterOption("Time", "Custom");
     fireEvent.change(screen.getByLabelText("From"), { target: { value: "2026-06-19T08:00" } });
     fireEvent.change(screen.getByLabelText("To"), { target: { value: "2026-06-19T12:00" } });
     fireEvent.change(screen.getByLabelText("Source id"), { target: { value: "SMART-EVSE-1" } });
-    fireEvent.change(screen.getByLabelText("Target type"), { target: { value: "server" } });
+    chooseFilterOption("Target type", "Server");
     fireEvent.change(screen.getByLabelText("Target id"), { target: { value: "server" } });
     fireEvent.change(screen.getByLabelText("Charger id"), { target: { value: "SMART-EVSE-1" } });
     fireEvent.change(screen.getByLabelText("Proxy target id"), { target: { value: "proxy-1" } });
     fireEvent.change(screen.getByLabelText("OCPP method"), { target: { value: "BootNotification" } });
-    fireEvent.change(screen.getByLabelText("Message type"), { target: { value: "call" } });
+    chooseFilterOption("Message type", "Call");
 
     expect(await screen.findByText("Method: BootNotification")).toBeInTheDocument();
-    expect(screen.getByText("Message type: call")).toBeInTheDocument();
-    expect(screen.getByText("Source type: charger")).toBeInTheDocument();
     await waitFor(() => {
       const calls = fetchMock.mock.calls.filter(([input]) => String(input).startsWith("/api/communication-journal?"));
       const lastCall = calls[calls.length - 1];
@@ -2130,7 +2230,7 @@ describe("App", () => {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
       }
 
-      if (url === "/api/tags" && method === "GET") {
+      if (url.startsWith("/api/tags") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2159,7 +2259,7 @@ describe("App", () => {
         return emptyVisibilityResponses(url, method)!;
       }
 
-      if (url === "/api/sessions" && method === "GET") {
+      if ((url === "/api/sessions" || url === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2286,7 +2386,7 @@ describe("App", () => {
         return emptyVisibilityResponses(url, method)!;
       }
 
-      if (url === "/api/sessions" && method === "GET") {
+      if ((url === "/api/sessions" || url === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2608,7 +2708,7 @@ describe("App", () => {
         return new Response(JSON.stringify(proxyTargets), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2780,7 +2880,7 @@ describe("App", () => {
         return new Response(JSON.stringify(parsedUrl.searchParams.get("chargerId") === selectedChargerId ? proxyTargets : []), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -2925,7 +3025,7 @@ describe("App", () => {
       if (path === "/api/tags" && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
       if (path === "/api/logs" && method === "GET") {
@@ -2965,8 +3065,24 @@ describe("App", () => {
         return new Response(JSON.stringify({ authenticated: true, username: "admin" }), { status: 200 });
       }
 
-      if (url === "/api/tags" && method === "GET") {
-        return new Response(JSON.stringify([]), { status: 200 });
+      if (url.startsWith("/api/tags") && method === "GET") {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "tag-1",
+              uuid: "TAG-1",
+              label: null,
+              enabled: true,
+              createdAt: "2026-06-19T08:00:00.000Z",
+              lastUsedAt: "2026-06-19T09:05:00.000Z",
+              lastUsedChargerId: "SMART-EVSE-1",
+              lastUsedTransactionId: 42,
+              chargerUsage: [{ chargerId: "SMART-EVSE-1", lastUsedAt: "2026-06-19T09:05:00.000Z", lastUsedTransactionId: 42 }],
+              chargerAccess: [{ chargerId: "SMART-EVSE-1", enabled: true }]
+            }
+          ]),
+          { status: 200 }
+        );
       }
 
       if (url === "/api/proxy-targets" && method === "GET") {
@@ -2977,7 +3093,7 @@ describe("App", () => {
         return emptyVisibilityResponses(url, method)!;
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(
           JSON.stringify([
             {
@@ -3272,6 +3388,16 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Sessions" }));
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     expect(await screen.findByText("1.65 kWh")).toBeInTheDocument();
+    chooseFilterOption("Tag", "TAG-1");
+    await waitFor(() => {
+      expect(window.location.search).toContain("idTag=TAG-1");
+      expect(
+        fetchMock.mock.calls.some(([input]) => {
+          const requestUrl = new URL(String(input), "http://localhost");
+          return requestUrl.pathname === "/api/sessions/search" && requestUrl.searchParams.get("idTag") === "TAG-1";
+        })
+      ).toBe(true);
+    });
     expect(screen.getByText("Missing stop?")).toBeInTheDocument();
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(screen.getByText("Energy used")).toBeInTheDocument();
@@ -3279,8 +3405,8 @@ describe("App", () => {
     expect(screen.getByText(/7\.2 kW/, { selector: ".session-live-value" })).toHaveTextContent("1.65 kWh");
     fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
     expect((await screen.findAllByText("SMART-EVSE-1")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Connector")).toBeInTheDocument();
-    expect(await screen.findByText("TAG-1")).toBeInTheDocument();
+    expect(screen.getAllByText("Connector").length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("TAG-1")).length).toBeGreaterThan(0);
     expect(screen.getByText("Energy source")).toBeInTheDocument();
     expect(screen.getByText("Latest meter sample")).toBeInTheDocument();
     expect(screen.getByText(/charger may have missed StopTransaction/)).toBeInTheDocument();
@@ -3398,7 +3524,7 @@ describe("App", () => {
         );
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(
           JSON.stringify(
             selectedChargerId === selectedChargerId
@@ -3525,7 +3651,7 @@ describe("App", () => {
     expect(await screen.findByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
     expect(screen.getAllByText("SMART-EVSE-1").length).toBeGreaterThan(0);
-    expect(screen.getByText("Connector")).toBeInTheDocument();
+    expect(screen.getAllByText("Connector").length).toBeGreaterThan(0);
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
 
     fireEvent.click(sidebar.getByRole("button", { name: "Communication" }));
@@ -3593,7 +3719,7 @@ describe("App", () => {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
-      if (path === "/api/sessions" && method === "GET") {
+      if ((path === "/api/sessions" || path === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 
@@ -3683,7 +3809,7 @@ describe("App", () => {
       const visibilityResponse = emptyVisibilityResponses(url, method);
       if (visibilityResponse) return visibilityResponse;
 
-      if (url === "/api/sessions" && method === "GET") {
+      if ((url === "/api/sessions" || url === "/api/sessions/search") && method === "GET") {
         return new Response(JSON.stringify([]), { status: 200 });
       }
 

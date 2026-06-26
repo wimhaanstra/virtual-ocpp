@@ -1,9 +1,40 @@
 :root {
   font-family: var(--wa-font-family-body);
+  color: var(--wa-color-text-normal);
+  background: var(--wa-color-surface-lowered);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
 }
 
 body {
+  min-width: 320px;
+  min-height: 100vh;
   background: var(--wa-color-surface-lowered);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
 wa-button::part(base),

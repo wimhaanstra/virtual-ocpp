@@ -450,11 +450,41 @@ export type CommunicationJournalLastPurgeSummary = {
   scope: "retention" | "filters";
 };
 
+export type ApiTokenScope = "read_only" | "read_write";
+export type ApiTokenStatus = "active" | "expired" | "revoked";
+
+export type ApiToken = {
+  id: string;
+  name: string;
+  scope: ApiTokenScope;
+  status: ApiTokenStatus;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  lastUsedAt: string | null;
+};
+
+export type CreatedApiToken = ApiToken & {
+  token: string;
+};
+
 export type OnboardingState = "unknown" | "pending" | "completed" | "skipped";
 
 export type OnboardingSettingsStatus = "idle" | "loading" | "ready" | "unavailable" | "error";
 
-export type ActiveView = "Home" | "Settings" | "Charger dashboard" | "Diagnostics" | "Chargers" | "Proxy targets" | "Tags" | "Tag access" | "Sessions" | "Communication";
+export type ActiveView =
+  | "Home"
+  | "Settings"
+  | "Access tokens"
+  | "Charger dashboard"
+  | "Diagnostics"
+  | "Chargers"
+  | "Proxy targets"
+  | "Tags"
+  | "Tag access"
+  | "Sessions"
+  | "Communication";
 export type ThemeMode = "dark" | "light";
 export type TimeFormatPreference = "24h" | "12h";
 
@@ -471,6 +501,22 @@ export type CommunicationJournalFilters = {
   ocppMethod: string;
   transactionId: string;
   messageType: string;
+};
+
+export type SessionSearchFilters = {
+  from: string;
+  to: string;
+  status: string;
+  idTag: string;
+  transactionId: string;
+  connectorId: string;
+  minEnergyWh: string;
+};
+
+export type SessionSearchResponse = {
+  items: ChargingSession[];
+  nextCursor: string | null;
+  hasMore: boolean;
 };
 
 export type TagFormState = {

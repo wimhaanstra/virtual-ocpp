@@ -15,7 +15,8 @@ import {
   type LucideIcon,
   Wrench
 } from "lucide-react";
-import type { ActiveView, LiveStatus, ThemeMode } from "../types";
+import type { ActiveView, ChargerRegistryRow, LiveStatus, ThemeMode } from "../types";
+import { ChargerContextSwitcher } from "./ChargerContextSwitcher";
 import { Button } from "./ui/button";
 
 const chargerScopedNavItems: Array<{ view: ActiveView; label: string; icon: LucideIcon }> = [
@@ -46,17 +47,27 @@ const mobileMoreNavItems: Array<{ view: ActiveView; label: string; icon: LucideI
   ...globalNavItems
 ];
 
+function getDisplayVersion(version: string | null) {
+  return version?.split("-")[0] ?? "unknown";
+}
+
 type AppChromeProps = {
   activeView: ActiveView;
   appVersion: string | null;
   busy: boolean;
+  chargers: ChargerRegistryRow[];
   children: ReactNode;
   message: string;
+  selectedChargerId: string;
+  selectedChargerLabel: string;
+  selectedConnectionStatus: string;
+  selectedConnectionTone: string;
   sidebarCollapsed: boolean;
   theme: ThemeMode;
   liveStatus: LiveStatus;
   onLogout: () => void;
   onNavigate: (view: ActiveView) => void;
+  onSelectCharger: (chargerId: string) => void;
   onSidebarCollapsedChange: (collapsed: boolean) => void;
   onThemeToggle: () => void;
 };
@@ -65,18 +76,25 @@ export function AppChrome({
   activeView,
   appVersion,
   busy,
+  chargers,
   children,
   message,
+  selectedChargerId,
+  selectedChargerLabel,
+  selectedConnectionStatus,
+  selectedConnectionTone,
   sidebarCollapsed,
   theme,
   liveStatus,
   onLogout,
   onNavigate,
+  onSelectCharger,
   onSidebarCollapsedChange,
   onThemeToggle
 }: AppChromeProps) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const mobileMoreActive = mobileMoreNavItems.some((item) => item.view === activeView);
+  const displayVersion = getDisplayVersion(appVersion);
 
   useEffect(() => {
     setMobileMoreOpen(false);
@@ -90,6 +108,15 @@ export function AppChrome({
   return (
     <main className={`app-shell ${sidebarCollapsed ? "app-shell-collapsed" : ""}`}>
       <aside className="sidebar" aria-label="Main navigation">
+        <Button
+          type="button"
+          className="sidebar-collapse-button"
+          onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
+        </Button>
         <div className="sidebar-top">
           <div className="brand">
             <div className="brand-title">
@@ -103,18 +130,19 @@ export function AppChrome({
               </span>
               <span className="sidebar-label">Virtual OCPP</span>
             </div>
-            <Button
-              type="button"
-              className="sidebar-collapse-button"
-              onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {sidebarCollapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
-            </Button>
           </div>
         </div>
         <div className="sidebar-nav-shell">
+          <ChargerContextSwitcher
+            chargers={chargers}
+            selectedChargerId={selectedChargerId}
+            selectedChargerLabel={selectedChargerLabel}
+            status={selectedConnectionStatus}
+            statusTone={selectedConnectionTone}
+            variant="sidebar"
+            collapsed={sidebarCollapsed}
+            onSelectCharger={onSelectCharger}
+          />
           <nav className="sidebar-nav" aria-label="Charger-scoped pages">
             {chargerScopedNavItems.map((item) => {
               const Icon = item.icon;
@@ -187,23 +215,28 @@ export function AppChrome({
           </div>
           <p className="app-version" title={appVersion ? `Virtual OCPP ${appVersion}` : "Version unavailable"}>
             <span className="sidebar-label">Version </span>
-            <span>{appVersion ?? "unknown"}</span>
+            <span>{displayVersion}</span>
           </p>
         </footer>
       </aside>
 
       <section className="content">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">Self-hosted CSMS</p>
-            <h1>{activeView === "Home" ? "Global dashboard" : activeView}</h1>
-          </div>
+          <h1>{activeView === "Home" ? "Global dashboard" : activeView}</h1>
           <div className="topbar-actions">
             <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
               {liveStatus === "live" ? "Live" : liveStatus === "stale" ? "Stale" : "Connecting"}
             </span>
           </div>
         </header>
+
+        <ChargerContextSwitcher
+          chargers={chargers}
+          selectedChargerId={selectedChargerId}
+          selectedChargerLabel={selectedChargerLabel}
+          variant="mobile"
+          onSelectCharger={onSelectCharger}
+        />
 
         {message ? (
           <p className="notice" role="status">

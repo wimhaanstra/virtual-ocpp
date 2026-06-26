@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { AppConfig } from './config.js';
 import type { Database } from './db/client.js';
+import { registerAccessTokenRoutes } from './access-tokens.js';
 import { registerAuthRoutes } from './auth.js';
 import { registerChargingStatsRoutes } from './charging-stats.js';
 import { CommunicationJournalService } from './communication-journal.js';
@@ -10,11 +11,13 @@ import { registerChargerRoutes } from './chargers.js';
 import { registerDashboardConfigRoutes } from './dashboard-config.js';
 import { LiveUpdateBus } from './live-updates.js';
 import { registerLiveUpdateRoutes } from './live-updates-routes.js';
+import { registerMcpRoutes } from './mcp-routes.js';
 import { ChargerCommandService } from './ocpp/charger-command-service.js';
 import { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 import { registerOcppServer } from './ocpp/server.js';
 import { registerProxyTargetRoutes } from './proxy-targets.js';
 import { getCommunicationRetentionHours, registerSettingsRoutes } from './settings.js';
+import { registerSmartEvseDiagnosticsRoutes } from './smartevse-diagnostics.js';
 import { registerVisibilityRoutes } from './visibility.js';
 import { registerTagRoutes } from './tags.js';
 import { closeStaleChargerConnections } from './startup-maintenance.js';
@@ -63,6 +66,7 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWith
   closeStaleChargerConnections(db, liveUpdates);
 
   registerAuthRoutes(app, config, db, liveUpdates);
+  registerAccessTokenRoutes(app, db);
   registerLiveUpdateRoutes(app, db, liveUpdates);
   registerDashboardConfigRoutes(app, config, db);
   registerSettingsRoutes(app, db, communicationJournal);
@@ -71,7 +75,9 @@ export async function buildApp({ config, db }: BuildAppOptions): Promise<AppWith
   registerTagRoutes(app, db, liveUpdates);
   registerProxyTargetRoutes(app, db, proxyAuthorization, liveUpdates);
   registerCommunicationJournalRoutes(app, db, communicationJournal);
+  registerSmartEvseDiagnosticsRoutes(app, db);
   registerVisibilityRoutes(app, db, chargerCommands, proxyAuthorization, liveUpdates);
+  registerMcpRoutes(app, db);
   await registerOcppServer(app, config, db, communicationJournal, proxyAuthorization, chargerCommands, liveUpdates);
   if (config.nodeEnv === 'production') {
     registerStaticAssetRoutes(app);

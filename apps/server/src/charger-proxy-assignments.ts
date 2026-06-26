@@ -59,7 +59,7 @@ export function registerChargerProxyAssignmentRoutes(app: FastifyInstance, db: D
   });
 
   app.post('/api/charger-proxy-assignments', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = CreateAssignmentSchema.safeParse(request.body);
     if (!body.success) {
@@ -107,7 +107,7 @@ export function registerChargerProxyAssignmentRoutes(app: FastifyInstance, db: D
   });
 
   app.patch<{ Params: { id: string } }>('/api/charger-proxy-assignments/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateAssignmentSchema.safeParse(request.body);
     if (!body.success) {
@@ -158,7 +158,7 @@ export function registerChargerProxyAssignmentRoutes(app: FastifyInstance, db: D
   });
 
   app.delete<{ Params: { id: string } }>('/api/charger-proxy-assignments/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const existing = db.select().from(chargerProxyAssignments).where(eq(chargerProxyAssignments.id, request.params.id)).limit(1).get();
     if (!existing) {

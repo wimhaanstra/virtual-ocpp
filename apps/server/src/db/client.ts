@@ -39,6 +39,11 @@ export function applyMigrations(client: Database.Database) {
   client.exec('CREATE INDEX IF NOT EXISTS proxy_targets_charger_id_idx ON proxy_targets (charger_id)');
   client.exec('CREATE INDEX IF NOT EXISTS meter_samples_session_idx ON meter_samples (charger_id, transaction_id, sampled_at)');
   client.exec('CREATE INDEX IF NOT EXISTS meter_samples_measurand_idx ON meter_samples (measurand)');
+  client.exec('CREATE INDEX IF NOT EXISTS charging_sessions_started_at_id_idx ON charging_sessions (started_at, id)');
+  client.exec('CREATE INDEX IF NOT EXISTS charging_sessions_charger_started_at_id_idx ON charging_sessions (charger_id, started_at, id)');
+  client.exec('CREATE INDEX IF NOT EXISTS charging_sessions_status_started_at_id_idx ON charging_sessions (status, started_at, id)');
+  client.exec('CREATE INDEX IF NOT EXISTS charging_sessions_transaction_id_idx ON charging_sessions (transaction_id)');
+  client.exec('CREATE INDEX IF NOT EXISTS charging_sessions_id_tag_idx ON charging_sessions (id_tag)');
 }
 
 function ensureColumn(client: Database.Database, table: string, column: string, statement: string) {

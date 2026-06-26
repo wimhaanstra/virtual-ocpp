@@ -38,6 +38,21 @@ export function createTestDatabase() {
       revoked_at integer
     );
 
+    CREATE TABLE api_tokens (
+      id text PRIMARY KEY NOT NULL,
+      name text NOT NULL,
+      scope text NOT NULL CHECK (scope IN ('read_only', 'read_write')),
+      token_hash text NOT NULL,
+      created_at integer NOT NULL,
+      updated_at integer NOT NULL,
+      expires_at integer,
+      revoked_at integer,
+      last_used_at integer
+    );
+
+    CREATE UNIQUE INDEX api_tokens_token_hash_unique ON api_tokens (token_hash);
+    CREATE INDEX api_tokens_created_at_idx ON api_tokens (created_at);
+
     CREATE TABLE onboarding_settings (
       id text PRIMARY KEY NOT NULL,
       completed_at integer,

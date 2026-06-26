@@ -7,12 +7,14 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "simulator": "node --import tsx scripts/simulator.ts",
+    "seed:sessions": "node --import tsx scripts/seed-sessions.ts",
     "test": "vitest run --config vitest.config.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "db:migrate": "node --import tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.6.2",

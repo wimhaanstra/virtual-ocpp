@@ -584,6 +584,70 @@ describe('OCPP 1.6 local primary', () => {
     );
   });
 
+  it('journals invalid raw charger messages before handler dispatch', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const charger = await connectCharger(server.endpoint, 'RAW-DIAGNOSTICS');
+    cleanup.push(async () => { await charger.close({}); });
+
+    charger.sendRaw('not-json');
+
+    await waitForCondition(() => {
+      const rawEntry = server.db
+        .select()
+        .from(communicationJournal)
+        .where(eq(communicationJournal.messageType, 'raw'))
+        .limit(1)
+        .get();
+
+      expect(rawEntry).toMatchObject({
+        chargerId: 'RAW-DIAGNOSTICS',
+        sourceType: 'charger',
+        targetType: 'server',
+        messageType: 'raw',
+        errorCode: 'RpcFrameworkError',
+        errorDescription: 'Message must be a JSON structure'
+      });
+      expect(JSON.parse(rawEntry?.payloadJson ?? '{}')).toMatchObject({
+        direction: 'inbound',
+        bytes: 8,
+        preview: 'not-json',
+        response: {
+          messageType: 4,
+          errorCode: 'RpcFrameworkError',
+          errorDescription: 'Message must be a JSON structure'
+        }
+      });
+      expect(server.db.select().from(logs).all().some((row) => row.message === 'invalid raw ocpp message received')).toBe(true);
+    });
+  });
+
+  it('redacts and truncates malformed raw charger message previews', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const charger = await connectCharger(server.endpoint, 'RAW-REDACTION');
+    cleanup.push(async () => { await charger.close({}); });
+
+    charger.sendRaw(`not-json Basic abcdefghijklmnopqrstuvwxyz0123456789 ${'x'.repeat(700)}`);
+
+    await waitForCondition(() => {
+      const rawEntry = server.db
+        .select()
+        .from(communicationJournal)
+        .where(eq(communicationJournal.messageType, 'raw'))
+        .limit(1)
+        .get();
+      const payload = JSON.parse(rawEntry?.payloadJson ?? '{}') as { preview?: string };
+
+      expect(payload.preview).toContain('Basic [redacted]');
+      expect(payload.preview).not.toContain('abcdefghijklmnopqrstuvwxyz0123456789');
+      expect(payload.preview?.length).toBeLessThanOrEqual(520);
+      expect(payload.preview?.endsWith('...')).toBe(true);
+    });
+  });
+
   it('returns a conflict when sending a diagnostic command to a disconnected charger', async () => {
     const server = await startTestServer();
     cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
@@ -1094,6 +1158,95 @@ describe('OCPP 1.6 local primary', () => {
     expect(server.db.select().from(chargingSessions).all()).toHaveLength(1);
   });
 
+  it('forwards transactionless MeterValues to proxy targets and stores them locally', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'TXLESS-METER-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-TRANSACTIONLESS-METER' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-transactionless-meter',
+      chargerId: 'SMART-EVSE-TRANSACTIONLESS-METER',
+      name: 'Transactionless meter CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-TRANSACTIONLESS-METER',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-TRANSACTIONLESS-METER');
+    cleanup.push(async () => { await charger.close({}); });
+
+    await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'TXLESS-METER-TAG',
+      meterStart: 10_000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    });
+    await charger.call('MeterValues', {
+      connectorId: 1,
+      meterValue: [
+        {
+          timestamp: '2026-06-19T10:05:00.000Z',
+          sampledValue: [
+            { value: '10.25', measurand: 'Energy.Active.Import.Register', unit: 'kWh' },
+            { value: '3757.00', measurand: 'Power.Active.Import', unit: 'W' },
+            { value: '16.00', measurand: 'Current.Import', unit: 'A' },
+            { value: '16.00', measurand: 'Current.Import', unit: 'A', phase: 'L1' },
+            { value: '0.00', measurand: 'Current.Import', unit: 'A', phase: 'L2' },
+            { value: '39.00', measurand: 'Temperature', unit: 'Celsius' }
+          ]
+        }
+      ]
+    });
+
+    const forwardedMeterValues = proxy.calls.find((call) => call.method === 'MeterValues');
+    expect(forwardedMeterValues?.params).toMatchObject({
+      connectorId: 1,
+      meterValue: [
+        {
+          timestamp: '2026-06-19T10:05:00.000Z',
+          sampledValue: expect.arrayContaining([
+            { value: '10.25', measurand: 'Energy.Active.Import.Register', unit: 'kWh' },
+            { value: '16.00', measurand: 'Current.Import', unit: 'A', phase: 'L1' },
+            { value: '39.00', measurand: 'Temperature', unit: 'Celsius' }
+          ])
+        }
+      ]
+    });
+    expect(forwardedMeterValues?.params).not.toHaveProperty('transactionId');
+    const samples = server.db.select().from(meterSamples).all();
+    expect(samples).toHaveLength(6);
+    expect(samples.every((sample) => sample.transactionId === null)).toBe(true);
+    expect(samples.find((sample) => sample.measurand === 'Energy.Active.Import.Register')).toMatchObject({
+      chargerId: 'SMART-EVSE-TRANSACTIONLESS-METER',
+      connectorId: 1,
+      value: '10.25',
+      numericValue: 10.25,
+      normalizedValue: 10250,
+      normalizedUnit: 'Wh',
+      unit: 'kWh'
+    });
+    expect(samples.find((sample) => sample.measurand === 'Power.Active.Import')).toMatchObject({
+      value: '3757.00',
+      normalizedValue: 3757,
+      normalizedUnit: 'W'
+    });
+    expect(samples.find((sample) => sample.measurand === 'Current.Import' && sample.phase === 'L1')).toMatchObject({
+      value: '16.00',
+      normalizedValue: 16,
+      normalizedUnit: 'A'
+    });
+    expect(samples.find((sample) => sample.measurand === 'Temperature')).toMatchObject({
+      value: '39.00',
+      normalizedValue: 39,
+      normalizedUnit: 'Celsius'
+    });
+  });
+
   it('recovers SmartEVSE offline replay StopTransaction calls with transactionId -1 when exactly one active session matches', async () => {
     const proxy = await startRecordingProxyServer();
     cleanup.push(proxy.close);
@@ -1152,6 +1305,57 @@ describe('OCPP 1.6 local primary', () => {
         .all()
         .some((row) => row.message === 'unmatched stop transaction recovery candidate')
     ).toBe(false);
+  });
+
+  it('does not recover SmartEVSE StopTransaction transactionId -1 when timestamp is invalid', async () => {
+    const proxy = await startRecordingProxyServer();
+    cleanup.push(proxy.close);
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const tagId = createTag(server.db, { uuid: 'BAD-REPLAY-TAG' });
+    grantTagAccess(server.db, { tagId, chargerId: 'SMART-EVSE-BAD-REPLAY' });
+    insertProxyTarget(server.db, {
+      id: 'proxy-bad-replay',
+      chargerId: 'SMART-EVSE-BAD-REPLAY',
+      name: 'Bad replay CSMS',
+      url: proxy.endpoint,
+      stationId: 'UPSTREAM-BAD-REPLAY',
+      enabled: true,
+      mode: 'monitor-only',
+      outagePolicy: 'fail-open'
+    });
+
+    const charger = await connectCharger(server.endpoint, 'SMART-EVSE-BAD-REPLAY');
+    cleanup.push(async () => { await charger.close({}); });
+
+    const start = (await charger.call('StartTransaction', {
+      connectorId: 1,
+      idTag: 'BAD-REPLAY-TAG',
+      meterStart: 1000,
+      timestamp: '2026-06-19T10:00:00.000Z'
+    })) as { transactionId: number; idTagInfo: { status: string } };
+
+    charger.sendRaw(JSON.stringify([2, 'bad-replay-stop', 'StopTransaction', {
+      transactionId: -1,
+      idTag: 'BAD-REPLAY-TAG',
+      meterStop: 1550,
+      timestamp: 'not-a-date',
+      reason: 'Local'
+    }]));
+
+    await waitForCondition(() => {
+      expect(server.db.select().from(chargingSessions).where(eq(chargingSessions.transactionId, start.transactionId)).get()).toMatchObject({
+        status: 'active',
+        stopMeterWh: null,
+        stoppedAt: null
+      });
+      expect(proxy.calls.some((call) => call.method === 'StopTransaction')).toBe(false);
+      expect(server.db.select().from(logs).all().find((row) => row.message === 'unmatched stop transaction recovery candidate')).toMatchObject({
+        transactionId: -1,
+        metadata: expect.stringContaining('missing_or_invalid_timestamp')
+      });
+    });
   });
 
   it('ignores duplicate StopTransaction calls without changing the original stopped session', async () => {

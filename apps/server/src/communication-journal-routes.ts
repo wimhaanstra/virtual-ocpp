@@ -85,7 +85,7 @@ export function registerCommunicationJournalRoutes(app: FastifyInstance, db: Dat
   });
 
   app.post('/api/communication-journal/purge', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const parsed = PurgeBodySchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -211,7 +211,7 @@ function isEndpointType(value: string): value is CommunicationSourceType {
 }
 
 function isMessageType(value: string): value is CommunicationMessageType {
-  return value === 'call' || value === 'callResult' || value === 'callError' || value === 'connection' || value === 'disconnect';
+  return value === 'call' || value === 'callResult' || value === 'callError' || value === 'connection' || value === 'disconnect' || value === 'raw';
 }
 
 function toCommunicationCsv(items: ReturnType<CommunicationJournalService['list']>['items']) {

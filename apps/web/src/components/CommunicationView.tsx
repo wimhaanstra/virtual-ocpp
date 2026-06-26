@@ -1,7 +1,8 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, Download, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Download, RefreshCcw, SlidersHorizontal, Trash2 } from "lucide-react";
 import type { CommunicationJournalFilters, CommunicationJournalItem, CommunicationJournalStorageSummary, ProxyTarget } from "../types";
 import { buildCommunicationSummary, formatDateTime, formatTime, stringifyPayload } from "../app-helpers";
+import { FilterField, FilterGrid, FilterPanel, FilterSelect } from "./FilterControls";
 import { Button } from "./ui/button";
 
 type CommunicationViewProps = {
@@ -25,6 +26,13 @@ type CommunicationViewProps = {
   onRenderEndpoint: (type: string, id: string) => ReactNode;
   onResetFilters: () => void;
 };
+
+const endpointTypeFilterOptions = [
+  { value: "", label: "Any" },
+  { value: "charger", label: "Charger" },
+  { value: "server", label: "Server" },
+  { value: "proxy", label: "Proxy" }
+];
 
 export function CommunicationView({
   busy,
@@ -126,155 +134,146 @@ export function CommunicationView({
 
   return (
     <section className="communication-layout">
-      <section className="panel communication-filters-panel">
-        <div className="communication-filter-header">
-          <div>
-            <p className="eyebrow">Journal filters</p>
-            <h2>Filters</h2>
-          </div>
-          <div className="communication-filter-header__meta">
-            <span>{activeFilterChips.length} active</span>
+      <div className="dashboard-section-header">
+        <div>
+          <p className="eyebrow">Communication</p>
+          <h2>Recent journal rows</h2>
+          <p className="status-copy">
+            {communicationJournal.length} row{communicationJournal.length === 1 ? "" : "s"} loaded
+            {communicationStorage ? ` · ${communicationStorage.rowCount.toLocaleString()} stored · oldest ${formatStorageDate(communicationStorage.oldestCreatedAt)} · newest ${formatStorageDate(communicationStorage.newestCreatedAt)}` : ""}
+          </p>
+        </div>
+        <div className="dashboard-section-header__actions">
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
+            <RefreshCcw aria-hidden="true" />
+          </Button>
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onExport} disabled={busy} title="Export CSV" aria-label="Export CSV">
+            <Download aria-hidden="true" />
+          </Button>
+          <Button type="button" className="button-danger icon-button overview-icon-action" onClick={onPurge} disabled={busy} title="Purge journal" aria-label="Purge">
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+
+      <FilterPanel
+        activeCount={activeFilterChips.length}
+        ariaLabel="Active communication filters"
+        busy={busy}
+        chips={activeFilterChips}
+        emptyChipLabel="No extra filters"
+        meta={
+          <>
             <span>{communicationRetentionHours ?? 24}h retention</span>
             <SlidersHorizontal aria-hidden="true" />
-          </div>
-        </div>
-        <div className="filter-chip-row communication-active-filters" aria-label="Active communication filters">
-          {scopeChip ? <span className="filter-chip filter-chip-muted">{scopeChip}</span> : null}
-          {activeFilterChips.length > 0 ? (
-            activeFilterChips.map((chip) => (
-              <span className="filter-chip removable-filter-chip" key={chip.key}>
-                {chip.label}
-                <button
-                  type="button"
-                  onClick={() => removeFilterChip(chip.key)}
-                  aria-label={`Remove ${chip.label} filter`}
-                  title={`Remove ${chip.label} filter`}
-                >
-                  <X aria-hidden="true" />
-                </button>
-              </span>
-            ))
-          ) : (
-            <span className="filter-chip filter-chip-muted">No extra filters</span>
-          )}
-        </div>
-        <div className="communication-filter-form">
-          <div className="communication-filter-primary">
-            <label className="field">
-              <span>Time</span>
-              <select value={draftFilters.preset} onChange={(event) => updateFiltersNow({ preset: event.target.value })}>
-                <option value="15m">Last 15m</option>
-                <option value="1h">Last hour</option>
-                <option value="6h">Last 6h</option>
-                <option value="24h">Last 24h</option>
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>OCPP method</span>
-              <input
-                value={draftFilters.ocppMethod}
-                onChange={(event) => updateFilters({ ocppMethod: event.target.value })}
-                placeholder="BootNotification"
-              />
-            </label>
-            <label className="field">
-              <span>Message type</span>
-              <select
-                value={draftFilters.messageType}
-                onChange={(event) => updateFiltersNow({ messageType: event.target.value })}
-              >
-                <option value="">Any</option>
-                <option value="call">Call</option>
-                <option value="callResult">Call result</option>
-                <option value="callError">Call error</option>
-                <option value="connection">Connection</option>
-                <option value="disconnect">Disconnect</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Transaction</span>
-              <input
-                value={draftFilters.transactionId}
-                onChange={(event) => updateFilters({ transactionId: event.target.value })}
-                inputMode="numeric"
-                placeholder="1781932670376"
-              />
-            </label>
-            <div className="action-row communication-filter-actions">
-              <Button type="button" className="button-secondary compact-text-button" onClick={onResetFilters} disabled={busy}>
-                Reset
-              </Button>
-            </div>
-          </div>
-          {validationError ? <p className="field-error">{validationError}</p> : null}
+          </>
+        }
+        prefixChip={scopeChip ? <span className="filter-chip filter-chip-muted">{scopeChip}</span> : null}
+        validationError={validationError}
+        onRemove={(key) => removeFilterChip(key)}
+        onReset={onResetFilters}
+      >
+        <FilterGrid>
+          <FilterField label="Time">
+            <FilterSelect
+              ariaLabel="Time"
+              value={draftFilters.preset}
+              options={[
+                { value: "15m", label: "Last 15m" },
+                { value: "1h", label: "Last hour" },
+                { value: "6h", label: "Last 6h" },
+                { value: "24h", label: "Last 24h" },
+                { value: "custom", label: "Custom" }
+              ]}
+              onChange={(value) => updateFiltersNow({ preset: value })}
+            />
+          </FilterField>
+          <FilterField label="OCPP method">
+            <input
+              value={draftFilters.ocppMethod}
+              onChange={(event) => updateFilters({ ocppMethod: event.target.value })}
+              placeholder="BootNotification"
+            />
+          </FilterField>
+          <FilterField label="Message type">
+            <FilterSelect
+              ariaLabel="Message type"
+              value={draftFilters.messageType}
+              options={[
+                { value: "", label: "Any" },
+                { value: "call", label: "Call" },
+                { value: "callResult", label: "Call result" },
+                { value: "callError", label: "Call error" },
+                { value: "raw", label: "Raw" },
+                { value: "connection", label: "Connection" },
+                { value: "disconnect", label: "Disconnect" }
+              ]}
+              onChange={(value) => updateFiltersNow({ messageType: value })}
+            />
+          </FilterField>
+          <FilterField label="Transaction">
+            <input
+              value={draftFilters.transactionId}
+              onChange={(event) => updateFilters({ transactionId: event.target.value })}
+              inputMode="numeric"
+              placeholder="1781932670376"
+            />
+          </FilterField>
+        </FilterGrid>
 
           <details className="advanced-filters" open={hasAdvancedFilters || undefined}>
             <summary>
               <span>Source, target, time</span>
               <ChevronDown aria-hidden="true" />
             </summary>
-            <div className="communication-filters">
-              <label className="field">
-                <span>From</span>
+            <FilterGrid columns="advanced">
+              <FilterField label="From">
                 <input
                   value={draftFilters.from}
                   onChange={(event) => updateFilters({ from: event.target.value })}
                   type="datetime-local"
                   disabled={draftFilters.preset !== "custom"}
                 />
-              </label>
-              <label className="field">
-                <span>To</span>
+              </FilterField>
+              <FilterField label="To">
                 <input
                   value={draftFilters.to}
                   onChange={(event) => updateFilters({ to: event.target.value })}
                   type="datetime-local"
                   disabled={draftFilters.preset !== "custom"}
                 />
-              </label>
-              <label className="field">
-                <span>Source type</span>
-                <select
+              </FilterField>
+              <FilterField label="Source type">
+                <FilterSelect
+                  ariaLabel="Source type"
                   value={draftFilters.sourceType}
-                  onChange={(event) => updateFiltersNow({ sourceType: event.target.value })}
-                >
-                  <option value="">Any</option>
-                  <option value="charger">Charger</option>
-                  <option value="server">Server</option>
-                  <option value="proxy">Proxy</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Source id</span>
+                  options={endpointTypeFilterOptions}
+                  onChange={(value) => updateFiltersNow({ sourceType: value })}
+                />
+              </FilterField>
+              <FilterField label="Source id">
                 <input
                   value={draftFilters.sourceId}
                   onChange={(event) => updateFilters({ sourceId: event.target.value })}
                   placeholder="SMART-EVSE-1"
                 />
-              </label>
-              <label className="field">
-                <span>Target type</span>
-                <select
+              </FilterField>
+              <FilterField label="Target type">
+                <FilterSelect
+                  ariaLabel="Target type"
                   value={draftFilters.targetType}
-                  onChange={(event) => updateFiltersNow({ targetType: event.target.value })}
-                >
-                  <option value="">Any</option>
-                  <option value="charger">Charger</option>
-                  <option value="server">Server</option>
-                  <option value="proxy">Proxy</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Target id</span>
+                  options={endpointTypeFilterOptions}
+                  onChange={(value) => updateFiltersNow({ targetType: value })}
+                />
+              </FilterField>
+              <FilterField label="Target id">
                 <input
                   value={draftFilters.targetId}
                   onChange={(event) => updateFilters({ targetId: event.target.value })}
                   placeholder="server"
                 />
-              </label>
-              <label className="field">
-                <span>Charger id</span>
+              </FilterField>
+              <FilterField label="Charger id">
                 {selectedChargerId ? (
                   <input value={selectedChargerId} disabled />
                 ) : (
@@ -284,183 +283,57 @@ export function CommunicationView({
                     placeholder="SMART-EVSE-1"
                   />
                 )}
-              </label>
-              <label className="field">
-                <span>Proxy target id</span>
+              </FilterField>
+              <FilterField label="Proxy target id">
                 <input
                   value={draftFilters.proxyTargetId}
                   onChange={(event) => updateFilters({ proxyTargetId: event.target.value })}
                   placeholder="proxy-1"
                 />
-              </label>
-            </div>
+              </FilterField>
+            </FilterGrid>
           </details>
-        </div>
-      </section>
+      </FilterPanel>
 
-      <section className="panel table-panel communication-table-panel">
-        <div className="topbar-actions">
-          <div>
-            <p className="eyebrow">Communication</p>
-            <h2>Recent journal rows</h2>
-            <p className="status-copy">
-              {communicationJournal.length} row{communicationJournal.length === 1 ? "" : "s"} loaded
-              {communicationStorage ? ` · ${communicationStorage.rowCount.toLocaleString()} stored · oldest ${formatStorageDate(communicationStorage.oldestCreatedAt)} · newest ${formatStorageDate(communicationStorage.newestCreatedAt)}` : ""}
-            </p>
-          </div>
-          <div className="action-row compact-action-row">
-            <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
-              <RefreshCcw aria-hidden="true" />
-            </Button>
-            <Button type="button" className="button-secondary icon-button" onClick={onExport} disabled={busy} title="Export CSV" aria-label="Export CSV">
-              <Download aria-hidden="true" />
-            </Button>
-            <Button type="button" className="button-ghost button-danger icon-button" onClick={onPurge} disabled={busy} title="Purge journal" aria-label="Purge">
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+      <section className="communication-table-panel">
         {communicationJournal.length === 0 ? (
-          <p>No communication rows match these filters.</p>
+          <p className="dashboard-empty-state">No communication rows match these filters.</p>
         ) : (
-          <div className="communication-card-list record-list">
+          <div className="communication-date-stack">
             {groupedJournal.map((group) => (
               <section className="communication-date-group" key={group.dateKey} aria-label={group.label}>
-                <p className="eyebrow">{group.label}</p>
-                <div className="record-list">
-                  {group.items.map((item) => {
-                    const isExpanded = expandedCommunicationJournalId === item.id;
-                    const payloadText = stringifyPayload(item.payload);
-
-                    return (
-                      <article
-                        className="communication-card record-card"
-                        key={item.id}
-                        tabIndex={0}
-                        onClick={() => onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
-                          }
-                        }}
-                      >
-                        <div className="record-card__summary">
-                          <div>
-                            <p className="mono communication-card__method">{item.ocppMethod || item.messageType}</p>
-                            <p className="status-copy">{buildCommunicationSummary(item)}</p>
-                          </div>
-                          <div className="action-row compact-action-row">
-                            <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button session-expand-button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
-                              }}
-                              aria-expanded={isExpanded}
-                              aria-controls={`journal-payload-${item.id}`}
-                              aria-label={isExpanded ? "Hide communication details" : "Show communication details"}
-                              title={isExpanded ? "Hide communication details" : "Show communication details"}
-                            >
-                              {isExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="record-card__meta communication-card__meta">
-                          <span>{formatTime(item.createdAt)}</span>
-                          <span>{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
-                          <span aria-hidden="true">→</span>
-                          <span>{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
-                          <span>{item.messageType}</span>
-                        </div>
-                        {isExpanded ? (
-                          <div id={`journal-payload-${item.id}`} className="communication-expanded record-card__details">
-                            <div className="communication-expanded__grid">
-                              <div>
-                                <div className="communication-payload-header">
-                                  <p className="eyebrow">Payload</p>
-                                  <Button
-                                    type="button"
-                                    className="button-secondary icon-button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      void copyPayload(item);
-                                    }}
-                                    title="Copy payload"
-                                    aria-label="Copy payload"
-                                  >
-                                    {copiedPayloadId === item.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                                  </Button>
-                                </div>
-                                <pre className="communication-payload">{payloadText}</pre>
-                              </div>
-                              <div className="communication-details">
-                                <p>
-                                  <span className="eyebrow">Summary</span>
-                                  <span>{buildCommunicationSummary(item)}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Time</span>
-                                  <span>{formatDateTime(item.createdAt)}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Direction</span>
-                                  <span>{item.direction}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Message type</span>
-                                  <span>{item.messageType}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Method</span>
-                                  <span className="mono">{item.ocppMethod || "-"}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Source</span>
-                                  <span className="mono">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Target</span>
-                                  <span className="mono">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Charger</span>
-                                  <span className="mono">{item.chargerId || "-"}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Proxy target</span>
-                                  <span className="mono">
-                                    {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
-                                  </span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Transaction</span>
-                                  <span className="mono">{item.transactionId ?? "-"}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Correlation</span>
-                                  <span className="mono">{item.correlationId || "-"}</span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Error</span>
-                                  <span className="mono">
-                                    {item.errorCode ? item.errorCode : "-"}
-                                    {item.errorDescription ? ` - ${item.errorDescription}` : ""}
-                                  </span>
-                                </p>
-                                <p>
-                                  <span className="eyebrow">Tag</span>
-                                  <span className="mono">{item.idTag || "-"}</span>
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
-                      </article>
-                    );
-                  })}
+                <div className="communication-date-group__header">
+                  <p className="eyebrow">{group.label}</p>
+                </div>
+                <div className="communication-table-wrap">
+                  <table className="communication-table">
+                    <thead>
+                      <tr>
+                        <th aria-label="Expand communication details" />
+                        <th>Time</th>
+                        <th>Method</th>
+                        <th>Direction</th>
+                        <th>Source</th>
+                        <th>Target</th>
+                        <th>Type</th>
+                        <th>Transaction</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.items.map((item) => (
+                        <CommunicationTableRow
+                          copiedPayloadId={copiedPayloadId}
+                          formatProxyTargetLabel={formatProxyTargetLabel}
+                          isExpanded={expandedCommunicationJournalId === item.id}
+                          item={item}
+                          key={item.id}
+                          onCopyPayload={copyPayload}
+                          onExpandedCommunicationJournalIdChange={onExpandedCommunicationJournalIdChange}
+                          onRenderEndpoint={onRenderEndpoint}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             ))}
@@ -478,6 +351,163 @@ export function CommunicationView({
       </section>
     </section>
 
+  );
+}
+
+type CommunicationTableRowProps = {
+  copiedPayloadId: string | null;
+  formatProxyTargetLabel: (proxyTargetId: string) => string;
+  isExpanded: boolean;
+  item: CommunicationJournalItem;
+  onCopyPayload: (item: CommunicationJournalItem) => Promise<void>;
+  onExpandedCommunicationJournalIdChange: (id: string | null) => void;
+  onRenderEndpoint: (type: string, id: string) => ReactNode;
+};
+
+function CommunicationTableRow({
+  copiedPayloadId,
+  formatProxyTargetLabel,
+  isExpanded,
+  item,
+  onCopyPayload,
+  onExpandedCommunicationJournalIdChange,
+  onRenderEndpoint
+}: CommunicationTableRowProps) {
+  const payloadText = stringifyPayload(item.payload);
+  const nextExpandedId = isExpanded ? null : item.id;
+
+  return (
+    <>
+      <tr
+        className="communication-row"
+        tabIndex={0}
+        onClick={() => onExpandedCommunicationJournalIdChange(nextExpandedId)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onExpandedCommunicationJournalIdChange(nextExpandedId);
+          }
+        }}
+      >
+        <td className="communication-table-cell communication-table-cell--expand">
+          <Button
+            type="button"
+            className="button-secondary icon-button overview-icon-action"
+            onClick={(event) => {
+              event.stopPropagation();
+              onExpandedCommunicationJournalIdChange(nextExpandedId);
+            }}
+            aria-expanded={isExpanded}
+            aria-controls={`journal-payload-${item.id}`}
+            aria-label={isExpanded ? "Hide communication details" : "Show communication details"}
+            title={isExpanded ? "Hide communication details" : "Show communication details"}
+          >
+            {isExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+          </Button>
+        </td>
+        <td>
+          <strong>{formatTime(item.createdAt)}</strong>
+        </td>
+        <td>
+          <div className="communication-table-primary">
+            <strong className="mono">{item.ocppMethod || "-"}</strong>
+            <span>{item.errorCode ? `Error ${item.errorCode}` : buildCommunicationSummary(item)}</span>
+          </div>
+        </td>
+        <td>
+          <span className={`pill overview-status-pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
+        </td>
+        <td>{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</td>
+        <td>{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</td>
+        <td>{item.messageType}</td>
+        <td className="mono">{item.transactionId ?? "-"}</td>
+      </tr>
+      {isExpanded ? (
+        <tr className="communication-detail-table-row">
+          <td colSpan={8}>
+            <div id={`journal-payload-${item.id}`} className="communication-expanded">
+              <div className="communication-expanded__grid">
+                <div>
+                  <div className="communication-payload-header">
+                    <p className="eyebrow">Payload</p>
+                    <Button
+                      type="button"
+                      className="button-secondary icon-button overview-icon-action"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void onCopyPayload(item);
+                      }}
+                      title="Copy payload"
+                      aria-label="Copy payload"
+                    >
+                      {copiedPayloadId === item.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                    </Button>
+                  </div>
+                  <pre className="communication-payload">{payloadText}</pre>
+                </div>
+                <div className="communication-details">
+                  <p>
+                    <span className="eyebrow">Summary</span>
+                    <span>{buildCommunicationSummary(item)}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Time</span>
+                    <span>{formatDateTime(item.createdAt)}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Direction</span>
+                    <span>{item.direction}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Message type</span>
+                    <span>{item.messageType}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Method</span>
+                    <span className="mono">{item.ocppMethod || "-"}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Source</span>
+                    <span className="mono">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Target</span>
+                    <span className="mono">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Charger</span>
+                    <span className="mono">{item.chargerId || "-"}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Proxy target</span>
+                    <span className="mono">{item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Transaction</span>
+                    <span className="mono">{item.transactionId ?? "-"}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Correlation</span>
+                    <span className="mono">{item.correlationId || "-"}</span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Error</span>
+                    <span className="mono">
+                      {item.errorCode ? item.errorCode : "-"}
+                      {item.errorDescription ? ` - ${item.errorDescription}` : ""}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="eyebrow">Tag</span>
+                    <span className="mono">{item.idTag || "-"}</span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }
 

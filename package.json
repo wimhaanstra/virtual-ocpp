@@ -1,6 +1,6 @@
 {
   "name": "virtual-ocpp",
-  "version": "0.1.0-20260624",
+  "version": "0.1.0-20260626",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -17,6 +17,7 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=@virtual-ocpp/server",
+    "seed:sessions": "npm run seed:sessions --workspace=@virtual-ocpp/server --",
     "release:version": "node scripts/set-release-version.mjs",
     "docker:build": "npm run release:version && node scripts/docker-image.mjs build",
     "docker:build:amd64": "npm run release:version && node scripts/docker-image.mjs build:amd64",

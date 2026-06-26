@@ -35,14 +35,6 @@ export function DiagnosticsView({
 
   return (
     <section className="diagnostics-page">
-      <section className="diagnostics-page-header">
-        <div>
-          <p className="eyebrow">Problem solving</p>
-          <h1>Diagnostics</h1>
-        </div>
-        <span className="pill overview-status-pill pill-neutral mono">{selectedChargerId || "No charger selected"}</span>
-      </section>
-
       <ChargerDiagnosticsPanel
         busy={busy}
         selectedChargerId={selectedChargerId}

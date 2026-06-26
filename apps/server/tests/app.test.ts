@@ -1,11 +1,13 @@
 import { eq } from 'drizzle-orm';
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import { RPCServer } from 'ocpp-rpc';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { applyMigrations } from '../src/db/client.js';
 import {
+  apiTokens,
   chargerConnections,
   chargerProxyAssignments,
   chargers,
@@ -145,6 +147,9 @@ describe('app', () => {
       { method: 'GET', url: '/api/proxy-health?chargerId=CHARGER-1' },
       { method: 'GET', url: '/api/settings/onboarding' },
       { method: 'PATCH', url: '/api/settings/onboarding' },
+      { method: 'GET', url: '/api/access-tokens' },
+      { method: 'POST', url: '/api/access-tokens' },
+      { method: 'POST', url: '/mcp' },
       { method: 'GET', url: '/api/tags' },
       { method: 'GET', url: '/api/charger-connections' },
       { method: 'GET', url: '/api/sessions' },
@@ -157,6 +162,7 @@ describe('app', () => {
       { method: 'GET', url: '/api/charging-stats' },
       { method: 'GET', url: '/api/logs' },
       { method: 'GET', url: '/api/communication-journal' },
+      { method: 'GET', url: '/api/diagnostics/smartevse/CHARGER-1' },
       { method: 'GET', url: '/api/live-updates' }
     ] as const;
 
@@ -165,6 +171,226 @@ describe('app', () => {
       expect(response.statusCode).toBe(401);
       expect(response.json()).toEqual({ error: 'unauthorized' });
     }
+
+    await app.close();
+  });
+
+  it('serves an authenticated Streamable HTTP MCP endpoint', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/access-tokens',
+      headers: { cookie },
+      payload: {
+        name: 'MCP diagnostics',
+        scope: 'read_only'
+      }
+    });
+    expect(created.statusCode).toBe(201);
+    const authorization = `Bearer ${created.json().token}`;
+
+    const methodWithoutAuth = await app.inject({ method: 'GET', url: '/mcp' });
+    expect(methodWithoutAuth.statusCode).toBe(401);
+
+    const methodWithAuth = await app.inject({
+      method: 'GET',
+      url: '/mcp',
+      headers: { authorization }
+    });
+    expect(methodWithAuth.statusCode).toBe(405);
+    expect(methodWithAuth.json()).toMatchObject({
+      jsonrpc: '2.0',
+      error: { code: -32000 }
+    });
+
+    const initialize = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        authorization,
+        accept: 'application/json, text/event-stream'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-06-18',
+          capabilities: {},
+          clientInfo: {
+            name: 'vitest',
+            version: '1.0.0'
+          }
+        }
+      }
+    });
+    expect(initialize.statusCode).toBe(200);
+    expect(initialize.json()).toMatchObject({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        serverInfo: {
+          name: '@virtual-ocpp/server-mcp'
+        }
+      }
+    });
+
+    const tools = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: {
+        authorization,
+        accept: 'application/json, text/event-stream'
+      },
+      payload: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/list',
+        params: {}
+      }
+    });
+    expect(tools.statusCode).toBe(200);
+    expect(JSON.stringify(tools.json())).toContain('diagnostics_smartevse');
+
+    await app.close();
+  });
+
+  it('manages scoped API access tokens without storing or listing plaintext tokens', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const cookie = await login(app);
+
+    const readOnly = await app.inject({
+      method: 'POST',
+      url: '/api/access-tokens',
+      headers: { cookie },
+      payload: {
+        name: 'Diagnostics',
+        scope: 'read_only',
+        expiresAt: '2026-12-31T23:59:59.000Z'
+      }
+    });
+    expect(readOnly.statusCode).toBe(201);
+    expect(readOnly.json()).toMatchObject({
+      name: 'Diagnostics',
+      scope: 'read_only',
+      expiresAt: '2026-12-31T23:59:59.000Z',
+      revokedAt: null,
+      token: expect.stringMatching(/^[A-Za-z0-9_-]{32}$/)
+    });
+    expect(readOnly.json()).not.toHaveProperty('tokenHash');
+
+    const storedReadOnly = tempDb.db.select().from(apiTokens).where(eq(apiTokens.id, readOnly.json().id)).limit(1).get();
+    expect(storedReadOnly?.tokenHash).toBeTruthy();
+    expect(storedReadOnly?.tokenHash).not.toBe(readOnly.json().token);
+
+    const listed = await app.inject({
+      method: 'GET',
+      url: '/api/access-tokens',
+      headers: { cookie }
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()[0]).not.toHaveProperty('token');
+    expect(listed.json()[0]).not.toHaveProperty('tokenHash');
+
+    const bearer = { authorization: `Bearer ${readOnly.json().token}` };
+    const chargersResponse = await app.inject({
+      method: 'GET',
+      url: '/api/chargers',
+      headers: bearer
+    });
+    expect(chargersResponse.statusCode).toBe(200);
+
+    const legacySecret = 'legacy-secret-for-compatibility';
+    tempDb.db.insert(apiTokens).values({
+      id: 'legacy-token-id',
+      name: 'Legacy integration',
+      scope: 'read_only',
+      tokenHash: createHash('sha256').update(legacySecret).digest('hex'),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      expiresAt: null,
+      revokedAt: null,
+      lastUsedAt: null
+    }).run();
+    const legacyResponse = await app.inject({
+      method: 'GET',
+      url: '/api/chargers',
+      headers: { authorization: `Bearer v1.legacy-token-id.${legacySecret}` }
+    });
+    expect(legacyResponse.statusCode).toBe(200);
+
+    const readOnlyWrite = await app.inject({
+      method: 'POST',
+      url: '/api/tags',
+      headers: bearer,
+      payload: {
+        uuid: 'READ-ONLY-SHOULD-NOT-WRITE'
+      }
+    });
+    expect(readOnlyWrite.statusCode).toBe(403);
+    expect(readOnlyWrite.json()).toEqual({ error: 'insufficient_scope' });
+    expect(tempDb.db.select().from(tags).where(eq(tags.uuid, 'READ-ONLY-SHOULD-NOT-WRITE')).all()).toHaveLength(0);
+
+    const readWrite = await app.inject({
+      method: 'POST',
+      url: '/api/access-tokens',
+      headers: { cookie },
+      payload: {
+        name: 'Automation',
+        scope: 'read_write'
+      }
+    });
+    expect(readWrite.statusCode).toBe(201);
+
+    const tokenAdminWithBearer = await app.inject({
+      method: 'GET',
+      url: '/api/access-tokens',
+      headers: { authorization: `Bearer ${readWrite.json().token}` }
+    });
+    expect(tokenAdminWithBearer.statusCode).toBe(401);
+
+    const writeResponse = await app.inject({
+      method: 'POST',
+      url: '/api/tags',
+      headers: { authorization: `Bearer ${readWrite.json().token}` },
+      payload: {
+        uuid: 'WRITE-TOKEN-TAG',
+        label: 'Created by API token'
+      }
+    });
+    expect(writeResponse.statusCode).toBe(201);
+
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: `/api/access-tokens/${readOnly.json().id}`,
+      headers: { cookie }
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect(revoked.json()).toMatchObject({ ok: true, revokedAt: expect.any(String) });
+
+    const listedAfterRevoke = await app.inject({
+      method: 'GET',
+      url: '/api/access-tokens',
+      headers: { cookie }
+    });
+    expect(listedAfterRevoke.statusCode).toBe(200);
+    expect(listedAfterRevoke.json().map((token: { id: string }) => token.id)).not.toContain(readOnly.json().id);
+    expect(listedAfterRevoke.json().map((token: { id: string }) => token.id)).toContain(readWrite.json().id);
+
+    const afterRevoke = await app.inject({
+      method: 'GET',
+      url: '/api/chargers',
+      headers: bearer
+    });
+    expect(afterRevoke.statusCode).toBe(401);
 
     await app.close();
   });
@@ -1258,6 +1484,123 @@ describe('app', () => {
     await app.close();
   });
 
+  it('searches and paginates charging sessions without changing the legacy sessions response', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values([
+      {
+        id: 'session-search-1',
+        chargerId: 'CHARGER-SEARCH',
+        connectorId: 1,
+        transactionId: 2001,
+        idTag: 'RFID-ALPHA',
+        startedAt: new Date('2026-06-20T10:00:00.000Z'),
+        stoppedAt: new Date('2026-06-20T10:30:00.000Z'),
+        startMeterWh: 1000,
+        stopMeterWh: 2600,
+        stopReason: 'Local',
+        status: 'stopped'
+      },
+      {
+        id: 'session-search-2',
+        chargerId: 'CHARGER-SEARCH',
+        connectorId: 2,
+        transactionId: 2002,
+        idTag: 'RFID-BETA',
+        startedAt: new Date('2026-06-20T09:00:00.000Z'),
+        stoppedAt: null,
+        startMeterWh: 2600,
+        stopMeterWh: null,
+        stopReason: null,
+        status: 'active'
+      },
+      {
+        id: 'session-search-3',
+        chargerId: 'CHARGER-SEARCH',
+        connectorId: 1,
+        transactionId: 2003,
+        idTag: 'RFID-ALPHA',
+        startedAt: new Date('2026-06-19T08:00:00.000Z'),
+        stoppedAt: new Date('2026-06-19T08:20:00.000Z'),
+        startMeterWh: 3000,
+        stopMeterWh: 3400,
+        stopReason: 'EVDisconnected',
+        status: 'stopped'
+      },
+      {
+        id: 'session-search-other',
+        chargerId: 'CHARGER-OTHER',
+        connectorId: 1,
+        transactionId: 3001,
+        idTag: 'RFID-ALPHA',
+        startedAt: new Date('2026-06-20T11:00:00.000Z'),
+        stoppedAt: new Date('2026-06-20T11:30:00.000Z'),
+        startMeterWh: 100,
+        stopMeterWh: 5000,
+        stopReason: 'Local',
+        status: 'stopped'
+      }
+    ]).run();
+
+    const legacyResponse = await app.inject({
+      method: 'GET',
+      url: '/api/sessions?chargerId=CHARGER-SEARCH',
+      headers: { cookie }
+    });
+    expect(legacyResponse.statusCode).toBe(200);
+    expect(Array.isArray(legacyResponse.json())).toBe(true);
+
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/search?chargerId=CHARGER-SEARCH&limit=2',
+      headers: { cookie }
+    });
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json()).toMatchObject({
+      items: [
+        { id: 'session-search-1', transactionId: 2001 },
+        { id: 'session-search-2', transactionId: 2002 }
+      ],
+      hasMore: true,
+      nextCursor: expect.any(String)
+    });
+
+    const secondPage = await app.inject({
+      method: 'GET',
+      url: `/api/sessions/search?chargerId=CHARGER-SEARCH&limit=2&cursor=${encodeURIComponent(firstPage.json().nextCursor)}`,
+      headers: { cookie }
+    });
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json()).toMatchObject({
+      items: [{ id: 'session-search-3', transactionId: 2003 }],
+      hasMore: false,
+      nextCursor: null
+    });
+
+    const filtered = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/search?chargerId=CHARGER-SEARCH&status=stopped&idTag=ALPHA&connectorId=1&minEnergyWh=1000&from=2026-06-20T00%3A00%3A00.000Z&to=2026-06-21T00%3A00%3A00.000Z',
+      headers: { cookie }
+    });
+    expect(filtered.statusCode).toBe(200);
+    expect(filtered.json()).toMatchObject({
+      items: [{ id: 'session-search-1', transactionId: 2001 }],
+      hasMore: false
+    });
+
+    const invalid = await app.inject({
+      method: 'GET',
+      url: '/api/sessions/search?cursor=not-a-cursor',
+      headers: { cookie }
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    await app.close();
+  });
+
   it('matches transactionless MeterValues to the active session by connector and time window', async () => {
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
@@ -1423,6 +1766,152 @@ describe('app', () => {
         sampleAssociation: 'connector-time-window'
       })
     ]);
+
+    await app.close();
+  });
+
+  it('summarizes SmartEVSE MeterValues cadence and recent communication diagnostics', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+
+    tempDb.db.insert(chargingSessions).values({
+      id: 'smartevse-active-session',
+      chargerId: '8881',
+      connectorId: 1,
+      transactionId: 1782282759945,
+      idTag: '4227105',
+      startedAt: new Date('2026-06-24T12:52:49.000Z'),
+      stoppedAt: null,
+      startMeterWh: 494851,
+      stopMeterWh: null,
+      stopReason: null,
+      status: 'active'
+    }).run();
+    tempDb.db.insert(meterSamples).values([
+      {
+        id: 'smartevse-sample-1',
+        chargerId: '8881',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-25T06:14:37.000Z'),
+        value: '495513',
+        numericValue: 495513,
+        normalizedValue: 495513,
+        normalizedUnit: 'Wh',
+        measurand: 'Energy.Active.Import.Register',
+        unit: 'Wh',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'smartevse-sample-2',
+        chargerId: '8881',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-25T06:22:57.000Z'),
+        value: '495513',
+        numericValue: 495513,
+        normalizedValue: 495513,
+        normalizedUnit: 'Wh',
+        measurand: 'Energy.Active.Import.Register',
+        unit: 'Wh',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      },
+      {
+        id: 'smartevse-sample-3',
+        chargerId: '8881',
+        connectorId: 1,
+        transactionId: null,
+        sampledAt: new Date('2026-06-25T06:31:17.000Z'),
+        value: '495513',
+        numericValue: 495513,
+        normalizedValue: 495513,
+        normalizedUnit: 'Wh',
+        measurand: 'Energy.Active.Import.Register',
+        unit: 'Wh',
+        context: 'Sample.Periodic',
+        phase: null,
+        location: null,
+        format: null
+      }
+    ]).run();
+    tempDb.db.insert(communicationJournal).values({
+      id: 'smartevse-boot-journal',
+      createdAt: new Date(),
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: '8881',
+      targetType: 'server',
+      targetId: 'server',
+      chargerId: '8881',
+      proxyTargetId: null,
+      messageType: 'call',
+      ocppMethod: 'BootNotification',
+      transactionId: null,
+      idTag: null,
+      payloadJson: '{}',
+      errorCode: null,
+      errorDescription: null,
+      correlationId: 'smartevse-correlation'
+    }).run();
+    tempDb.db.insert(chargerConnections).values({
+      id: 'smartevse-connection',
+      chargerId: '8881',
+      connectedAt: new Date('2026-06-26T15:41:09.000Z'),
+      disconnectedAt: new Date('2026-06-26T15:46:09.000Z')
+    }).run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/diagnostics/smartevse/8881',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      chargerId: '8881',
+      meterValues: {
+        sampleRows: 3,
+        meterValueTimestamps: 3,
+        firstSampledAt: '2026-06-25T06:14:37.000Z',
+        lastSampledAt: '2026-06-25T06:31:17.000Z',
+        cadence: {
+          averageGapSeconds: 500,
+          minGapSeconds: 500,
+          maxGapSeconds: 500,
+          normalIntervalCount: 2,
+          normalIntervalBandSeconds: [450, 550]
+        }
+      },
+      activeSession: {
+        id: 'smartevse-active-session',
+        transactionId: 1782282759945,
+        latestMeterSampleAt: '2026-06-25T06:31:17.000Z'
+      },
+      recentJournal: {
+        methods: [
+          expect.objectContaining({
+            ocppMethod: 'BootNotification',
+            sourceType: 'charger',
+            targetType: 'server',
+            count: 1
+          })
+        ]
+      },
+      recentConnections: [
+        expect.objectContaining({
+          id: 'smartevse-connection',
+          durationSeconds: 300
+        })
+      ]
+    });
 
     await app.close();
   });

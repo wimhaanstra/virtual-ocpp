@@ -13,7 +13,7 @@ const LastPurgeSettingKey = 'communication.lastPurge';
 export type CommunicationDirection = 'inbound' | 'outbound';
 export type CommunicationSourceType = 'charger' | 'server' | 'proxy';
 export type CommunicationTargetType = 'charger' | 'server' | 'proxy';
-export type CommunicationMessageType = 'call' | 'callResult' | 'callError' | 'connection' | 'disconnect';
+export type CommunicationMessageType = 'call' | 'callResult' | 'callError' | 'connection' | 'disconnect' | 'raw';
 
 export type CommunicationJournalEntryInput = {
   direction: CommunicationDirection;
@@ -245,6 +245,28 @@ export class CommunicationJournalService {
       messageType: 'disconnect',
       chargerId,
       payload: { chargerId }
+    });
+  }
+
+  recordChargerRaw(input: {
+    chargerId: string;
+    payload: unknown;
+    errorCode?: string | null;
+    errorDescription?: string | null;
+    correlationId?: string | null;
+  }) {
+    return this.recordEntry({
+      direction: 'inbound',
+      sourceType: 'charger',
+      sourceId: input.chargerId,
+      targetType: 'server',
+      targetId: 'server',
+      messageType: 'raw',
+      chargerId: input.chargerId,
+      payload: input.payload,
+      errorCode: input.errorCode,
+      errorDescription: input.errorDescription,
+      correlationId: input.correlationId
     });
   }
 

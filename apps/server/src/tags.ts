@@ -59,7 +59,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
   });
 
   app.post('/api/tags', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = CreateTagSchema.safeParse(request.body);
     if (!body.success) {
@@ -96,7 +96,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
   });
 
   app.patch<{ Params: { id: string } }>('/api/tags/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateTagSchema.safeParse(request.body);
     if (!body.success) {
@@ -135,7 +135,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
   });
 
   app.delete<{ Params: { id: string } }>('/api/tags/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const existing = db.select().from(tags).where(eq(tags.id, request.params.id)).limit(1).get();
     if (!existing) {
@@ -149,7 +149,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
   });
 
   app.put<{ Params: { id: string; chargerId: string } }>('/api/tags/:id/chargers/:chargerId', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateTagAccessSchema.safeParse(request.body ?? {});
     if (!body.success) {
@@ -220,7 +220,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
   });
 
   app.delete<{ Params: { id: string; chargerId: string } }>('/api/tags/:id/chargers/:chargerId', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const existing = db
       .select()

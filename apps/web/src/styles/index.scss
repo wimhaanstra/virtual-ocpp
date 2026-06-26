@@ -1,7 +1,7 @@
 @use "tokens";
 @use "base";
-@use "legacy";
 @use "components";
+@use "auth";
 @use "chrome";
 @use "sidebar";
 @use "lists";
@@ -11,6 +11,10 @@
 @use "chargers";
 @use "sessions";
 @use "proxy-targets";
+@use "tags";
 @use "tag-access";
 @use "diagnostics";
 @use "settings";
+@use "communication";
+@use "onboarding";
+@use "recovery";

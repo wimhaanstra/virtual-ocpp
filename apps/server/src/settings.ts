@@ -41,7 +41,7 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
   });
 
   app.patch('/api/settings/onboarding', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateOnboardingSettingsSchema.safeParse(request.body ?? {});
     if (!body.success) {
@@ -89,7 +89,7 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
   });
 
   app.patch('/api/settings/communication', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateCommunicationSettingsSchema.safeParse(request.body ?? {});
     if (!body.success) {

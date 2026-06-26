@@ -102,7 +102,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
   });
 
   app.post('/api/proxy-targets', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = CreateProxyTargetSchema.safeParse(request.body);
     if (!body.success) {
@@ -152,7 +152,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
   });
 
   app.patch<{ Params: { id: string } }>('/api/proxy-targets/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateProxyTargetSchema.safeParse(request.body);
     if (!body.success) {
@@ -215,7 +215,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
   });
 
   app.delete<{ Params: { id: string } }>('/api/proxy-targets/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const existing = db.select().from(proxyTargets).where(eq(proxyTargets.id, request.params.id)).limit(1).get();
     if (!existing) {

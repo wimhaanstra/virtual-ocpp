@@ -163,7 +163,7 @@ function ProxyTargetTableRow({
             >
               {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
             </Button>
-            <Button type="button" className="button-ghost icon-button overview-icon-action" onClick={() => onDelete(target)} disabled={busy} title="Delete proxy target" aria-label="Delete">
+            <Button type="button" className="button-danger icon-button overview-icon-action" onClick={() => onDelete(target)} disabled={busy} title="Delete proxy target" aria-label="Delete">
               <Trash2 aria-hidden="true" />
             </Button>
           </div>

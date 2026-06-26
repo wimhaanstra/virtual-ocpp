@@ -113,41 +113,14 @@ See `docs/deployment.md` for Traefik/reverse proxy, TLS, storage override, and s
 
 ## Current Endpoints
 
-- `GET /health` returns service health.
-- `POST /api/auth/login` accepts `{ "username": "...", "password": "..." }` and sets an HTTP-only session cookie.
-- `POST /api/auth/logout` clears the session cookie.
-- `GET /api/auth/me` returns the current admin user when authenticated.
-- `GET /api/auth/session` returns the current admin session for the frontend shell.
-- `GET /api/tags` lists global tags and their charger access rows. Requires admin session.
-- `POST /api/tags` creates a tag: `{ "uuid": "...", "label": "...", "enabled": true }`. Requires admin session.
-- `PATCH /api/tags/:id` updates `uuid`, `label`, or `enabled`. Requires admin session.
-- `DELETE /api/tags/:id` deletes a tag. Requires admin session.
-- `PUT /api/tags/:id/chargers/:chargerId` grants or updates access for a tag on one registered charger. Requires admin session.
-- `DELETE /api/tags/:id/chargers/:chargerId` revokes access for a tag on one charger. Requires admin session.
-- `GET /api/proxy-targets?chargerId=...` lists configured external OCPP proxy targets for a charger. Requires admin session.
-- `POST /api/proxy-targets` creates a proxy target for `chargerId` with URL, optional username, optional password, optional station id, mode, outage policy, and optional `tagMappings`. Requires admin session.
-- `PATCH /api/proxy-targets/:id` updates target name, URL, username, station id, enabled state, mode, outage policy, stored Basic Auth password, or per-proxy tag mappings. Requires admin session.
-- `DELETE /api/proxy-targets/:id` deletes a proxy target. Requires admin session.
-- `GET /api/proxy-health?chargerId=...` returns runtime upstream proxy socket health for a charger. Requires admin session.
-- `GET /api/dashboard-config` returns secret-free charger connection config for the dashboard. Requires admin session.
-- `GET /api/settings/communication` returns communication journal retention settings plus row-count, oldest/newest-row storage summary, and last purge result. Requires admin session.
-- `PATCH /api/settings/communication` updates communication journal retention. Requires admin session.
-- `GET /api/communication-journal` lists redacted charger/server/proxy OCPP communication rows with source/target filters. Requires admin session.
-- `GET /api/communication-journal/export` downloads the current redacted journal scope as CSV. Requires admin session.
-- `POST /api/communication-journal/purge` deletes expired communication journal rows, or rows matching an explicit filter scope when confirmed with `PURGE`. Requires admin session.
-- `GET /api/chargers` lists recent charger connections. Requires admin session.
-- `GET /api/charger-connections` is an alias for charger connection history. Requires admin session.
-- `GET /api/sessions` lists recent charging sessions. Requires admin session.
-- `GET /api/active-session-audit?chargerId=...` lists active sessions that may have missed `StopTransaction`, with latest meter/status context and active proxy mappings. Requires admin session.
-- `POST /api/sessions/:id/remote-stop` sends OCPP `RemoteStopTransaction` to the connected charger for an active session. Requires admin session.
-- `GET /api/proxy-stop-recovery-queue?chargerId=...` lists stopped local sessions whose upstream proxy mapping is still open, including the preserved upstream transaction id and preview `StopTransaction` payload. Requires admin session.
-- `POST /api/proxy-stop-recovery-queue/:mappingId/retry` retries one queued upstream proxy `StopTransaction` and clears the queue item only after the proxy call succeeds. Requires admin session.
-- `POST /api/sessions/:id/proxy-stop-recovery-suggestion` predicts the next upstream transaction id for one proxy target from the latest stored proxy mapping. Requires admin session.
-- `POST /api/sessions/:id/proxy-stop-recovery-preview` previews a manual `StopTransaction` for one proxy target using an operator-supplied upstream transaction id. Requires admin session.
-- `POST /api/sessions/:id/proxy-stop-recovery` sends that manual proxy `StopTransaction` for an already-stopped local session and records the recovered upstream mapping. Requires admin session.
-- `POST /api/sessions/:id/close` locally closes a lingering active session record without sending an OCPP command. Requires admin session.
-- `GET /api/logs` lists recent log/activity entries with safe context and without raw metadata. Requires admin session.
-- `ws://host:8797/ocpp/:chargerId` accepts OCPP 1.6j charger websocket connections. The dashboard shows the configured URL template from `OCPP_PUBLIC_URL`, or a local backend-port default when no override is set.
+The canonical external API guide lives in [`docs/external-api.md`](docs/external-api.md). It covers admin sessions, scoped bearer tokens, endpoint groups, permissions, curl examples, the MCP server, and SmartEVSE diagnostics evidence.
+
+At a high level:
+
+- `GET /health` and `GET /ready` are public health checks.
+- `POST /api/auth/login` sets the signed admin session cookie.
+- All other `/api/*` routes require an authenticated admin session.
+- `ws://host:8797/ocpp/:chargerId` is the charger websocket endpoint, with optional Basic Auth when `OCPP_BASIC_AUTH_PASSWORD` is configured.
 
 ## Current OCPP Support
 

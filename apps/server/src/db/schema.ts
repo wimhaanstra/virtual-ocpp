@@ -8,6 +8,25 @@ export const sessions = sqliteTable('sessions', {
   revokedAt: integer('revoked_at', { mode: 'timestamp_ms' })
 });
 
+export const apiTokens = sqliteTable(
+  'api_tokens',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    scope: text('scope').notNull(),
+    tokenHash: text('token_hash').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
+    revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),
+    lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' })
+  },
+  (table) => ({
+    tokenHashUnique: uniqueIndex('api_tokens_token_hash_unique').on(table.tokenHash),
+    createdAtIdx: index('api_tokens_created_at_idx').on(table.createdAt)
+  })
+);
+
 export const onboardingSettings = sqliteTable('onboarding_settings', {
   id: text('id').primaryKey(),
   completedAt: integer('completed_at', { mode: 'timestamp_ms' }),

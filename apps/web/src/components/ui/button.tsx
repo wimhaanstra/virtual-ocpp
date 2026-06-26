@@ -23,9 +23,7 @@ export function Button({ className, type = "button", ...props }: ButtonProps) {
       aria-disabled={props.disabled ? "true" : undefined}
       appearance={isGhost ? "plain" : isSecondary ? "outlined" : "filled"}
       className={cn("wa-button-adapter", className)}
-      role="button"
       size={isCompact ? "s" : "m"}
-      tabIndex={props.disabled ? -1 : 0}
       type={type}
       variant={isDanger ? "danger" : isSecondary || isGhost ? "neutral" : "brand"}
       {...props}

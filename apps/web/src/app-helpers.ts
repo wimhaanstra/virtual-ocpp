@@ -8,6 +8,7 @@ import type {
   ProxyHealthTarget,
   ProxyTarget,
   ProxyTargetFormState,
+  SessionSearchFilters,
   OnboardingSettings,
   OnboardingState,
   Tag,
@@ -29,6 +30,16 @@ export const emptyCommunicationJournalFilters = (): CommunicationJournalFilters 
   ocppMethod: "",
   transactionId: "",
   messageType: ""
+});
+
+export const emptySessionSearchFilters = (): SessionSearchFilters => ({
+  from: "",
+  to: "",
+  status: "",
+  idTag: "",
+  transactionId: "",
+  connectorId: "",
+  minEnergyWh: ""
 });
 
 export const emptyTagForm = (): TagFormState => ({
@@ -60,6 +71,7 @@ export const emptyProxyTargetForm = (): ProxyTargetFormState => ({
 export const viewPaths: Record<ActiveView, string> = {
   Home: "/",
   Settings: "/settings",
+  "Access tokens": "/settings/access-tokens",
   "Charger dashboard": "/charger-dashboard",
   Diagnostics: "/diagnostics",
   Chargers: "/chargers",
@@ -113,6 +125,26 @@ export function buildCommunicationViewUrl(chargerId: string, filters: Communicat
   const params = buildCommunicationFilterParams(filters, chargerId, "url");
   const query = params.toString();
   return `${viewPaths.Communication}${query ? `?${query}` : ""}`;
+}
+
+export function getSessionFiltersFromSearch(search = window.location.search): SessionSearchFilters {
+  const params = new URLSearchParams(search);
+  return {
+    ...emptySessionSearchFilters(),
+    from: params.get("from") ?? "",
+    to: params.get("to") ?? "",
+    status: params.get("status") ?? "",
+    idTag: params.get("idTag") ?? "",
+    transactionId: params.get("transactionId") ?? "",
+    connectorId: params.get("connectorId") ?? "",
+    minEnergyWh: params.get("minEnergyWh") ?? ""
+  };
+}
+
+export function buildSessionViewUrl(chargerId: string, filters: SessionSearchFilters) {
+  const params = buildSessionFilterParams(filters, chargerId);
+  const query = params.toString();
+  return `${viewPaths.Sessions}${query ? `?${query}` : ""}`;
 }
 
 export function withChargerContext(url: string, chargerId: string) {
@@ -347,6 +379,14 @@ export function buildCommunicationJournalQuery(filters: CommunicationJournalFilt
   return buildCommunicationJournalUrl("/api/communication-journal", filters, chargerId, "100", cursor);
 }
 
+export function buildSessionSearchQuery(filters: SessionSearchFilters, chargerId: string, cursor = "") {
+  const params = buildSessionFilterParams(filters, chargerId);
+  params.set("limit", "50");
+  if (cursor) params.set("cursor", cursor);
+  const query = params.toString();
+  return `/api/sessions/search${query ? `?${query}` : ""}`;
+}
+
 export function buildCommunicationJournalExportQuery(filters: CommunicationJournalFilters, chargerId: string) {
   return buildCommunicationJournalUrl("/api/communication-journal/export", filters, chargerId, "5000");
 }
@@ -385,6 +425,19 @@ function buildCommunicationFilterParams(filters: CommunicationJournalFilters, ch
     }
   }
 
+  return params;
+}
+
+function buildSessionFilterParams(filters: SessionSearchFilters, chargerId: string) {
+  const params = new URLSearchParams();
+  if (chargerId) params.set("chargerId", chargerId);
+  if (filters.from.trim()) params.set("from", filters.from.trim());
+  if (filters.to.trim()) params.set("to", filters.to.trim());
+  if (filters.status.trim()) params.set("status", filters.status.trim());
+  if (filters.idTag.trim()) params.set("idTag", filters.idTag.trim());
+  if (filters.transactionId.trim()) params.set("transactionId", filters.transactionId.trim());
+  if (filters.connectorId.trim()) params.set("connectorId", filters.connectorId.trim());
+  if (filters.minEnergyWh.trim()) params.set("minEnergyWh", filters.minEnergyWh.trim());
   return params;
 }
 

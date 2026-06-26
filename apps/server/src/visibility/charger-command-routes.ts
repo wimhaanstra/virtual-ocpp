@@ -55,7 +55,7 @@ export function registerChargerCommandRoutes(
   liveUpdates?: LiveUpdateBus
 ) {
   app.post<{ Params: { id: string } }>('/api/chargers/:id/commands/get-configuration', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const parsed = GetConfigurationCommandSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -96,7 +96,7 @@ export function registerChargerCommandRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/chargers/:id/commands/change-configuration', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const parsed = ChangeConfigurationCommandSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -137,7 +137,7 @@ export function registerChargerCommandRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/chargers/:id/commands/trigger-message', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const parsed = TriggerMessageCommandSchema.safeParse(request.body ?? {});
     if (!parsed.success) {

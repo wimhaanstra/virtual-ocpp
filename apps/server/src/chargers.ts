@@ -109,7 +109,7 @@ export function registerChargerRoutes(
   });
 
   app.patch<{ Params: { id: string } }>('/api/chargers/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = UpdateChargerSchema.safeParse(request.body);
     if (!body.success) {
@@ -162,7 +162,7 @@ export function registerChargerRoutes(
   });
 
   app.post<{ Params: { id: string } }>('/api/chargers/:id/meter-gaps/scan', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = ScanMeterGapsSchema.safeParse(request.body ?? {});
     if (!body.success) {
@@ -201,7 +201,7 @@ export function registerChargerRoutes(
   });
 
   app.delete<{ Params: { id: string } }>('/api/chargers/:id', async (request, reply) => {
-    if (await requireAdmin(request, reply, db)) return;
+    if (await requireAdmin(request, reply, db, 'write')) return;
 
     const body = DeleteChargerSchema.safeParse(request.body);
     if (!body.success) {

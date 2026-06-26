@@ -22,7 +22,10 @@ type RpcClient = {
   call: (method: string, params: Record<string, unknown>, options?: { callTimeoutMs?: number }) => Promise<unknown>;
   close: (options?: { code?: number; reason?: string; awaitPending?: boolean }) => Promise<unknown>;
   handle: (method: string | ((call: { method: string; params: unknown }) => unknown), handler?: (call: RpcCall<never>) => unknown) => void;
-  on: (event: 'close', handler: () => void) => void;
+  on: {
+    (event: 'close', handler: () => void): void;
+    (event: 'badMessage', handler: (event: { buffer: Buffer; error: unknown; response: unknown }) => void): void;
+  };
 };
 
 export async function registerOcppServer(
@@ -64,6 +67,7 @@ export async function registerOcppServer(
     const connectionId = repository.recordConnected(context.chargerId);
     chargerCommands.register(context.chargerId, client);
     void proxyAuthorization.warmUpTargets(context.chargerId);
+    registerProtocolDiagnostics(repository, client, communicationJournal, context.chargerId);
 
     registerTrackedHandler(repository, client, communicationJournal, context.chargerId, 'BootNotification', (params: Parameters<typeof handlers.bootNotification>[1]) =>
       handlers.bootNotification(context, params)
@@ -136,6 +140,47 @@ export async function registerOcppServer(
   app.addHook('onClose', async () => {
     await proxyAuthorization.close();
     await rpcServer.close({ code: 1001, reason: 'Server shutting down' });
+  });
+}
+
+function registerProtocolDiagnostics(
+  repository: OcppRepository,
+  client: RpcClient,
+  communicationJournal: CommunicationJournalService | undefined,
+  chargerId: string
+) {
+  client.on('badMessage', ({ buffer, error, response }) => {
+    const correlationId = randomUUID();
+    const payload = {
+      direction: 'inbound',
+      bytes: buffer.byteLength,
+      preview: sanitizeRawMessagePreview(buffer),
+      response: summarizeBadMessageResponse(response)
+    };
+    const errorCode = getErrorCode(error);
+    const errorDescription = getErrorDescription(error);
+
+    communicationJournal?.recordChargerRaw({
+      chargerId,
+      payload,
+      errorCode,
+      errorDescription,
+      correlationId
+    });
+    repository.recordLog({
+      level: 'warn',
+      category: 'ocpp',
+      message: 'invalid raw ocpp message received',
+      chargerId,
+      metadata: {
+        correlationId,
+        errorCode,
+        errorDescription,
+        bytes: payload.bytes,
+        preview: payload.preview,
+        response: payload.response
+      }
+    });
   });
 }
 
@@ -221,6 +266,9 @@ function serializeErrorPayload(error: unknown) {
 }
 
 function getErrorCode(error: unknown) {
+  if (error && typeof error === 'object' && 'rpcErrorCode' in error && typeof (error as { rpcErrorCode?: unknown }).rpcErrorCode === 'string') {
+    return (error as { rpcErrorCode: string }).rpcErrorCode;
+  }
   if (error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string') {
     return (error as { code: string }).code;
   }
@@ -234,6 +282,26 @@ function getErrorDescription(error: unknown) {
   }
 
   return 'unknown_error';
+}
+
+function sanitizeRawMessagePreview(buffer: Buffer) {
+  const text = buffer.toString('utf8').replace(/[\u0000-\u001f\u007f]/g, (char) => {
+    if (char === '\t' || char === '\n' || char === '\r') return char;
+    return ' ';
+  });
+  const truncated = text.length > 500 ? `${text.slice(0, 500)}...` : text;
+  return truncated.replace(/(Basic\s+)[A-Za-z0-9._~+/-]+=*/gi, '$1[redacted]');
+}
+
+function summarizeBadMessageResponse(response: unknown) {
+  if (!Array.isArray(response)) return null;
+  const [messageType, messageId, errorCode, errorDescription] = response;
+  return {
+    messageType,
+    messageId,
+    errorCode,
+    errorDescription
+  };
 }
 
 function getChargerIdFromHandshake(endpoint: string, identity: string | undefined) {

@@ -16,6 +16,13 @@
   min-width: 0;
 }
 
+.charging-session-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
 .dashboard-item__identity {
   min-width: 0;
 }
@@ -48,6 +55,11 @@
   min-width: 0;
 }
 
+.charging-stats-panel-standalone {
+  display: grid;
+  gap: 12px;
+}
+
 .charger-live-panel .charging-stats-panel {
   gap: 12px;
   padding: 0;
@@ -60,16 +72,51 @@
   justify-content: space-between;
   gap: 14px;
   min-width: 0;
-  padding-inline: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 80%, transparent);
+  padding: 0 0 8px;
+}
+
+.dashboard-section-header > div:first-child {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-left: 12px;
+}
+
+.dashboard-section-header > div:first-child::before {
+  content: "";
+  position: absolute;
+  inset: 2px auto 2px 0;
+  width: 3px;
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-brand-fill-loud);
+}
+
+.dashboard-section-header .eyebrow {
+  margin: 0;
+  color: var(--wa-color-brand-on-quiet);
+  font-size: 10px;
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.08em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
 }
 
 .dashboard-section-header h2 {
-  margin: 2px 0 0;
+  margin: 0;
   color: var(--wa-color-text-normal);
-  font-size: var(--wa-font-size-l);
+  font-size: clamp(18px, 1.7vw, 22px);
   font-weight: var(--wa-font-weight-semibold);
   line-height: var(--wa-line-height-condensed);
   letter-spacing: 0;
+}
+
+.dashboard-section-header .status-copy {
+  margin: 2px 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-s);
+  line-height: var(--wa-line-height-condensed);
 }
 
 .dashboard-section-header > svg {
@@ -89,6 +136,18 @@
 
 .charger-live-panel .charging-session-stack {
   gap: 10px;
+}
+
+.proxy-health-list {
+  display: grid;
+  gap: 10px;
+}
+
+.proxy-health-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .charger-live-panel .charging-session-card,

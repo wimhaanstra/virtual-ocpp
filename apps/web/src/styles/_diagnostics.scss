@@ -4,22 +4,6 @@
   min-width: 0;
 }
 
-.diagnostics-page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  min-width: 0;
-}
-
-.diagnostics-page-header h1 {
-  margin: 2px 0 0;
-  color: var(--wa-color-text-normal);
-  font-size: clamp(28px, 4vw, 42px);
-  line-height: 1.04;
-  letter-spacing: 0;
-}
-
 .diagnostics-section,
 .charger-diagnostics-panel {
   display: grid;
@@ -76,6 +60,12 @@
 
 .command-card .field {
   gap: 6px;
+}
+
+.command-card .field input {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .command-card .field small {
@@ -181,10 +171,10 @@
 }
 
 @media (max-width: 720px) {
-  .diagnostics-page-header,
   .diagnostics-page .dashboard-section-header,
   .diagnostics-item__header,
   .meter-gap-list article {
+    align-items: flex-start;
     flex-direction: column;
   }
 
@@ -195,5 +185,11 @@
 
   .diagnostics-item__actions {
     justify-content: flex-start;
+  }
+
+  .chip-row .filter-chip {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
