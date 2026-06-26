@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Database } from './db/client.js';
-import { logs } from './db/schema.js';
+import { DEFAULT_TENANT_ID, logs } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -12,6 +12,7 @@ export function recordLogEntry(
     level?: LogLevel;
     category: string;
     message: string;
+    tenantId?: string;
     chargerId?: string;
     transactionId?: number;
     metadata?: Record<string, unknown>;
@@ -24,6 +25,7 @@ export function recordLogEntry(
   db.insert(logs).values({
     id,
     level: input.level ?? 'info',
+    tenantId: input.tenantId ?? DEFAULT_TENANT_ID,
     category: input.category,
     message: input.message,
     chargerId: input.chargerId,

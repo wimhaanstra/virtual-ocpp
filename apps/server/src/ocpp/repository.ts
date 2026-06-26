@@ -32,11 +32,11 @@ export class OcppRepository {
     transactionId?: number;
     metadata?: Record<string, unknown>;
   }) {
-    recordLogEntry(this.db, this.liveUpdates, input);
+    recordLogEntry(this.db, this.liveUpdates, { ...input, tenantId: input.chargerId ? this.getTenantIdForCharger(input.chargerId) : undefined });
   }
 
-  recordConnected(chargerId: string) {
-    this.upsertChargerSeen(chargerId);
+  recordConnected(chargerId: string, tenantId = this.getTenantIdForCharger(chargerId)) {
+    this.upsertChargerSeen(chargerId, tenantId);
     const connectionId = randomUUID();
     const connectedAt = new Date();
     const openConnections = this.db
@@ -62,6 +62,7 @@ export class OcppRepository {
 
     this.db.insert(chargerConnections).values({
       id: connectionId,
+      tenantId,
       chargerId,
       connectedAt
     }).run();
@@ -91,10 +92,11 @@ export class OcppRepository {
       chargePointVendor?: string;
       chargePointModel?: string;
       firmwareVersion?: string;
-    }
+    },
+    tenantId = this.getTenantIdForCharger(chargerId)
   ) {
     const now = new Date();
-    this.upsertChargerSeen(chargerId, now);
+    this.upsertChargerSeen(chargerId, tenantId, now);
     this.db
       .update(chargers)
       .set({
@@ -105,13 +107,13 @@ export class OcppRepository {
         firmwareVersion: input.firmwareVersion ?? null,
         updatedAt: now
       })
-      .where(eq(chargers.id, chargerId))
+      .where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, chargerId)))
       .run();
     this.publishChargerState(chargerId);
   }
 
-  recordSeen(chargerId: string) {
-    this.upsertChargerSeen(chargerId);
+  recordSeen(chargerId: string, tenantId = this.getTenantIdForCharger(chargerId)) {
+    this.upsertChargerSeen(chargerId, tenantId);
     this.liveUpdates?.publishCoalesced(
       `charger-seen:${chargerId}`,
       {
@@ -202,6 +204,7 @@ export class OcppRepository {
 
     this.db.insert(chargingSessions).values({
       id: sessionId,
+      tenantId: this.getTenantIdForCharger(input.chargerId),
       chargerId: input.chargerId,
       connectorId: input.connectorId,
       transactionId: input.transactionId,
@@ -481,6 +484,7 @@ export class OcppRepository {
   }) {
     this.db.insert(meterSamples).values({
       id: randomUUID(),
+      tenantId: this.getTenantIdForCharger(input.chargerId),
       chargerId: input.chargerId,
       connectorId: input.connectorId,
       transactionId: input.transactionId,
@@ -584,12 +588,13 @@ export class OcppRepository {
     return null;
   }
 
-  private upsertChargerSeen(chargerId: string, seenAt = new Date()) {
+  private upsertChargerSeen(chargerId: string, tenantId = this.getTenantIdForCharger(chargerId), seenAt = new Date()) {
     const existing = this.db.select().from(chargers).where(eq(chargers.id, chargerId)).limit(1).get();
     if (existing) {
       this.db
         .update(chargers)
         .set({
+          tenantId,
           lastSeenAt: seenAt,
           updatedAt: seenAt
         })
@@ -600,6 +605,7 @@ export class OcppRepository {
 
     this.db.insert(chargers).values({
       id: chargerId,
+      tenantId,
       enabled: true,
       firstSeenAt: seenAt,
       lastSeenAt: seenAt,
@@ -650,6 +656,7 @@ export class OcppRepository {
     const id = randomUUID();
     this.db.insert(meterGapEvents).values({
       id,
+      tenantId: this.getTenantIdForCharger(input.chargerId),
       chargerId: input.chargerId,
       connectorId: input.connectorId,
       previousSessionId: input.previousSession.id,
@@ -684,6 +691,10 @@ export class OcppRepository {
     });
 
     return { created: true, existing: false, ignored: false, id };
+  }
+
+  private getTenantIdForCharger(chargerId: string) {
+    return this.db.select({ tenantId: chargers.tenantId }).from(chargers).where(eq(chargers.id, chargerId)).limit(1).get()?.tenantId ?? 'default';
   }
 }
 

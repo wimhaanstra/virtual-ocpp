@@ -1,8 +1,8 @@
-import { desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { createApiTokenMaterial, requireAdminCookie } from './auth.js';
+import { createApiTokenMaterial, getTenantAuthContext, requireAdminCookie } from './auth.js';
 import type { Database } from './db/client.js';
 import { apiTokens } from './db/schema.js';
 
@@ -21,12 +21,22 @@ const RotateApiTokenSchema = z.object({
 export function registerAccessTokenRoutes(app: FastifyInstance, db: Database) {
   app.get('/api/access-tokens', async (request, reply) => {
     if (await requireAdminCookie(request, reply, db)) return;
+    const auth = getTenantAuthContext(request);
+    if (!auth || auth.role === 'viewer') return reply.code(403).send({ error: 'insufficient_role' });
 
-    return db.select().from(apiTokens).where(isNull(apiTokens.revokedAt)).orderBy(desc(apiTokens.createdAt)).all().map((row) => serializeApiToken(row));
+    return db
+      .select()
+      .from(apiTokens)
+      .where(and(eq(apiTokens.tenantId, auth.tenantId), isNull(apiTokens.revokedAt)))
+      .orderBy(desc(apiTokens.createdAt))
+      .all()
+      .map((row) => serializeApiToken(row));
   });
 
   app.post('/api/access-tokens', async (request, reply) => {
     if (await requireAdminCookie(request, reply, db)) return;
+    const auth = getTenantAuthContext(request);
+    if (!auth || auth.role === 'viewer') return reply.code(403).send({ error: 'insufficient_role' });
 
     const parsed = CreateApiTokenSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
@@ -43,6 +53,8 @@ export function registerAccessTokenRoutes(app: FastifyInstance, db: Database) {
 
     const row = {
       id,
+      tenantId: auth.tenantId,
+      userId: auth.userId,
       name: parsed.data.name,
       scope: parsed.data.scope,
       tokenHash: tokenMaterial.tokenHash,
@@ -63,8 +75,10 @@ export function registerAccessTokenRoutes(app: FastifyInstance, db: Database) {
 
   app.post<{ Params: { id: string } }>('/api/access-tokens/:id/revoke', async (request, reply) => {
     if (await requireAdminCookie(request, reply, db)) return;
+    const auth = getTenantAuthContext(request);
+    if (!auth || auth.role === 'viewer') return reply.code(403).send({ error: 'insufficient_role' });
 
-    const existing = db.select().from(apiTokens).where(eq(apiTokens.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(apiTokens).where(and(eq(apiTokens.tenantId, auth.tenantId), eq(apiTokens.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'api_token_not_found' });
     }
@@ -81,8 +95,10 @@ export function registerAccessTokenRoutes(app: FastifyInstance, db: Database) {
 
   app.delete<{ Params: { id: string } }>('/api/access-tokens/:id', async (request, reply) => {
     if (await requireAdminCookie(request, reply, db)) return;
+    const auth = getTenantAuthContext(request);
+    if (!auth || auth.role === 'viewer') return reply.code(403).send({ error: 'insufficient_role' });
 
-    const existing = db.select().from(apiTokens).where(eq(apiTokens.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(apiTokens).where(and(eq(apiTokens.tenantId, auth.tenantId), eq(apiTokens.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'api_token_not_found' });
     }
@@ -102,13 +118,15 @@ export function registerAccessTokenRoutes(app: FastifyInstance, db: Database) {
 
   app.post<{ Params: { id: string } }>('/api/access-tokens/:id/rotate', async (request, reply) => {
     if (await requireAdminCookie(request, reply, db)) return;
+    const auth = getTenantAuthContext(request);
+    if (!auth || auth.role === 'viewer') return reply.code(403).send({ error: 'insufficient_role' });
 
     const body = RotateApiTokenSchema.safeParse(request.body ?? {});
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_api_token', details: body.error.flatten() });
     }
 
-    const existing = db.select().from(apiTokens).where(eq(apiTokens.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(apiTokens).where(and(eq(apiTokens.tenantId, auth.tenantId), eq(apiTokens.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'api_token_not_found' });
     }

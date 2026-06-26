@@ -11,6 +11,8 @@ import { ChargerCommandService } from './charger-command-service.js';
 import { OcppHandlers } from './handlers.js';
 import { ProxyAuthorizationService } from './proxy-service.js';
 import { OcppRepository } from './repository.js';
+import { and, eq, gt } from 'drizzle-orm';
+import { chargerPairingSessions, chargers, tenants } from '../db/schema.js';
 
 type RpcCall<TParams> = {
   params: TParams;
@@ -18,7 +20,7 @@ type RpcCall<TParams> = {
 
 type RpcClient = {
   identity: string;
-  session?: { chargerId?: string };
+  session?: { tenantId?: string; chargerId?: string };
   call: (method: string, params: Record<string, unknown>, options?: { callTimeoutMs?: number }) => Promise<unknown>;
   close: (options?: { code?: number; reason?: string; awaitPending?: boolean }) => Promise<unknown>;
   handle: (method: string | ((call: { method: string; params: unknown }) => unknown), handler?: (call: RpcCall<never>) => unknown) => void;
@@ -47,24 +49,24 @@ export async function registerOcppServer(
   });
 
   rpcServer.auth((accept, reject, handshake) => {
-    const chargerId = getChargerIdFromHandshake(handshake.endpoint, handshake.identity);
+    const context = resolveHandshakeContext(db, handshake.endpoint, handshake.identity, handshake.password);
 
-    if (!chargerId) {
+    if (!context) {
       reject(404, 'Unknown OCPP endpoint');
       return;
     }
 
-    if (config.ocppBasicAuthPassword && !passwordMatches(handshake.password, config.ocppBasicAuthPassword)) {
+    if (context.requiresGlobalPassword && config.ocppBasicAuthPassword && !passwordMatches(handshake.password, config.ocppBasicAuthPassword)) {
       reject(401, 'Invalid OCPP credentials');
       return;
     }
 
-    accept({ chargerId }, 'ocpp1.6');
+    accept({ tenantId: context.tenantId, chargerId: context.chargerId }, 'ocpp1.6');
   });
 
   rpcServer.on('client', (client: RpcClient) => {
-    const context = { chargerId: client.session?.chargerId ?? client.identity };
-    const connectionId = repository.recordConnected(context.chargerId);
+    const context = { tenantId: client.session?.tenantId ?? 'default', chargerId: client.session?.chargerId ?? client.identity };
+    const connectionId = repository.recordConnected(context.chargerId, context.tenantId);
     chargerCommands.register(context.chargerId, client);
     void proxyAuthorization.warmUpTargets(context.chargerId);
     registerProtocolDiagnostics(repository, client, communicationJournal, context.chargerId);
@@ -94,7 +96,7 @@ export async function registerOcppServer(
       handlers.meterValues(context, params)
     );
     client.handle(({ method, params }) => {
-      repository.recordSeen(context.chargerId);
+      repository.recordSeen(context.chargerId, context.tenantId);
       const correlationId = randomUUID();
       communicationJournal?.recordChargerCall({
         chargerId: context.chargerId,
@@ -304,10 +306,106 @@ function summarizeBadMessageResponse(response: unknown) {
   };
 }
 
+function resolveHandshakeContext(db: Database, endpoint: string, identity: string | undefined, password: Buffer | undefined) {
+  const paired = getPairedChargerContext(db, endpoint, password);
+  if (paired) return paired;
+
+  const chargerId = getChargerIdFromHandshake(endpoint, identity);
+  if (!chargerId) return null;
+  const existing = db.select().from(chargers).where(eq(chargers.id, chargerId)).limit(1).get();
+  if (existing?.credentialHash && !passwordHashMatches(password, existing.credentialHash)) {
+    return null;
+  }
+  return {
+    tenantId: existing?.tenantId ?? 'default',
+    chargerId,
+    requiresGlobalPassword: true
+  };
+}
+
+function getPairedChargerContext(db: Database, endpoint: string, password: Buffer | undefined) {
+  const parts = endpoint.split('/').filter(Boolean);
+  if (parts[0] !== 'ocpp' || parts[1] !== 't') return null;
+  if (parts.length !== 5) return null;
+
+  const [, , encodedTenantPublicId, encodedPairingCode, encodedChargerId] = parts;
+  const tenantPublicId = decodeURIComponent(encodedTenantPublicId ?? '').trim();
+  const pairingCode = decodeURIComponent(encodedPairingCode ?? '').trim();
+  const chargerIdentity = decodeURIComponent(encodedChargerId ?? '').trim();
+  if (!tenantPublicId || !pairingCode || !chargerIdentity) return null;
+
+  const tenant = db.select().from(tenants).where(eq(tenants.publicId, tenantPublicId)).limit(1).get();
+  if (!tenant) return null;
+
+  const pairing = db
+    .select()
+    .from(chargerPairingSessions)
+    .where(and(eq(chargerPairingSessions.tenantId, tenant.id), eq(chargerPairingSessions.pairingCodeHash, hashSecret(pairingCode)), gt(chargerPairingSessions.expiresAt, new Date())))
+    .limit(1)
+    .get();
+  if (!pairing) return null;
+  if (pairing.basicAuthPasswordHash && !passwordHashMatches(password, pairing.basicAuthPasswordHash)) return null;
+  const chargerId = createTenantScopedChargerId(tenant.publicId, chargerIdentity);
+  if (pairing.chargerId && pairing.chargerId !== chargerId) return null;
+
+  const now = new Date();
+  const existing = db.select().from(chargers).where(eq(chargers.id, chargerId)).limit(1).get();
+  if (!existing) {
+    db.insert(chargers).values({
+      id: chargerId,
+      tenantId: tenant.id,
+      credentialHash: pairing.basicAuthPasswordHash,
+      enabled: true,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+  } else {
+    db.update(chargers)
+      .set({
+        tenantId: tenant.id,
+        credentialHash: pairing.basicAuthPasswordHash,
+        lastSeenAt: now,
+        updatedAt: now
+      })
+      .where(eq(chargers.id, chargerId))
+      .run();
+  }
+  if (!pairing.chargerId || !pairing.consumedAt) {
+    db.update(chargerPairingSessions).set({ chargerId, consumedAt: now }).where(eq(chargerPairingSessions.id, pairing.id)).run();
+  }
+
+  return {
+    tenantId: tenant.id,
+    chargerId,
+    requiresGlobalPassword: false
+  };
+}
+
 function getChargerIdFromHandshake(endpoint: string, identity: string | undefined) {
   if (endpoint === '/ocpp') return identity;
   if (!endpoint.startsWith('/ocpp/')) return null;
 
   const chargerId = decodeURIComponent(endpoint.slice('/ocpp/'.length)).trim();
   return chargerId || null;
+}
+
+function createTenantScopedChargerId(tenantPublicId: string, chargerIdentity: string) {
+  return `${tenantPublicId}/${chargerIdentity}`;
+}
+
+function passwordHashMatches(password: Buffer | undefined, expectedHash: string) {
+  if (!password) return false;
+  return safeHashEquals(createHash('sha256').update(password).digest('hex'), expectedHash);
+}
+
+function hashSecret(secret: string) {
+  return createHash('sha256').update(secret).digest('hex');
+}
+
+function safeHashEquals(left: string, right: string) {
+  const leftHash = createHash('sha256').update(left).digest();
+  const rightHash = createHash('sha256').update(right).digest();
+  return timingSafeEqual(leftHash, rightHash);
 }

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { appSettings, communicationJournal, onboardingSettings } from '../src/db/schema.js';
+import { appSettings, chargers, communicationJournal, onboardingSettings } from '../src/db/schema.js';
 import { createTestDatabase, testConfig } from './support/test-utils.js';
 
 describe('onboarding settings api', () => {
@@ -114,6 +114,45 @@ describe('onboarding settings api', () => {
       expect.objectContaining({
         id: 'onboarding',
         completedAt: null,
+        skippedAt: null
+      })
+    ]);
+
+    await app.close();
+  });
+
+  it('marks onboarding complete when a tenant already has a charger but no onboarding row', async () => {
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config: testConfig(), db: tempDb.db });
+    const cookie = await login(app);
+    const now = new Date();
+    tempDb.db.insert(chargers).values({
+      id: 'default/paired-charger',
+      tenantId: 'default',
+      enabled: true,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/settings/onboarding',
+      headers: { cookie }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      completed: true,
+      completedAt: expect.any(String),
+      skippedAt: null
+    });
+    expect(tempDb.db.select().from(onboardingSettings).all()).toEqual([
+      expect.objectContaining({
+        tenantId: 'default',
+        completedAt: expect.any(Date),
         skippedAt: null
       })
     ]);

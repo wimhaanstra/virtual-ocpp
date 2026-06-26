@@ -1,10 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAdmin } from './auth.js';
+import { getTenantId, requireAdmin, requireTenantRole } from './auth.js';
 import type { CommunicationJournalService } from './communication-journal.js';
 import type { Database } from './db/client.js';
-import { appSettings, onboardingSettings } from './db/schema.js';
+import { appSettings, chargers, onboardingSettings } from './db/schema.js';
 
 const SingletonSettingsId = 'onboarding';
 const CommunicationRetentionKey = 'communication.retentionHours';
@@ -37,11 +37,12 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
   app.get('/api/settings/onboarding', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
-    return getOnboardingSettings(db);
+    return getOnboardingSettings(db, getTenantId(request));
   });
 
   app.patch('/api/settings/onboarding', async (request, reply) => {
-    if (await requireAdmin(request, reply, db, 'write')) return;
+    const auth = await requireTenantRole(request, reply, db, 'admin');
+    if (!auth) return;
 
     const body = UpdateOnboardingSettingsSchema.safeParse(request.body ?? {});
     if (!body.success) {
@@ -64,13 +65,19 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
             skippedAt: null
           };
 
-    const existing = db.select().from(onboardingSettings).where(eq(onboardingSettings.id, SingletonSettingsId)).limit(1).get();
+    const existing = db
+      .select()
+      .from(onboardingSettings)
+      .where(and(eq(onboardingSettings.tenantId, auth.tenantId), eq(onboardingSettings.id, SingletonSettingsId)))
+      .limit(1)
+      .get();
     if (existing) {
-      db.update(onboardingSettings).set(patch).where(eq(onboardingSettings.id, SingletonSettingsId)).run();
+      db.update(onboardingSettings).set(patch).where(and(eq(onboardingSettings.tenantId, auth.tenantId), eq(onboardingSettings.id, SingletonSettingsId))).run();
     } else {
       db.insert(onboardingSettings)
         .values({
           id: SingletonSettingsId,
+          tenantId: auth.tenantId,
           ...patch
         })
         .run();
@@ -78,6 +85,7 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
 
     return serializeOnboardingSettings({
       id: SingletonSettingsId,
+      tenantId: auth.tenantId,
       ...patch
     });
   });
@@ -85,11 +93,12 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
   app.get('/api/settings/communication', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
 
-    return getCommunicationSettings(db, journal);
+    return getCommunicationSettings(db, getTenantId(request), journal);
   });
 
   app.patch('/api/settings/communication', async (request, reply) => {
-    if (await requireAdmin(request, reply, db, 'write')) return;
+    const auth = await requireTenantRole(request, reply, db, 'admin');
+    if (!auth) return;
 
     const body = UpdateCommunicationSettingsSchema.safeParse(request.body ?? {});
     if (!body.success) {
@@ -98,34 +107,57 @@ export function registerSettingsRoutes(app: FastifyInstance, db: Database, journ
 
     const now = new Date();
     const value = String(body.data.retentionHours);
-    const existing = db.select().from(appSettings).where(eq(appSettings.key, CommunicationRetentionKey)).limit(1).get();
+    const existing = db
+      .select()
+      .from(appSettings)
+      .where(and(eq(appSettings.tenantId, auth.tenantId), eq(appSettings.key, CommunicationRetentionKey)))
+      .limit(1)
+      .get();
     if (existing) {
-      db.update(appSettings).set({ value, updatedAt: now }).where(eq(appSettings.key, CommunicationRetentionKey)).run();
+      db.update(appSettings).set({ value, updatedAt: now }).where(and(eq(appSettings.tenantId, auth.tenantId), eq(appSettings.key, CommunicationRetentionKey))).run();
     } else {
-      db.insert(appSettings).values({ key: CommunicationRetentionKey, value, updatedAt: now }).run();
+      db.insert(appSettings).values({ key: CommunicationRetentionKey, tenantId: auth.tenantId, value, updatedAt: now }).run();
     }
 
-    return getCommunicationSettings(db, journal);
+    return getCommunicationSettings(db, auth.tenantId, journal);
   });
 }
 
-export function getCommunicationRetentionHours(db: Database) {
-  const row = db.select().from(appSettings).where(eq(appSettings.key, CommunicationRetentionKey)).limit(1).get();
+export function getCommunicationRetentionHours(db: Database, tenantId = 'default') {
+  const row = db.select().from(appSettings).where(and(eq(appSettings.tenantId, tenantId), eq(appSettings.key, CommunicationRetentionKey))).limit(1).get();
   const parsed = Number(row?.value ?? DefaultCommunicationRetentionHours);
   return Number.isInteger(parsed) && parsed > 0 && parsed <= MaxCommunicationRetentionHours ? parsed : DefaultCommunicationRetentionHours;
 }
 
-function getCommunicationSettings(db: Database, journal?: CommunicationJournalService) {
+function getCommunicationSettings(db: Database, tenantId: string, journal?: CommunicationJournalService) {
   return {
-    retentionHours: getCommunicationRetentionHours(db),
+    retentionHours: getCommunicationRetentionHours(db, tenantId),
     defaultRetentionHours: DefaultCommunicationRetentionHours,
     storage: journal?.getStorageSummary() ?? null,
     lastPurge: journal?.getLastPurgeSummary() ?? null
   };
 }
 
-function getOnboardingSettings(db: Database) {
-  const row = db.select().from(onboardingSettings).where(eq(onboardingSettings.id, SingletonSettingsId)).limit(1).get();
+function getOnboardingSettings(db: Database, tenantId: string) {
+  const row = db.select().from(onboardingSettings).where(and(eq(onboardingSettings.tenantId, tenantId), eq(onboardingSettings.id, SingletonSettingsId))).limit(1).get();
+  if (!row) {
+    const existingCharger = db.select({ id: chargers.id }).from(chargers).where(eq(chargers.tenantId, tenantId)).limit(1).get();
+    if (existingCharger) {
+      const now = new Date();
+      db.insert(onboardingSettings).values({
+        id: SingletonSettingsId,
+        tenantId,
+        completedAt: now,
+        skippedAt: null
+      }).run();
+      return serializeOnboardingSettings({
+        id: SingletonSettingsId,
+        tenantId,
+        completedAt: now,
+        skippedAt: null
+      });
+    }
+  }
   return serializeOnboardingSettings(row ?? null);
 }
 

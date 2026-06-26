@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Copy, Loader2, PlugZap, X } from "lucide-react";
 import type { ChargerRegistryRow, DashboardConfig, ProxyTarget, Tag } from "../types";
-import { getChargerContextId, getChargerDisplayLabel } from "../app-helpers";
+import { getChargerContextId } from "../app-helpers";
 import { Button } from "./ui/button";
 
 type OnboardingTagMode = "skip" | "existing" | "create";
@@ -24,6 +24,7 @@ type ChargerOnboardingModalProps = {
   detectedCharger: ChargerRegistryRow | null;
   knownChargerCount: number;
   label: string;
+  pairingBasicAuth: boolean;
   proxyDraft: OnboardingProxyDraft;
   showSetupSteps?: boolean;
   startedAt: string;
@@ -36,6 +37,7 @@ type ChargerOnboardingModalProps = {
   onCopyUrl: (url: string) => void;
   onFinish: () => void;
   onLabelChange: (label: string) => void;
+  onPairingBasicAuthChange: (enabled: boolean) => void;
   onProxyDraftChange: (patch: Partial<OnboardingProxyDraft>) => void;
   onRefresh: () => void;
   onSelectedTagChange: (tagId: string) => void;
@@ -48,6 +50,7 @@ export function ChargerOnboardingModal({
   detectedCharger,
   knownChargerCount,
   label,
+  pairingBasicAuth,
   proxyDraft,
   showSetupSteps = false,
   startedAt,
@@ -60,12 +63,14 @@ export function ChargerOnboardingModal({
   onCopyUrl,
   onFinish,
   onLabelChange,
+  onPairingBasicAuthChange,
   onProxyDraftChange,
   onRefresh,
   onSelectedTagChange,
   onTagDraftChange
 }: ChargerOnboardingModalProps) {
   const activeChargerId = detectedCharger ? getChargerContextId(detectedCharger) : "";
+  const onRefreshRef = useRef(onRefresh);
   const connectionUrl = dashboardConfig?.ocppWebSocketUrl ?? "Loading connection URL...";
   const suggestedId = `charger-${new Date(startedAt).getTime().toString(36)}`;
   const exampleUrl = connectionUrl.includes(":chargerId") ? connectionUrl.replace(":chargerId", suggestedId) : connectionUrl;
@@ -90,16 +95,19 @@ export function ChargerOnboardingModal({
   };
 
   useEffect(() => {
+    onRefreshRef.current = onRefresh;
+  }, [onRefresh]);
+
+  useEffect(() => {
     if (!startedAt) return;
 
     const refresh = () => {
-      onRefresh();
+      onRefreshRef.current();
     };
 
     refresh();
     const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
-    // Intentionally keyed only on the wizard session start; onRefresh is stable enough for this flow.
   }, [startedAt]);
 
   useEffect(() => {
@@ -160,8 +168,41 @@ export function ChargerOnboardingModal({
             </div>
             <div>
               <dt>Basic Auth</dt>
-              <dd>{dashboardConfig?.ocppBasicAuthRequired ? dashboardConfig.ocppBasicAuthUsername ?? "charger id" : "Not required"}</dd>
+              <dd>
+                <label className="checkbox-row">
+                  <input type="checkbox" checked={pairingBasicAuth} onChange={(event) => onPairingBasicAuthChange(event.target.checked)} disabled={busy} />
+                  <span>Require for this pairing URL</span>
+                </label>
+              </dd>
             </div>
+            {dashboardConfig?.ocppBasicAuthRequired ? (
+              <>
+                <div>
+                  <dt>Username</dt>
+                  <dd className="copy-row">
+                    <span className="mono">{dashboardConfig.ocppBasicAuthUsername}</span>
+                    <Button type="button" className="button-secondary icon-button" onClick={() => onCopyUrl(dashboardConfig.ocppBasicAuthUsername ?? "")} disabled={busy || !dashboardConfig.ocppBasicAuthUsername} aria-label="Copy Basic Auth username" title="Copy Basic Auth username">
+                      <Copy aria-hidden="true" />
+                    </Button>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Password</dt>
+                  <dd className="copy-row">
+                    <span className="mono">{dashboardConfig.ocppBasicAuthPassword}</span>
+                    <Button type="button" className="button-secondary icon-button" onClick={() => onCopyUrl(dashboardConfig.ocppBasicAuthPassword ?? "")} disabled={busy || !dashboardConfig.ocppBasicAuthPassword} aria-label="Copy Basic Auth password" title="Copy Basic Auth password">
+                      <Copy aria-hidden="true" />
+                    </Button>
+                  </dd>
+                </div>
+              </>
+            ) : null}
+            {dashboardConfig?.expiresAt ? (
+              <div>
+                <dt>Pairing expires</dt>
+                <dd>{new Date(dashboardConfig.expiresAt).toLocaleString()}</dd>
+              </div>
+            ) : null}
           </dl>
         </div>
       </section>
@@ -174,11 +215,8 @@ export function ChargerOnboardingModal({
             <div className="detected-charger-box">
               <PlugZap aria-hidden="true" />
               <div>
-                <p className="mono">{activeChargerId}</p>
-                <p className="status-copy">
-                  {getChargerDisplayLabel(detectedCharger)}
-                  {detectedCharger.active ? " is connected." : " was registered."}
-                </p>
+                <p className="status-copy">Charger detected.</p>
+                <p>{detectedCharger.active ? "Connection is active." : "Registration was received."}</p>
               </div>
             </div>
           ) : (
@@ -198,7 +236,7 @@ export function ChargerOnboardingModal({
 
       <label className="field wizard-step-full">
         <span>Display label</span>
-        <input value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder={detectedCharger ? activeChargerId : "Garage charger"} disabled={!detectedCharger || busy} />
+        <input value={label} onChange={(event) => onLabelChange(event.target.value)} placeholder="Garage charger" disabled={!detectedCharger || busy} />
       </label>
     </>
   );

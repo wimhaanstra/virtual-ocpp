@@ -30,6 +30,7 @@ export function applyMigrations(client: Database.Database) {
   }
   ensureColumn(client, 'proxy_targets', 'charger_id', 'ALTER TABLE proxy_targets ADD COLUMN charger_id text');
   ensureColumn(client, 'proxy_targets', 'allow_recovery_submissions', 'ALTER TABLE proxy_targets ADD COLUMN allow_recovery_submissions integer NOT NULL DEFAULT 0');
+  ensureTenantColumns(client);
   ensureColumn(client, 'meter_samples', 'numeric_value', 'ALTER TABLE meter_samples ADD COLUMN numeric_value real');
   ensureColumn(client, 'meter_samples', 'normalized_value', 'ALTER TABLE meter_samples ADD COLUMN normalized_value real');
   ensureColumn(client, 'meter_samples', 'normalized_unit', 'ALTER TABLE meter_samples ADD COLUMN normalized_unit text');
@@ -51,4 +52,44 @@ function ensureColumn(client: Database.Database, table: string, column: string, 
   if (!columns.some((entry) => entry.name === column)) {
     client.exec(statement);
   }
+}
+
+function ensureTenantColumns(client: Database.Database) {
+  const tenantTables = [
+    'sessions',
+    'api_tokens',
+    'onboarding_settings',
+    'app_settings',
+    'tags',
+    'chargers',
+    'tag_charger_access',
+    'charger_connections',
+    'charging_sessions',
+    'remote_stop_requests',
+    'meter_samples',
+    'meter_gap_events',
+    'proxy_targets',
+    'charger_proxy_assignments',
+    'proxy_session_mappings',
+    'proxy_tag_mappings',
+    'logs',
+    'communication_journal'
+  ];
+
+  for (const table of tenantTables) {
+    ensureColumn(client, table, 'tenant_id', `ALTER TABLE ${table} ADD COLUMN tenant_id text NOT NULL DEFAULT 'default'`);
+    client.exec(`CREATE INDEX IF NOT EXISTS ${table}_tenant_id_idx ON ${table} (tenant_id)`);
+  }
+
+  ensureColumn(client, 'sessions', 'user_id', 'ALTER TABLE sessions ADD COLUMN user_id text');
+  ensureColumn(client, 'sessions', 'role', "ALTER TABLE sessions ADD COLUMN role text NOT NULL DEFAULT 'owner'");
+  ensureColumn(client, 'users', 'is_super_admin', 'ALTER TABLE users ADD COLUMN is_super_admin integer NOT NULL DEFAULT 0');
+  ensureColumn(client, 'tenant_invites', 'revoked_at', 'ALTER TABLE tenant_invites ADD COLUMN revoked_at integer');
+  ensureColumn(client, 'api_tokens', 'user_id', 'ALTER TABLE api_tokens ADD COLUMN user_id text');
+  ensureColumn(client, 'chargers', 'credential_hash', 'ALTER TABLE chargers ADD COLUMN credential_hash text');
+  client.exec('DROP INDEX IF EXISTS tags_uuid_unique');
+  client.exec('CREATE UNIQUE INDEX IF NOT EXISTS tags_tenant_uuid_unique ON tags (tenant_id, uuid)');
+  client.exec('CREATE INDEX IF NOT EXISTS chargers_tenant_id_id_idx ON chargers (tenant_id, id)');
+  client.exec('CREATE INDEX IF NOT EXISTS app_settings_tenant_key_idx ON app_settings (tenant_id, key)');
+  client.exec('CREATE INDEX IF NOT EXISTS onboarding_settings_tenant_id_idx ON onboarding_settings (tenant_id)');
 }

@@ -93,6 +93,21 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
     );
   }
 
+  if (path === "/api/charger-pairings" && method === "POST") {
+    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    return new Response(
+      JSON.stringify({
+        ocppWebSocketUrl: "ws://localhost:8797/ocpp/t/default/pairing-code/:chargerId",
+        ocppProtocol: "ocpp1.6",
+        expiresAt: "2026-06-19T08:45:00.000Z",
+        basicAuthRequired: Boolean(body.basicAuth),
+        basicAuthUsername: body.basicAuth ? "charger" : null,
+        basicAuthPassword: body.basicAuth ? "pairing-password" : null
+      }),
+      { status: 201 }
+    );
+  }
+
   if (path === "/api/settings/onboarding" && method === "GET") {
     return new Response(JSON.stringify({ completed: true, completedAt: "2026-06-19T08:30:00.000Z", skippedAt: null }), { status: 200 });
   }
@@ -114,6 +129,14 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
   }
 
   if (path === "/api/access-tokens" && method === "GET") {
+    return new Response(JSON.stringify([]), { status: 200 });
+  }
+
+  if (path === "/api/auth/account-members" && method === "GET") {
+    return new Response(JSON.stringify([]), { status: 200 });
+  }
+
+  if (path === "/api/auth/invites" && method === "GET") {
     return new Response(JSON.stringify([]), { status: 200 });
   }
 
@@ -1289,13 +1312,14 @@ describe("App", () => {
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
     expect(wizard).toBeInTheDocument();
     expect(within(wizard).getByText("Waiting for a new charger")).toBeInTheDocument();
-    expect(screen.getAllByText("ws://localhost:8797/ocpp/:chargerId").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ws://localhost:8797/ocpp/t/default/pairing-code/:chargerId").length).toBeGreaterThan(0);
 
     includeNewCharger = true;
     fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
 
     expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
-    expect(within(wizard).getByText("SMART-EVSE-NEW")).toBeInTheDocument();
+    expect(within(wizard).getByText("Connection is active.")).toBeInTheDocument();
+    expect(within(wizard).queryByText("SMART-EVSE-NEW")).not.toBeInTheDocument();
 
     fireEvent.change(within(wizard).getByLabelText("Display label"), { target: { value: "Garage" } });
     fireEvent.click(within(wizard).getByRole("button", { name: "Save and switch" }));
@@ -1408,7 +1432,8 @@ describe("App", () => {
     fireEvent.click(within(wizard).getByRole("button", { name: "Refresh" }));
 
     expect(await within(wizard).findByText("Charger detected")).toBeInTheDocument();
-    expect(within(wizard).getByText("SMART-EVSE-NEW")).toBeInTheDocument();
+    expect(within(wizard).getByText("Connection is active.")).toBeInTheDocument();
+    expect(within(wizard).queryByText("SMART-EVSE-NEW")).not.toBeInTheDocument();
 
     fireEvent.click(within(wizard).getByRole("button", { name: "Cancel" }));
 
@@ -1622,6 +1647,163 @@ describe("App", () => {
         return path === "/api/settings/onboarding" && init?.method === "PATCH";
       })
     ).toBe(false);
+  });
+
+  it("creates account invite codes from Settings", async () => {
+    let accountMembers = [
+      {
+        id: "membership-owner",
+        userId: "user-owner",
+        username: "admin",
+        role: "owner",
+        createdAt: "2026-06-20T08:00:00.000Z",
+        updatedAt: "2026-06-20T08:00:00.000Z"
+      },
+      {
+        id: "membership-member",
+        userId: "user-member",
+        username: "member-user",
+        role: "viewer",
+        createdAt: "2026-06-21T08:00:00.000Z",
+        updatedAt: "2026-06-21T08:00:00.000Z"
+      }
+    ];
+    let accountInvites = [
+      {
+        id: "invite-existing",
+        role: "viewer",
+        createdByUserId: "user-owner",
+        createdAt: "2026-06-22T08:00:00.000Z",
+        expiresAt: "2026-06-29T08:00:00.000Z"
+      }
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const parsedUrl = new URL(url, "http://localhost");
+      const path = parsedUrl.pathname;
+
+      if (path === "/api/auth/session") {
+        return new Response(
+          JSON.stringify({
+            authenticated: true,
+            username: "admin",
+            userId: "user-owner",
+            tenantId: "tenant-1",
+            role: "owner",
+            memberships: [{ tenantId: "tenant-1", tenantName: "Sorted Bits", role: "owner" }]
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (path === "/api/auth/account-members" && method === "GET") {
+        return new Response(JSON.stringify(accountMembers), { status: 200 });
+      }
+
+      if (path === "/api/auth/account-members/membership-member" && method === "PATCH") {
+        const body = init?.body ? JSON.parse(String(init.body)) : {};
+        accountMembers = accountMembers.map((member) => (member.id === "membership-member" ? { ...member, role: body.role, updatedAt: "2026-06-23T08:00:00.000Z" } : member));
+        return new Response(JSON.stringify(accountMembers.find((member) => member.id === "membership-member")), { status: 200 });
+      }
+
+      if (path === "/api/auth/account-members/membership-member/remove" && method === "POST") {
+        accountMembers = accountMembers.filter((member) => member.id !== "membership-member");
+        return new Response(JSON.stringify({ ok: true, id: "membership-member" }), { status: 200 });
+      }
+
+      if (path === "/api/auth/invites" && method === "GET") {
+        return new Response(JSON.stringify(accountInvites), { status: 200 });
+      }
+
+      if (path === "/api/auth/invites" && method === "POST") {
+        accountInvites = [
+          {
+            id: "invite-created",
+            role: "admin",
+            createdByUserId: "user-owner",
+            createdAt: "2026-06-26T08:00:00.000Z",
+            expiresAt: "2026-06-26T12:00:00.000Z"
+          },
+          ...accountInvites
+        ];
+        return new Response(
+          JSON.stringify({
+            code: "invite-code-123",
+            role: "admin",
+            expiresAt: "2026-06-26T12:00:00.000Z"
+          }),
+          { status: 201 }
+        );
+      }
+
+      if (path === "/api/auth/invites/invite-existing/revoke" && method === "POST") {
+        accountInvites = accountInvites.filter((invite) => invite.id !== "invite-existing");
+        return new Response(JSON.stringify({ ok: true, id: "invite-existing" }), { status: 200 });
+      }
+
+      const fallbackResponse = emptyVisibilityResponses(url, method, init);
+      if (fallbackResponse) return fallbackResponse;
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    const clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: clipboardWriteText }
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
+
+    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
+    fireEvent.click(sidebar.getByRole("button", { name: "Settings" }));
+
+    expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(await screen.findByText("member-user")).toBeInTheDocument();
+    expect(screen.getByText(/Expires/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Role for admin")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove admin" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Invite role"), { target: { value: "admin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create invite" }));
+
+    await waitFor(() => {
+      const inviteCall = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/auth/invites" && init?.method === "POST");
+      expect(inviteCall).toBeDefined();
+      expect(JSON.parse(String(inviteCall?.[1]?.body))).toEqual({ role: "admin" });
+    });
+    expect(await screen.findByText(/invite-code-123/)).toBeInTheDocument();
+    expect(screen.getByText(/Admin invite expires/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy link" }));
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith(expect.stringMatching(/^http:\/\/localhost(?::\d+)?\/\?invite=invite-code-123$/));
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy code" }));
+    await waitFor(() => {
+      expect(clipboardWriteText).toHaveBeenCalledWith("invite-code-123");
+    });
+
+    fireEvent.change(screen.getByLabelText("Role for member-user"), { target: { value: "admin" } });
+    await waitFor(() => {
+      const roleCall = fetchMock.mock.calls.find(([input, init]) => String(input) === "/api/auth/account-members/membership-member" && init?.method === "PATCH");
+      expect(roleCall).toBeDefined();
+      expect(JSON.parse(String(roleCall?.[1]?.body))).toEqual({ role: "admin" });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Revoke Viewer invite" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/auth/invites/invite-existing/revoke" && init?.method === "POST")).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove member-user" }));
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/auth/account-members/membership-member/remove" && init?.method === "POST")).toBe(true);
+    });
+    await waitFor(() => expect(screen.queryByText("member-user")).not.toBeInTheDocument());
   });
 
   it("opens first-run onboarding automatically and persists skip on cancel", async () => {
@@ -2939,7 +3121,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(screen.getByText("0/3 enabled")).toBeInTheDocument();
+    expect(screen.getByText("0/5 enabled")).toBeInTheDocument();
     expect(screen.getByText("No proxy targets configured yet.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Add target" }));
@@ -2979,12 +3161,12 @@ describe("App", () => {
 
   it("shows and enforces the enabled proxy target limit in the proxy target UI", async () => {
     const selectedChargerId = "SMART-EVSE-1";
-    const proxyTargets: TestProxyTarget[] = [1, 2, 3, 4].map((index) => ({
+    const proxyTargets: TestProxyTarget[] = [1, 2, 3, 4, 5, 6].map((index) => ({
       id: `proxy-${index}`,
       name: `Proxy ${index}`,
       url: `wss://proxy-${index}.example/ocpp`,
       stationId: null,
-      enabled: index < 4,
+      enabled: index < 6,
       mode: "monitor-only" as const,
       outagePolicy: "fail-open" as const,
       allowRecoverySubmissions: false,
@@ -3045,7 +3227,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Proxy targets" })).toBeInTheDocument();
-    expect(await screen.findByText("3/3 enabled")).toBeInTheDocument();
+    expect(await screen.findByText("5/5 enabled")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enable proxy target" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Add target" }));

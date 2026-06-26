@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAdmin } from './auth.js';
+import { getTenantId, requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
 import { chargers, chargingSessions, tagChargerAccess, tags } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
@@ -27,12 +27,14 @@ const UpdateTagAccessSchema = z.object({
 export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdates?: LiveUpdateBus) {
   app.get('/api/tags', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
+    const tenantId = getTenantId(request);
 
-    const accessRows = db.select().from(tagChargerAccess).all();
-    const usageByTag = getTagUsageByIdTag(db);
+    const accessRows = db.select().from(tagChargerAccess).where(eq(tagChargerAccess.tenantId, tenantId)).all();
+    const usageByTag = getTagUsageByIdTag(db, tenantId);
     return db
       .select()
       .from(tags)
+      .where(eq(tags.tenantId, tenantId))
       .all()
       .map((tag) => ({
         id: tag.id,
@@ -60,6 +62,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
 
   app.post('/api/tags', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = CreateTagSchema.safeParse(request.body);
     if (!body.success) {
@@ -72,6 +75,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
     try {
       db.insert(tags).values({
         id,
+        tenantId,
         uuid: body.data.uuid,
         label: body.data.label || null,
         enabled: body.data.enabled,
@@ -97,13 +101,14 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
 
   app.patch<{ Params: { id: string } }>('/api/tags/:id', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = UpdateTagSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_tag', details: body.error.flatten() });
     }
 
-    const existing = db.select().from(tags).where(eq(tags.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(tags).where(and(eq(tags.tenantId, tenantId), eq(tags.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'tag_not_found' });
     }
@@ -115,7 +120,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
     };
 
     try {
-      db.update(tags).set(update).where(eq(tags.id, request.params.id)).run();
+      db.update(tags).set(update).where(and(eq(tags.tenantId, tenantId), eq(tags.id, request.params.id))).run();
     } catch (error) {
       if (error instanceof Error && error.message.includes('UNIQUE')) {
         return reply.code(409).send({ error: 'tag_exists' });
@@ -136,13 +141,14 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
 
   app.delete<{ Params: { id: string } }>('/api/tags/:id', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
-    const existing = db.select().from(tags).where(eq(tags.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(tags).where(and(eq(tags.tenantId, tenantId), eq(tags.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'tag_not_found' });
     }
 
-    db.delete(tags).where(eq(tags.id, request.params.id)).run();
+    db.delete(tags).where(and(eq(tags.tenantId, tenantId), eq(tags.id, request.params.id))).run();
     recordTagLog(db, liveUpdates, 'tag deleted', { tagId: request.params.id });
 
     return { ok: true };
@@ -150,18 +156,19 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
 
   app.put<{ Params: { id: string; chargerId: string } }>('/api/tags/:id/chargers/:chargerId', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = UpdateTagAccessSchema.safeParse(request.body ?? {});
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_tag_access', details: body.error.flatten() });
     }
 
-    const tag = db.select().from(tags).where(eq(tags.id, request.params.id)).limit(1).get();
+    const tag = db.select().from(tags).where(and(eq(tags.tenantId, tenantId), eq(tags.id, request.params.id))).limit(1).get();
     if (!tag) {
       return reply.code(404).send({ error: 'tag_not_found' });
     }
 
-    const charger = db.select().from(chargers).where(eq(chargers.id, request.params.chargerId)).limit(1).get();
+    const charger = db.select().from(chargers).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, request.params.chargerId))).limit(1).get();
     if (!charger) {
       return reply.code(404).send({ error: 'charger_not_found' });
     }
@@ -170,7 +177,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
     const existing = db
       .select()
       .from(tagChargerAccess)
-      .where(and(eq(tagChargerAccess.tagId, request.params.id), eq(tagChargerAccess.chargerId, request.params.chargerId)))
+      .where(and(eq(tagChargerAccess.tenantId, tenantId), eq(tagChargerAccess.tagId, request.params.id), eq(tagChargerAccess.chargerId, request.params.chargerId)))
       .limit(1)
       .get();
 
@@ -198,6 +205,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
     db.insert(tagChargerAccess).values({
       id,
       tagId: request.params.id,
+      tenantId,
       chargerId: request.params.chargerId,
       enabled: body.data.enabled,
       createdAt: now,
@@ -221,11 +229,12 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
 
   app.delete<{ Params: { id: string; chargerId: string } }>('/api/tags/:id/chargers/:chargerId', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const existing = db
       .select()
       .from(tagChargerAccess)
-      .where(and(eq(tagChargerAccess.tagId, request.params.id), eq(tagChargerAccess.chargerId, request.params.chargerId)))
+      .where(and(eq(tagChargerAccess.tenantId, tenantId), eq(tagChargerAccess.tagId, request.params.id), eq(tagChargerAccess.chargerId, request.params.chargerId)))
       .limit(1)
       .get();
     if (!existing) {
@@ -252,7 +261,7 @@ type TagUsageAggregate = TagUsage & {
   byCharger: Map<string, TagUsage>;
 };
 
-function getTagUsageByIdTag(db: Database) {
+function getTagUsageByIdTag(db: Database, tenantId: string) {
   const usageByTag = new Map<string, TagUsageAggregate>();
   const sessionRows = db
     .select({
@@ -262,6 +271,7 @@ function getTagUsageByIdTag(db: Database) {
       startedAt: chargingSessions.startedAt
     })
     .from(chargingSessions)
+    .where(eq(chargingSessions.tenantId, tenantId))
     .all();
 
   for (const session of sessionRows) {

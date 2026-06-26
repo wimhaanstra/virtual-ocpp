@@ -22,7 +22,10 @@ import {
   remoteStopRequests,
   sessions,
   tagChargerAccess,
-  tags
+  tags,
+  tenantInvites,
+  tenantMemberships,
+  tenants
 } from '../src/db/schema.js';
 import { OcppRepository } from '../src/ocpp/repository.js';
 import { createTestDatabase, testConfig } from './support/test-utils.js';
@@ -79,13 +82,346 @@ describe('app', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       ok: true,
-      username: 'admin'
+      username: 'admin',
+      tenantId: 'default',
+      role: 'owner',
+      scope: 'session'
     });
     expect(response.headers['set-cookie']).toBeDefined();
     expect(tempDb.db.select().from(sessions).all()).toHaveLength(1);
     expect(tempDb.db.select().from(logs).all()).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('registers a user with a generated account name', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        username: 'alice',
+        password: 'correct-password'
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      ok: true,
+      username: 'alice',
+      role: 'owner',
+      scope: 'session'
+    });
+    expect(response.json().tenantId).toEqual(expect.any(String));
+
+    const createdTenant = tempDb.db.select().from(tenants).where(eq(tenants.id, response.json().tenantId)).limit(1).get();
+    expect(createdTenant?.name).toMatch(/^Account [A-F0-9]{6}$/);
+
+    const cookie = response.headers['set-cookie'];
+    if (!cookie || Array.isArray(cookie)) throw new Error('Expected registration to set one cookie');
+
+    const session = await app.inject({
+      method: 'GET',
+      url: '/api/auth/session',
+      headers: { cookie }
+    });
+    expect(session.statusCode).toBe(200);
+    expect(session.json().memberships).toEqual([
+      {
+        tenantId: response.json().tenantId,
+        tenantName: createdTenant?.name,
+        role: 'owner'
+      }
+    ]);
+
+    const renamed = await app.inject({
+      method: 'PATCH',
+      url: `/api/auth/accounts/${response.json().tenantId}`,
+      headers: { cookie },
+      payload: { name: 'Renamed account' }
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json()).toMatchObject({
+      tenantId: response.json().tenantId,
+      tenantName: 'Renamed account'
+    });
+
+    await app.close();
+  });
+
+  it('lets an invited user preview and join an account', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const ownerCookie = await login(app);
+
+    const invite = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites',
+      headers: { cookie: ownerCookie },
+      payload: { role: 'viewer' }
+    });
+    expect(invite.statusCode).toBe(201);
+
+    const preview = await app.inject({
+      method: 'GET',
+      url: `/api/auth/invites/${invite.json().code}`
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({
+      tenantId: 'default',
+      tenantName: 'Default account',
+      role: 'viewer'
+    });
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites/accept',
+      payload: {
+        code: invite.json().code,
+        username: 'invited-user',
+        password: 'correct-password'
+      }
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json()).toMatchObject({
+      username: 'invited-user',
+      tenantId: 'default',
+      role: 'viewer'
+    });
+
+    const membershipCount = tempDb.db.select().from(tenantMemberships).all().length;
+    expect(membershipCount).toBe(2);
+
+    await app.close();
+  });
+
+  it('lets account owners manage members and pending invites', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const ownerCookie = await login(app);
+
+    const invite = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites',
+      headers: { cookie: ownerCookie },
+      payload: { role: 'admin' }
+    });
+    expect(invite.statusCode).toBe(201);
+
+    const pendingInvites = await app.inject({
+      method: 'GET',
+      url: '/api/auth/invites',
+      headers: { cookie: ownerCookie }
+    });
+    expect(pendingInvites.statusCode).toBe(200);
+    expect(pendingInvites.json()).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        role: 'admin',
+        createdAt: expect.any(String),
+        expiresAt: expect.any(String)
+      })
+    ]);
+    expect(pendingInvites.json()[0]).not.toHaveProperty('codeHash');
+    expect(pendingInvites.json()[0]).not.toHaveProperty('code');
+
+    const revokedInvite = await app.inject({
+      method: 'POST',
+      url: `/api/auth/invites/${pendingInvites.json()[0].id}/revoke`,
+      headers: { cookie: ownerCookie }
+    });
+    expect(revokedInvite.statusCode).toBe(200);
+    expect(tempDb.db.select().from(tenantInvites).where(eq(tenantInvites.id, pendingInvites.json()[0].id)).limit(1).get()?.revokedAt).toBeInstanceOf(Date);
+
+    const revokedPreview = await app.inject({
+      method: 'GET',
+      url: `/api/auth/invites/${invite.json().code}`
+    });
+    expect(revokedPreview.statusCode).toBe(404);
+
+    const activeInvite = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites',
+      headers: { cookie: ownerCookie },
+      payload: { role: 'viewer' }
+    });
+    expect(activeInvite.statusCode).toBe(201);
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites/accept',
+      payload: {
+        code: activeInvite.json().code,
+        username: 'member-user',
+        password: 'correct-password'
+      }
+    });
+    expect(accepted.statusCode).toBe(200);
+
+    const members = await app.inject({
+      method: 'GET',
+      url: '/api/auth/account-members',
+      headers: { cookie: ownerCookie }
+    });
+    expect(members.statusCode).toBe(200);
+    expect(members.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ username: 'admin', role: 'owner' }),
+        expect.objectContaining({ username: 'member-user', role: 'viewer' })
+      ])
+    );
+    const invitedMember = members.json().find((entry: { username: string }) => entry.username === 'member-user');
+    expect(invitedMember).toBeDefined();
+    expect(invitedMember).not.toHaveProperty('passwordHash');
+
+    const promoted = await app.inject({
+      method: 'PATCH',
+      url: `/api/auth/account-members/${invitedMember.id}`,
+      headers: { cookie: ownerCookie },
+      payload: { role: 'admin' }
+    });
+    expect(promoted.statusCode).toBe(200);
+    expect(promoted.json()).toMatchObject({ id: invitedMember.id, role: 'admin' });
+
+    const ownerMember = members.json().find((entry: { username: string }) => entry.username === 'admin');
+    const demotedSelf = await app.inject({
+      method: 'PATCH',
+      url: `/api/auth/account-members/${ownerMember.id}`,
+      headers: { cookie: ownerCookie },
+      payload: { role: 'admin' }
+    });
+    expect(demotedSelf.statusCode).toBe(409);
+    expect(demotedSelf.json()).toEqual({ error: 'current_member_locked' });
+
+    const removed = await app.inject({
+      method: 'POST',
+      url: `/api/auth/account-members/${invitedMember.id}/remove`,
+      headers: { cookie: ownerCookie }
+    });
+    expect(removed.statusCode).toBe(200);
+    expect(tempDb.db.select().from(tenantMemberships).where(eq(tenantMemberships.id, invitedMember.id)).limit(1).get()?.revokedAt).toBeInstanceOf(Date);
+
+    const removedOwner = await app.inject({
+      method: 'POST',
+      url: `/api/auth/account-members/${ownerMember.id}/remove`,
+      headers: { cookie: ownerCookie }
+    });
+    expect(removedOwner.statusCode).toBe(409);
+    expect(removedOwner.json()).toEqual({ error: 'current_member_locked' });
+
+    await app.close();
+  });
+
+  it('lets an existing user redeem an invite and switch between accounts', async () => {
+    const config = testConfig();
+    const tempDb = createTestDatabase();
+    closeDb = tempDb.close;
+    const app = await buildApp({ config, db: tempDb.db });
+    const ownerCookie = await login(app);
+
+    const ownedAccount = await app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        username: 'multi-user',
+        password: 'correct-password'
+      }
+    });
+    expect(ownedAccount.statusCode).toBe(200);
+    const ownedTenantId = ownedAccount.json().tenantId as string;
+    const userCookie = ownedAccount.headers['set-cookie'];
+    if (!userCookie || Array.isArray(userCookie)) throw new Error('Expected registration to set one cookie');
+
+    const superAdminSession = await app.inject({
+      method: 'GET',
+      url: '/api/auth/session',
+      headers: { cookie: ownerCookie }
+    });
+    expect(superAdminSession.statusCode).toBe(200);
+    expect(superAdminSession.json().memberships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tenantId: 'default', role: 'owner' }),
+        expect.objectContaining({ tenantId: ownedTenantId, role: 'owner' })
+      ])
+    );
+
+    const superAdminSwitch = await app.inject({
+      method: 'POST',
+      url: '/api/auth/accounts/select',
+      headers: { cookie: ownerCookie },
+      payload: { tenantId: ownedTenantId }
+    });
+    expect(superAdminSwitch.statusCode).toBe(200);
+    expect(superAdminSwitch.json()).toMatchObject({
+      tenantId: ownedTenantId,
+      role: 'owner'
+    });
+    const superAdminSwitchBack = await app.inject({
+      method: 'POST',
+      url: '/api/auth/accounts/select',
+      headers: { cookie: ownerCookie },
+      payload: { tenantId: 'default' }
+    });
+    expect(superAdminSwitchBack.statusCode).toBe(200);
+
+    const invite = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites',
+      headers: { cookie: ownerCookie },
+      payload: { role: 'admin' }
+    });
+    expect(invite.statusCode).toBe(201);
+
+    const redeemed = await app.inject({
+      method: 'POST',
+      url: '/api/auth/invites/redeem',
+      headers: { cookie: userCookie },
+      payload: { code: invite.json().code }
+    });
+    expect(redeemed.statusCode).toBe(200);
+    expect(redeemed.json()).toMatchObject({
+      tenantId: 'default',
+      role: 'admin'
+    });
+
+    const defaultSession = await app.inject({
+      method: 'GET',
+      url: '/api/auth/session',
+      headers: { cookie: userCookie }
+    });
+    expect(defaultSession.statusCode).toBe(200);
+    expect(defaultSession.json()).toMatchObject({
+      tenantId: 'default',
+      role: 'admin'
+    });
+    expect(defaultSession.json().memberships).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tenantId: ownedTenantId, role: 'owner' }),
+        expect.objectContaining({ tenantId: 'default', role: 'admin' })
+      ])
+    );
+
+    const switched = await app.inject({
+      method: 'POST',
+      url: '/api/auth/accounts/select',
+      headers: { cookie: userCookie },
+      payload: { tenantId: ownedTenantId }
+    });
+    expect(switched.statusCode).toBe(200);
+    expect(switched.json()).toMatchObject({
+      tenantId: ownedTenantId,
+      role: 'owner'
+    });
 
     await app.close();
   });
@@ -644,7 +980,7 @@ describe('app', () => {
     await app.close();
   });
 
-  it('enforces at most three enabled proxy targets per charger', async () => {
+  it('enforces at most five enabled proxy targets per charger', async () => {
     const config = testConfig();
     const tempDb = createTestDatabase();
     closeDb = tempDb.close;
@@ -663,7 +999,7 @@ describe('app', () => {
       }).run();
     }
 
-    for (let index = 1; index <= 3; index += 1) {
+    for (let index = 1; index <= 5; index += 1) {
       tempDb.db.insert(proxyTargets).values({
         id: `proxy-limit-${index}`,
         chargerId: 'CHARGER-PROXY-LIMIT',
@@ -685,14 +1021,14 @@ describe('app', () => {
       headers: { cookie },
       payload: {
         chargerId: 'CHARGER-PROXY-LIMIT',
-        name: 'Fourth enabled',
-        url: 'ws://127.0.0.1:9004/ocpp',
+        name: 'Sixth enabled',
+        url: 'ws://127.0.0.1:9006/ocpp',
         enabled: true
       }
     });
     expect(blockedCreate.statusCode).toBe(409);
-    expect(blockedCreate.json()).toMatchObject({ error: 'proxy_target_limit_exceeded', maxEnabledTargets: 3 });
-    expect(tempDb.db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, 'CHARGER-PROXY-LIMIT')).all()).toHaveLength(3);
+    expect(blockedCreate.json()).toMatchObject({ error: 'proxy_target_limit_exceeded', maxEnabledTargets: 5 });
+    expect(tempDb.db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, 'CHARGER-PROXY-LIMIT')).all()).toHaveLength(5);
 
     const disabledCreate = await app.inject({
       method: 'POST',
@@ -700,8 +1036,8 @@ describe('app', () => {
       headers: { cookie },
       payload: {
         chargerId: 'CHARGER-PROXY-LIMIT',
-        name: 'Fourth disabled',
-        url: 'ws://127.0.0.1:9005/ocpp',
+        name: 'Sixth disabled',
+        url: 'ws://127.0.0.1:9007/ocpp',
         enabled: false
       }
     });
@@ -717,7 +1053,7 @@ describe('app', () => {
       }
     });
     expect(blockedEnable.statusCode).toBe(409);
-    expect(blockedEnable.json()).toMatchObject({ error: 'proxy_target_limit_exceeded', maxEnabledTargets: 3 });
+    expect(blockedEnable.json()).toMatchObject({ error: 'proxy_target_limit_exceeded', maxEnabledTargets: 5 });
     expect(tempDb.db.select().from(proxyTargets).where(eq(proxyTargets.id, disabledCreate.json().id)).get()).toMatchObject({ enabled: false });
 
     const enabledUpdate = await app.inject({

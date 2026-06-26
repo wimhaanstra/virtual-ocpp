@@ -5,6 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '../../src/config.js';
+import { applyMigrations } from '../../src/db/client.js';
 import * as schema from '../../src/db/schema.js';
 
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
@@ -287,6 +288,7 @@ export function createTestDatabase() {
     CREATE INDEX communication_journal_message_type_created_at_idx ON communication_journal (message_type, created_at, id);
     CREATE INDEX communication_journal_transaction_created_at_idx ON communication_journal (transaction_id, created_at, id);
   `);
+  applyMigrations(sqlite);
 
   return {
     db: drizzle(sqlite, { schema }),

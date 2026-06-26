@@ -33,6 +33,9 @@ import { SessionsView } from "./components/SessionsView";
 import { TagsView } from "./components/TagsView";
 import type {
   ActiveSessionAuditResponse,
+  AccountInvite,
+  AccountMember,
+  AccountMembership,
   ApiToken,
   ApiTokenScope,
   ActiveView,
@@ -113,7 +116,7 @@ type LiveRefreshTopic =
 
 type ChargerWizardMode = "add-charger" | "manual-onboarding" | "first-run-onboarding";
 type OnboardingTagMode = "skip" | "existing" | "create";
-const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 3;
+const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 5;
 const chargerScopedViews = new Set<ActiveView>(["Charger dashboard", "Diagnostics", "Sessions", "Proxy targets", "Tag access"]);
 type OnboardingProxyDraft = {
   enabled: boolean;
@@ -140,6 +143,14 @@ const emptyOnboardingProxyDraft = (): OnboardingProxyDraft => ({
 export default function App() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<"login" | "register" | "invite">("login");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteTenantName, setInviteTenantName] = useState("");
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [activeTenantId, setActiveTenantId] = useState("");
+  const [accountMemberships, setAccountMemberships] = useState<AccountMembership[]>([]);
+  const [accountMembers, setAccountMembers] = useState<AccountMember[]>([]);
+  const [accountInvites, setAccountInvites] = useState<AccountInvite[]>([]);
   const [authenticated, setAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>(() => getViewFromPath());
   const [tags, setTags] = useState<Tag[]>([]);
@@ -188,6 +199,7 @@ export default function App() {
   const [communicationPurgeScope, setCommunicationPurgeScope] = useState<"retention" | "filters">("retention");
   const [communicationPurgeConfirmation, setCommunicationPurgeConfirmation] = useState("");
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig | null>(null);
+  const [chargerPairingBasicAuth, setChargerPairingBasicAuth] = useState(false);
   const [onboardingSettings, setOnboardingSettings] = useState<OnboardingSettings | null>(null);
   const [onboardingSettingsStatus, setOnboardingSettingsStatus] = useState<OnboardingSettingsStatus>("idle");
   const [communicationSettings, setCommunicationSettings] = useState<CommunicationSettings | null>(null);
@@ -204,6 +216,8 @@ export default function App() {
   const [chargerWizardLabel, setChargerWizardLabel] = useState("");
   const [chargerWizardLoading, setChargerWizardLoading] = useState(false);
   const [chargerWizardMode, setChargerWizardMode] = useState<ChargerWizardMode>("add-charger");
+  const [chargerWizardPairingId, setChargerWizardPairingId] = useState("");
+  const [chargerWizardPairedCharger, setChargerWizardPairedCharger] = useState<ChargerRegistryRow | null>(null);
   const [onboardingTagMode, setOnboardingTagMode] = useState<OnboardingTagMode>("skip");
   const [onboardingSelectedTagId, setOnboardingSelectedTagId] = useState("");
   const [onboardingTagUuid, setOnboardingTagUuid] = useState("");
@@ -230,10 +244,11 @@ export default function App() {
   );
   const chargerWizardDetectedCharger = useMemo(() => {
     if (!chargerWizardOpen || chargerWizardLoading) return null;
+    if (chargerWizardPairedCharger) return chargerWizardPairedCharger;
     const knownIds = new Set(chargerWizardKnownIds);
 
     return chargers.find((charger) => !knownIds.has(getChargerContextId(charger))) ?? null;
-  }, [chargerWizardKnownIds, chargerWizardLoading, chargerWizardOpen, chargers]);
+  }, [chargerWizardKnownIds, chargerWizardLoading, chargerWizardOpen, chargerWizardPairedCharger, chargers]);
   const selectedChargerLabel = selectedCharger ? getChargerDisplayLabel(selectedCharger) : "All chargers";
   const proxyTargetHealth = useMemo(
     () =>
@@ -318,6 +333,12 @@ export default function App() {
   }
 
   useEffect(() => {
+    const invite = new URLSearchParams(window.location.search).get("invite");
+    if (invite) {
+      setInviteCode(invite);
+      setAuthMode("invite");
+      void loadInvitePreview(invite);
+    }
     void loadSession();
   }, []);
 
@@ -388,6 +409,11 @@ export default function App() {
   }, [activeView, authenticated, selectedChargerId, sessionFilters]);
 
   useEffect(() => {
+    if (!authenticated || activeView !== "Settings" || !activeTenantId) return;
+    void loadAccountAccess();
+  }, [activeView, authenticated, activeTenantId]);
+
+  useEffect(() => {
     if (!authenticated || !message) return;
 
     const timeout = window.setTimeout(() => setMessage(""), 5_000);
@@ -450,13 +476,29 @@ export default function App() {
     };
   }, [authenticated, selectedChargerId]);
 
-  async function loadSession() {
+  async function loadSession(options: { clearMessage?: boolean } = {}) {
     const response = await fetch("/api/auth/session", { credentials: "include" });
     if (!response.ok) return;
+    const session = (await response.json()) as { tenantId?: string; userId?: string | null; memberships?: AccountMembership[] };
+    setCurrentUserId(session.userId ?? "");
+    setActiveTenantId(session.tenantId ?? "");
+    setAccountMemberships(session.memberships ?? []);
     setAuthenticated(true);
     setActiveView(getViewFromPath());
-    setMessage("");
+    if (options.clearMessage !== false) {
+      setMessage("");
+    }
     await loadAdminData(selectedChargerId);
+  }
+
+  async function loadInvitePreview(code: string) {
+    const response = await fetch(`/api/auth/invites/${encodeURIComponent(code)}`);
+    if (!response.ok) {
+      setMessage("Invite link is invalid or expired.");
+      return;
+    }
+    const preview = (await response.json()) as { tenantName: string };
+    setInviteTenantName(preview.tenantName);
   }
 
   function navigateToView(view: ActiveView) {
@@ -544,6 +586,11 @@ export default function App() {
     setCommunicationSettingsStatus("idle");
     setApiTokens([]);
     setApiTokensStatus("idle");
+    setAccountMemberships([]);
+    setAccountMembers([]);
+    setAccountInvites([]);
+    setCurrentUserId("");
+    setActiveTenantId("");
     setSelectedChargerId("");
     setActiveView("Home");
     setLiveStatus("connecting");
@@ -554,6 +601,15 @@ export default function App() {
     if (response.status !== 401) return false;
     resetAdminState();
     return true;
+  }
+
+  async function readErrorCode(response: Response) {
+    try {
+      const body = (await response.clone().json()) as { error?: string };
+      return body.error ?? "";
+    } catch {
+      return "";
+    }
   }
 
   async function fetchAdminJson<T>(url: string) {
@@ -707,6 +763,41 @@ export default function App() {
       return;
     }
     setDashboardConfig(data);
+  }
+
+  async function createChargerPairing(basicAuth: boolean) {
+    const response = await fetch("/api/charger-pairings", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ basicAuth })
+    });
+    if (handleUnauthorized(response)) return;
+    if (!response.ok) {
+      setMessage("Could not create charger pairing URL.");
+      return;
+    }
+    const data = (await response.json()) as {
+      id: string;
+      ocppWebSocketUrl: string;
+      ocppProtocol: string;
+      expiresAt: string;
+      basicAuthRequired: boolean;
+      basicAuthUsername: string | null;
+      basicAuthPassword: string | null;
+    };
+    setChargerWizardPairingId(data.id);
+    setChargerWizardPairedCharger(null);
+    setChargerPairingBasicAuth(data.basicAuthRequired);
+    setDashboardConfig({
+      ocppWebSocketUrl: data.ocppWebSocketUrl,
+      ocppProtocol: data.ocppProtocol,
+      ocppBasicAuthRequired: data.basicAuthRequired,
+      ocppBasicAuthUsername: data.basicAuthUsername,
+      ocppBasicAuthPassword: data.basicAuthPassword,
+      expiresAt: data.expiresAt,
+      appVersion: dashboardConfig?.appVersion ?? "unknown"
+    });
   }
 
   async function getChargerConfiguration(chargerId: string, keys: string[]) {
@@ -1002,6 +1093,22 @@ export default function App() {
     setChargers(data);
   }
 
+  async function loadChargerPairingStatus(pairingId = chargerWizardPairingId) {
+    if (!pairingId) return;
+
+    const data = await fetchAdminJson<{ charger: ChargerRegistryRow | null }>(`/api/charger-pairings/${encodeURIComponent(pairingId)}`);
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load charger pairing status.");
+      return;
+    }
+    setChargerWizardPairedCharger(data.charger);
+  }
+
+  async function refreshChargerWizard() {
+    await Promise.all([loadChargers(), loadChargerPairingStatus()]);
+  }
+
   function startChargerLabelEdit(charger: ChargerRegistryRow) {
     navigateToView("Chargers");
     setChargerLabelTarget(charger);
@@ -1110,6 +1217,9 @@ export default function App() {
   async function openChargerWizard(mode: ChargerWizardMode = "add-charger") {
     setChargerWizardLabel("");
     setChargerWizardMode(mode);
+    setChargerPairingBasicAuth(false);
+    setChargerWizardPairingId("");
+    setChargerWizardPairedCharger(null);
     resetOnboardingSetupState();
     setChargerWizardOpen(true);
     setChargerWizardLoading(true);
@@ -1129,7 +1239,7 @@ export default function App() {
       await loadTags();
     }
     setChargerWizardLoading(false);
-    void loadDashboardConfig();
+    await createChargerPairing(false);
   }
 
   async function closeChargerWizard() {
@@ -1140,6 +1250,9 @@ export default function App() {
     setChargerWizardStartedAt("");
     setChargerWizardLoading(false);
     setChargerWizardMode("add-charger");
+    setChargerPairingBasicAuth(false);
+    setChargerWizardPairingId("");
+    setChargerWizardPairedCharger(null);
     resetOnboardingSetupState();
     setMessage("");
 
@@ -1207,7 +1320,7 @@ export default function App() {
       }
 
       await loadChargers();
-      const shouldCompleteFirstRun = chargerWizardMode === "first-run-onboarding";
+      const shouldCompletePendingOnboarding = !onboardingSettings?.completedAt && !onboardingSettings?.skippedAt;
       setChargerWizardOpen(false);
       setChargerWizardLabel("");
       setChargerWizardKnownIds([]);
@@ -1215,7 +1328,7 @@ export default function App() {
       setChargerWizardLoading(false);
       setChargerWizardMode("add-charger");
       resetOnboardingSetupState();
-      if (shouldCompleteFirstRun) {
+      if (shouldCompletePendingOnboarding) {
         const updated = await updateOnboardingSettings("completed");
         if (!updated) return;
       }
@@ -1890,25 +2003,265 @@ export default function App() {
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    setMessage("Signing in...");
+    const endpoint =
+      authMode === "register"
+        ? "/api/auth/register"
+        : authMode === "invite"
+          ? "/api/auth/invites/accept"
+          : "/api/auth/login";
+    const payload =
+      authMode === "invite"
+        ? { code: inviteCode, username, password }
+        : { username, password };
+    setMessage(authMode === "register" ? "Creating account..." : authMode === "invite" ? "Joining account..." : "Signing in...");
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(endpoint, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
-        setMessage("Invalid admin credentials.");
+        setMessage(authMode === "register" ? "Could not create account." : authMode === "invite" ? "Could not join account." : "Invalid credentials.");
         return;
       }
 
       setAuthenticated(true);
       setActiveView("Home");
       setPassword("");
-      setMessage("Signed in.");
-      await loadAdminData();
+      setInviteCode("");
+      setInviteTenantName("");
+      setAuthMode("login");
+      setMessage(authMode === "register" ? "Account created." : authMode === "invite" ? "Joined account." : "Signed in.");
+      await loadSession({ clearMessage: false });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function redeemInviteCode(code: string) {
+    const trimmedCode = code.trim();
+    if (!trimmedCode) {
+      setMessage("Enter an invite code.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("Joining account...");
+    try {
+      const response = await fetch("/api/auth/invites/redeem", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmedCode })
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        setMessage(response.status === 409 ? "You already belong to that account." : "Could not join account.");
+        return;
+      }
+
+      setSelectedChargerId("");
+      await loadSession({ clearMessage: false });
+      setMessage("Joined account.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createInviteCode(role: AccountMembership["role"]) {
+    setBusy(true);
+    setMessage("Creating invite...");
+    try {
+      const response = await fetch("/api/auth/invites", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role })
+      });
+      if (handleUnauthorized(response)) return null;
+      if (!response.ok) {
+        setMessage(response.status === 403 ? "Only account owners can create invites." : "Could not create invite.");
+        return null;
+      }
+
+      const invite = (await response.json()) as { code: string; role: AccountMembership["role"]; expiresAt: string };
+      setMessage("Invite created.");
+      void loadAccountInvites();
+      return {
+        ...invite,
+        inviteUrl: `${window.location.origin}/?invite=${encodeURIComponent(invite.code)}`
+      };
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadAccountAccess() {
+    await Promise.all([loadAccountMembers(), loadAccountInvites()]);
+  }
+
+  async function loadAccountMembers() {
+    const data = await fetchAdminJson<AccountMember[]>("/api/auth/account-members");
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load account members.");
+      return;
+    }
+    setAccountMembers(data);
+  }
+
+  async function loadAccountInvites() {
+    const data = await fetchAdminJson<AccountInvite[]>("/api/auth/invites");
+    if (data === null) return;
+    if (data === undefined) {
+      setMessage("Could not load account invites.");
+      return;
+    }
+    setAccountInvites(data);
+  }
+
+  async function updateAccountMemberRole(memberId: string, role: AccountMembership["role"]) {
+    setBusy(true);
+    setMessage("Saving member role...");
+    try {
+      const response = await fetch(`/api/auth/account-members/${encodeURIComponent(memberId)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role })
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        const error = await readErrorCode(response);
+        setMessage(
+          error === "current_member_locked"
+            ? "You cannot change your own role."
+            : error === "last_owner_required"
+              ? "An account must keep at least one owner."
+              : "Could not save member role."
+        );
+        return;
+      }
+      await loadAccountAccess();
+      await loadSession({ clearMessage: false });
+      setMessage("Member role saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeAccountMember(memberId: string) {
+    setBusy(true);
+    setMessage("Removing member...");
+    try {
+      const response = await fetch(`/api/auth/account-members/${encodeURIComponent(memberId)}/remove`, {
+        method: "POST",
+        credentials: "include"
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        const error = await readErrorCode(response);
+        setMessage(
+          error === "current_member_locked"
+            ? "You cannot remove your own membership."
+            : error === "last_owner_required"
+              ? "An account must keep at least one owner."
+              : "Could not remove member."
+        );
+        return;
+      }
+      await loadAccountAccess();
+      await loadSession({ clearMessage: false });
+      setMessage("Member removed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeAccountInvite(inviteId: string) {
+    setBusy(true);
+    setMessage("Revoking invite...");
+    try {
+      const response = await fetch(`/api/auth/invites/${encodeURIComponent(inviteId)}/revoke`, {
+        method: "POST",
+        credentials: "include"
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        setMessage("Could not revoke invite.");
+        return;
+      }
+      await loadAccountInvites();
+      setMessage("Invite revoked.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyInviteValue(value: string) {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard not available");
+      }
+      await navigator.clipboard.writeText(value);
+      setMessage("Invite copied.");
+    } catch {
+      setMessage("Could not copy invite.");
+    }
+  }
+
+  async function selectAccount(tenantId: string) {
+    if (!tenantId || tenantId === activeTenantId) return;
+
+    setBusy(true);
+    setMessage("Switching account...");
+    try {
+      const response = await fetch("/api/auth/accounts/select", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId })
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        setMessage("Could not switch account.");
+        return;
+      }
+
+      setSelectedChargerId("");
+      await loadSession({ clearMessage: false });
+      setMessage("Account switched.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameAccount(name: string) {
+    const trimmedName = name.trim();
+    if (!activeTenantId || !trimmedName) {
+      setMessage("Enter an account name.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("Saving account name...");
+    try {
+      const response = await fetch(`/api/auth/accounts/${encodeURIComponent(activeTenantId)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName })
+      });
+      if (handleUnauthorized(response)) return;
+      if (!response.ok) {
+        setMessage("Could not save account name.");
+        return;
+      }
+
+      await loadSession({ clearMessage: false });
+      setMessage("Account name saved.");
     } finally {
       setBusy(false);
     }
@@ -2273,8 +2626,17 @@ export default function App() {
       <AuthPage
         username={username}
         password={password}
+        inviteCode={inviteCode}
+        inviteTenantName={inviteTenantName}
+        mode={authMode}
         message={message}
         busy={busy}
+        onModeChange={setAuthMode}
+        onInviteCodeChange={(value) => {
+          setInviteCode(value);
+          setInviteTenantName("");
+          if (value.trim()) void loadInvitePreview(value.trim());
+        }}
         onUsernameChange={setUsername}
         onPasswordChange={setPassword}
         onSubmit={login}
@@ -2351,7 +2713,12 @@ export default function App() {
           />
         ) : activeView === "Settings" ? (
           <SettingsView
+            accountInvites={accountInvites}
+            accountMembers={accountMembers}
+            accountMemberships={accountMemberships}
+            activeTenantId={activeTenantId}
             busy={busy}
+            currentUserId={currentUserId}
             apiTokenCount={apiTokens.length}
             apiTokensStatus={apiTokensStatus}
             communicationSettings={communicationSettings}
@@ -2364,7 +2731,15 @@ export default function App() {
             onPurgeExpiredCommunication={() => void purgeExpiredCommunicationJournalFromSettings()}
             onRefreshCommunicationSettings={() => void loadCommunicationSettings()}
             onRefreshOnboarding={() => void loadOnboardingSettings()}
+            onCreateInvite={(role) => createInviteCode(role)}
+            onCopyInvite={(value) => void copyInviteValue(value)}
+            onRedeemInvite={(code) => void redeemInviteCode(code)}
+            onRemoveAccountMember={(memberId) => void removeAccountMember(memberId)}
+            onRenameAccount={(name) => void renameAccount(name)}
+            onRevokeAccountInvite={(inviteId) => void revokeAccountInvite(inviteId)}
             onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
+            onSelectAccount={(tenantId) => void selectAccount(tenantId)}
+            onUpdateAccountMemberRole={(memberId, role) => void updateAccountMemberRole(memberId, role)}
             onTimeFormatChange={updateTimeFormat}
           />
         ) : activeView === "Access tokens" ? (
@@ -2931,6 +3306,7 @@ export default function App() {
         <ChargerOnboardingModal
           busy={busy}
           dashboardConfig={dashboardConfig}
+          pairingBasicAuth={chargerPairingBasicAuth}
           detectedCharger={chargerWizardDetectedCharger}
           knownChargerCount={chargerWizardKnownIds.length}
           label={chargerWizardLabel}
@@ -2946,8 +3322,9 @@ export default function App() {
           onCopyUrl={(url) => void copyChargerWizardUrl(url)}
           onFinish={() => void finishChargerWizard()}
           onLabelChange={setChargerWizardLabel}
+          onPairingBasicAuthChange={(enabled) => void createChargerPairing(enabled)}
           onProxyDraftChange={(patch) => setOnboardingProxyDraft((current) => ({ ...current, ...patch }))}
-          onRefresh={() => void loadChargers()}
+          onRefresh={() => void refreshChargerWizard()}
           onSelectedTagChange={setOnboardingSelectedTagId}
           onTagDraftChange={(patch) => {
             if (patch.mode) setOnboardingTagMode(patch.mode);

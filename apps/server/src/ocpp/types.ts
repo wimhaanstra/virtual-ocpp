@@ -91,5 +91,6 @@ export type MeterValuesRequest = {
 };
 
 export type OcppHandlerContext = {
+  tenantId: string;
   chargerId: string;
 };

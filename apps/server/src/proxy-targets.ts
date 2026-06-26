@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAdmin } from './auth.js';
+import { getTenantId, requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
 import { chargers, proxySessionMappings, proxyTagMappings, proxyTargets } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
@@ -11,7 +11,7 @@ import type { ProxyAuthorizationService } from './ocpp/proxy-service.js';
 
 const ModeSchema = z.enum(['monitor-only', 'deny-capable']);
 const OutagePolicySchema = z.enum(['fail-open', 'fail-closed']);
-const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 3;
+const MAX_ENABLED_PROXY_TARGETS_PER_CHARGER = 5;
 const TagMappingsSchema = z
   .array(
     z.object({
@@ -71,13 +71,14 @@ const ProxyHealthQuerySchema = z.object({
 export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, proxyAuthorization?: ProxyAuthorizationService, liveUpdates?: LiveUpdateBus) {
   app.get('/api/proxy-health', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
+    const tenantId = getTenantId(request);
 
     const parsed = ProxyHealthQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid_proxy_health_query', details: parsed.error.flatten() });
     }
 
-    return proxyAuthorization?.getHealth(parsed.data.chargerId) ?? {
+    return proxyAuthorization?.getHealth(parsed.data.chargerId, tenantId) ?? {
       chargerId: parsed.data.chargerId ?? null,
       summary: {
         total: 0,
@@ -92,28 +93,30 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
 
   app.get('/api/proxy-targets', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
+    const tenantId = getTenantId(request);
 
     const parsed = ListProxyTargetsQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid_proxy_target_query', details: parsed.error.flatten() });
     }
 
-    return db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, parsed.data.chargerId)).all().map((target) => toPublicProxyTarget(db, target));
+    return db.select().from(proxyTargets).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.chargerId, parsed.data.chargerId))).all().map((target) => toPublicProxyTarget(db, target));
   });
 
   app.post('/api/proxy-targets', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = CreateProxyTargetSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_proxy_target', details: body.error.flatten() });
     }
 
-    const charger = db.select().from(chargers).where(eq(chargers.id, body.data.chargerId)).limit(1).get();
+    const charger = db.select().from(chargers).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, body.data.chargerId))).limit(1).get();
     if (!charger) {
       return reply.code(404).send({ error: 'charger_not_found' });
     }
-    if (body.data.enabled && countEnabledProxyTargets(db, body.data.chargerId) >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER) {
+    if (body.data.enabled && countEnabledProxyTargets(db, body.data.chargerId, tenantId) >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER) {
       return reply.code(409).send({
         error: 'proxy_target_limit_exceeded',
         maxEnabledTargets: MAX_ENABLED_PROXY_TARGETS_PER_CHARGER
@@ -124,6 +127,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     const now = new Date();
     const target = {
       id,
+      tenantId,
       chargerId: body.data.chargerId,
       name: body.data.name,
       url: body.data.url,
@@ -139,7 +143,7 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     };
 
     db.insert(proxyTargets).values(target).run();
-    replaceProxyTagMappings(db, id, body.data.tagMappings ?? []);
+    replaceProxyTagMappings(db, id, tenantId, body.data.tagMappings ?? []);
     recordProxyLog(db, liveUpdates, 'proxy target created', {
       proxyTargetId: id,
       chargerId: target.chargerId,
@@ -153,13 +157,14 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
 
   app.patch<{ Params: { id: string } }>('/api/proxy-targets/:id', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = UpdateProxyTargetSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_proxy_target', details: body.error.flatten() });
     }
 
-    const existing = db.select().from(proxyTargets).where(eq(proxyTargets.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(proxyTargets).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'proxy_target_not_found' });
     }
@@ -184,16 +189,16 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
     if (hasActiveMappings && !disablingTarget && hasDisruptiveUpdate) {
       return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
     }
-    if (enablingTarget && countEnabledProxyTargets(db, existing.chargerId, existing.id) >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER) {
+    if (enablingTarget && countEnabledProxyTargets(db, existing.chargerId, tenantId, existing.id) >= MAX_ENABLED_PROXY_TARGETS_PER_CHARGER) {
       return reply.code(409).send({
         error: 'proxy_target_limit_exceeded',
         maxEnabledTargets: MAX_ENABLED_PROXY_TARGETS_PER_CHARGER
       });
     }
 
-    db.update(proxyTargets).set(update).where(eq(proxyTargets.id, request.params.id)).run();
+    db.update(proxyTargets).set(update).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.id, request.params.id))).run();
     if (body.data.tagMappings !== undefined) {
-      replaceProxyTagMappings(db, existing.id, body.data.tagMappings);
+      replaceProxyTagMappings(db, existing.id, tenantId, body.data.tagMappings);
     }
     if (disablingTarget) {
       closeActiveProxyMappings(db, existing.chargerId, existing.id);
@@ -216,8 +221,9 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
 
   app.delete<{ Params: { id: string } }>('/api/proxy-targets/:id', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
-    const existing = db.select().from(proxyTargets).where(eq(proxyTargets.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(proxyTargets).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'proxy_target_not_found' });
     }
@@ -226,8 +232,8 @@ export function registerProxyTargetRoutes(app: FastifyInstance, db: Database, pr
       return reply.code(409).send({ error: 'proxy_target_has_active_sessions' });
     }
 
-    db.delete(proxyTagMappings).where(eq(proxyTagMappings.proxyTargetId, request.params.id)).run();
-    db.delete(proxyTargets).where(eq(proxyTargets.id, request.params.id)).run();
+    db.delete(proxyTagMappings).where(and(eq(proxyTagMappings.tenantId, tenantId), eq(proxyTagMappings.proxyTargetId, request.params.id))).run();
+    db.delete(proxyTargets).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.id, request.params.id))).run();
     if (existing.chargerId) {
       await proxyAuthorization?.invalidateTarget(existing.chargerId, existing.id, 'proxy target connection invalidated after delete');
     }
@@ -253,7 +259,7 @@ function toPublicProxyTarget(db: Database, target: typeof proxyTargets.$inferSel
     tagMappings: db
       .select()
       .from(proxyTagMappings)
-      .where(eq(proxyTagMappings.proxyTargetId, target.id))
+      .where(and(eq(proxyTagMappings.tenantId, target.tenantId), eq(proxyTagMappings.proxyTargetId, target.id)))
       .all()
       .map((mapping) => ({
         id: mapping.id,
@@ -268,16 +274,18 @@ function toPublicProxyTarget(db: Database, target: typeof proxyTargets.$inferSel
 function replaceProxyTagMappings(
   db: Database,
   proxyTargetId: string,
+  tenantId: string,
   mappings: Array<{
     localIdTag: string;
     outboundIdTag: string;
   }>
 ) {
   const now = new Date();
-  db.delete(proxyTagMappings).where(eq(proxyTagMappings.proxyTargetId, proxyTargetId)).run();
+  db.delete(proxyTagMappings).where(and(eq(proxyTagMappings.tenantId, tenantId), eq(proxyTagMappings.proxyTargetId, proxyTargetId))).run();
   for (const mapping of mappings) {
     db.insert(proxyTagMappings).values({
       id: randomUUID(),
+      tenantId,
       proxyTargetId,
       localIdTag: mapping.localIdTag.trim(),
       outboundIdTag: mapping.outboundIdTag.trim(),
@@ -322,13 +330,13 @@ function closeActiveProxyMappings(db: Database, chargerId: string | null, proxyT
     .run();
 }
 
-function countEnabledProxyTargets(db: Database, chargerId: string | null, excludingProxyTargetId?: string) {
+function countEnabledProxyTargets(db: Database, chargerId: string | null, tenantId: string, excludingProxyTargetId?: string) {
   if (!chargerId) return 0;
 
   return db
     .select({ id: proxyTargets.id })
     .from(proxyTargets)
-    .where(and(eq(proxyTargets.chargerId, chargerId), eq(proxyTargets.enabled, true)))
+    .where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.chargerId, chargerId), eq(proxyTargets.enabled, true)))
     .all()
     .filter((target) => target.id !== excludingProxyTargetId).length;
 }

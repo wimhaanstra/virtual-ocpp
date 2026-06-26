@@ -5,10 +5,18 @@ Virtual OCPP exposes a cookie-authenticated admin API, scoped bearer tokens for 
 ## Auth And Tokens
 
 - `POST /api/auth/login` accepts `{ "username": "...", "password": "..." }`.
+- `POST /api/auth/register` accepts `{ "username": "...", "password": "..." }` and creates a new tenant account with a generated account name. The first user is added as `owner`.
+- `POST /api/auth/invites` creates a one-time invite code for an existing tenant. It requires an authenticated owner session and accepts `{ "role": "owner" | "admin" | "viewer" }`.
+- `GET /api/auth/invites/:code` previews a valid unredeemed invite and returns the target account name and role.
+- `POST /api/auth/invites/accept` accepts `{ "code": "...", "username": "...", "password": "..." }`. If the username exists, the password must match and the existing user joins the invited tenant; otherwise a new user is created.
+- `POST /api/auth/invites/redeem` accepts `{ "code": "..." }` for an already authenticated user and joins the invited tenant.
+- `POST /api/auth/accounts/select` accepts `{ "tenantId": "..." }` and switches the current session to another account the user belongs to.
+- `PATCH /api/auth/accounts/:tenantId` accepts `{ "name": "..." }` and renames an account. The caller must be an owner of the active account or the configured super admin.
 - On success the server sets a signed, HTTP-only session cookie named `virtual_ocpp_session`.
 - The cookie lives for 12 hours.
 - The cookie is marked `Secure` when the request is served over HTTPS or behind `X-Forwarded-Proto: https`.
-- `GET /api/auth/session` and `GET /api/auth/me` return the current admin session when the cookie is valid.
+- `GET /api/auth/session` and `GET /api/auth/me` return the current user, tenant, role, and account memberships when the cookie is valid.
+- The configured env admin is marked `isSuperAdmin` after a successful configured-password login and receives all tenant accounts in the membership list for account switching.
 - `POST /api/auth/logout` revokes the current session and clears the cookie.
 - `GET /api/access-tokens` lists API tokens. This route requires the admin cookie; bearer tokens cannot manage tokens.
 - `POST /api/access-tokens` creates a token with `{ "name": "...", "scope": "read_only" | "read_write", "expiresAt": null | "..." }`. The plaintext token is returned once.
@@ -21,12 +29,13 @@ Bearer tokens are sent as:
 Authorization: Bearer <32-character-token>
 ```
 
-Only a SHA-256 hash of the token is stored. `read_only` tokens can call read routes and preview routes. `read_write` tokens can also call mutation routes and charger command routes. Legacy `v1.<token-id>.<secret>` tokens are still accepted.
+Only a SHA-256 hash of the token is stored. Tokens are scoped to the issuing tenant. `read_only` tokens can call read routes and preview routes. `read_write` tokens can also call mutation routes and charger command routes. Legacy `v1.<token-id>.<secret>` tokens are still accepted.
 
-The charger websocket can also use Basic Auth when `OCPP_BASIC_AUTH_PASSWORD` is set.
+The charger onboarding wizard creates tenant-specific pairing URLs through `POST /api/charger-pairings`. The response includes a short-lived URL like `/ocpp/t/:tenantPublicId/:pairingCode/:chargerId`, and can optionally include display-once Basic Auth credentials for that pairing session.
 
-- Username must match the charger id.
-- Password must match `OCPP_BASIC_AUTH_PASSWORD`.
+Chargers paired through the tenant-specific URL are stored with a tenant-scoped charger id based on the URL tenant segment and the charger-supplied identity, for example `tenant-public-id/charger-identity`. The charger-supplied identity is not trusted as a globally unique id.
+
+Legacy `/ocpp/:chargerId` connections still work for existing/local flows. New onboarding should use the tenant-specific pairing URL shown in the wizard.
 
 ## Endpoint Groups
 
@@ -38,6 +47,13 @@ The charger websocket can also use Basic Auth when `OCPP_BASIC_AUTH_PASSWORD` is
 ### Session Bootstrap
 
 - `POST /api/auth/login`
+- `POST /api/auth/register`
+- `POST /api/auth/invites`
+- `GET /api/auth/invites/:code`
+- `POST /api/auth/invites/accept`
+- `POST /api/auth/invites/redeem`
+- `POST /api/auth/accounts/select`
+- `PATCH /api/auth/accounts/:tenantId`
 - `GET /api/auth/session`
 - `GET /api/auth/me`
 - `POST /api/auth/logout`
@@ -47,8 +63,9 @@ The charger websocket can also use Basic Auth when `OCPP_BASIC_AUTH_PASSWORD` is
 - `POST /api/access-tokens/:id/rotate`
 - `DELETE /api/access-tokens/:id`
 - `GET /api/dashboard-config`
+- `POST /api/charger-pairings`
 
-`/api/dashboard-config` returns the charger websocket URL template, OCPP protocol version, whether charger Basic Auth is required, and the app version.
+`/api/dashboard-config` returns the legacy charger websocket URL template, OCPP protocol version, and app version. `POST /api/charger-pairings` returns the tenant-specific onboarding URL and optional Basic Auth credentials for the current pairing session.
 
 ### Inventory And Configuration
 

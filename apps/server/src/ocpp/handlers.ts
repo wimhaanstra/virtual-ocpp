@@ -24,7 +24,7 @@ export class OcppHandlers {
   ) {}
 
   async bootNotification(context: OcppHandlerContext, params: BootNotificationRequest) {
-    this.repository.recordBootNotification(context.chargerId, params);
+    this.repository.recordBootNotification(context.chargerId, params, context.tenantId);
 
     this.repository.recordLog({
       category: 'ocpp',

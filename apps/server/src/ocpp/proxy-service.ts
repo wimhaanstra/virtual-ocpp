@@ -428,10 +428,15 @@ export class ProxyAuthorizationService {
     );
   }
 
-  getHealth(chargerId?: string) {
-    const targets = chargerId
-      ? this.db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, chargerId)).all()
-      : this.db.select().from(proxyTargets).all();
+  getHealth(chargerId?: string, tenantId?: string) {
+    const targets =
+      chargerId && tenantId
+        ? this.db.select().from(proxyTargets).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.chargerId, chargerId))).all()
+        : chargerId
+          ? this.db.select().from(proxyTargets).where(eq(proxyTargets.chargerId, chargerId)).all()
+          : tenantId
+            ? this.db.select().from(proxyTargets).where(eq(proxyTargets.tenantId, tenantId)).all()
+            : this.db.select().from(proxyTargets).all();
 
     const items = targets.map((target) => {
       const targetChargerId = target.chargerId ?? '';

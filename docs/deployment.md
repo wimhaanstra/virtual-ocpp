@@ -67,26 +67,28 @@ Override SQLite storage by changing the volume mount, for example by replacing t
 ## Required Environment
 
 - `SESSION_SECRET`: at least 32 characters; signs the admin session cookie.
-- `ADMIN_PASSWORD`: must not be empty; password for the local admin user.
+- `ADMIN_PASSWORD`: must not be empty; used to bootstrap or promote the configured super admin account.
 
 Common optional values:
 
-- `ADMIN_USERNAME`: defaults to `admin`.
-- `OCPP_PUBLIC_URL`: charger-facing websocket URL, for example `wss://ocpp.example.com/ocpp/:chargerId`.
-- `OCPP_BASIC_AUTH_PASSWORD`: requires chargers to use OCPP websocket Basic Auth with the charger id as username.
+- `ADMIN_USERNAME`: defaults to `admin`; used with `ADMIN_PASSWORD` for the super admin login.
+- `OCPP_PUBLIC_URL`: charger-facing websocket URL template used as the base for tenant-specific pairing URLs.
+- `OCPP_BASIC_AUTH_PASSWORD`: legacy global charger Basic Auth password. New charger onboarding can generate per-pairing Basic Auth credentials from the wizard.
 - `CHARGER_SILENT_AFTER_SECONDS`: defaults to `300`.
 - `METER_GAP_THRESHOLD_WH`: defaults to `1000`.
 
 Communication journal retention defaults to 24 hours and is managed from Settings after login. The value is stored in SQLite.
 
+New deployments can also use the login screen registration link to create a tenant account directly. Those accounts get a generated name that can be changed later. Existing tenant users should be added with invite codes from an owner account. The configured super admin can switch into any tenant account from Settings.
+
 ## Reverse Proxy
 
 Terminate TLS at your reverse proxy and forward websocket upgrades to the container. Preserve upgrade headers for:
 
-- `/ocpp/:chargerId` for chargers
+- `/ocpp/:chargerId` and `/ocpp/t/:tenantPublicId/:pairingCode/:chargerId` for chargers
 - `/`, `/api/*`, and `/health` for the web UI and API
 
-If the public charger URL uses TLS, set `OCPP_PUBLIC_URL` to a `wss://` value so the dashboard shows the correct charger-facing address.
+If the public charger URL uses TLS, set `OCPP_PUBLIC_URL` to a `wss://` value so generated tenant pairing URLs use the correct charger-facing address.
 
 The application serves the UI, API, live updates, and OCPP charger websocket endpoint from the same internal port, `8797`. A reverse proxy should route the whole host to container port `8797`; it does not need a separate websocket service or path-specific backend.
 

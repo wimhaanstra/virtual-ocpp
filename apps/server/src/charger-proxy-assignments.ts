@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAdmin } from './auth.js';
+import { getTenantId, requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
 import { chargerProxyAssignments, proxySessionMappings, proxyTargets } from './db/schema.js';
 import { recordLogEntry } from './log-writer.js';
@@ -60,6 +60,7 @@ export function registerChargerProxyAssignmentRoutes(app: FastifyInstance, db: D
 
   app.post('/api/charger-proxy-assignments', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = CreateAssignmentSchema.safeParse(request.body);
     if (!body.success) {
@@ -75,6 +76,7 @@ export function registerChargerProxyAssignmentRoutes(app: FastifyInstance, db: D
     const id = randomUUID();
     const assignment = {
       id,
+      tenantId,
       chargerId: body.data.chargerId,
       proxyTargetId: body.data.proxyTargetId,
       enabled: body.data.enabled,

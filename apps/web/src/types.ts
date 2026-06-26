@@ -427,7 +427,42 @@ export type DashboardConfig = {
   ocppProtocol: string;
   ocppBasicAuthRequired: boolean;
   ocppBasicAuthUsername: string | null;
+  ocppBasicAuthPassword?: string | null;
+  expiresAt?: string | null;
   appVersion: string;
+};
+
+export type AccountMembership = {
+  tenantId: string;
+  tenantName: string;
+  role: "owner" | "admin" | "viewer";
+};
+
+export type AccountMember = {
+  id: string;
+  userId: string;
+  username: string;
+  role: "owner" | "admin" | "viewer";
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AccountInvite = {
+  id: string;
+  role: "owner" | "admin" | "viewer";
+  createdByUserId: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type AuthSession = {
+  authenticated: boolean;
+  tenantId: string;
+  userId: string | null;
+  username: string;
+  role: "owner" | "admin" | "viewer";
+  isSuperAdmin: boolean;
+  memberships: AccountMembership[];
 };
 
 export type OnboardingSettings = {

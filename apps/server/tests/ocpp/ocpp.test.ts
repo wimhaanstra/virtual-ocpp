@@ -256,6 +256,63 @@ describe('OCPP 1.6 local primary', () => {
     expect(server.db.select().from(logs).all().some((row) => row.message === 'boot notification accepted')).toBe(true);
   });
 
+  it('detects a charger paired through a tenant-specific onboarding URL', async () => {
+    const server = await startTestServer();
+    cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });
+
+    const registered = await server.app.inject({
+      method: 'POST',
+      url: '/api/auth/register',
+      payload: {
+        username: 'tenant-owner',
+        password: 'correct-password'
+      }
+    });
+    expect(registered.statusCode).toBe(200);
+    const cookie = registered.headers['set-cookie'];
+    if (!cookie || Array.isArray(cookie)) throw new Error('Expected registration to set one cookie');
+
+    const pairing = await server.app.inject({
+      method: 'POST',
+      url: '/api/charger-pairings',
+      headers: { cookie },
+      payload: { basicAuth: false }
+    });
+    expect(pairing.statusCode).toBe(201);
+    const pairingBody = pairing.json() as { id: string; ocppWebSocketUrl: string };
+    const pairingPath = new URL(pairingBody.ocppWebSocketUrl).pathname.replace(':chargerId', 'MUTABLE-DEVICE-ID');
+    const endpoint = `${server.endpoint.replace(/\/ocpp$/, '')}${pairingPath}`;
+    const pathParts = new URL(endpoint).pathname.split('/').filter(Boolean);
+    const scopedChargerId = `${pathParts[2]}/${pathParts[4]}`;
+
+    const charger = await connectCharger(endpoint, 'IGNORED-WEBSOCKET-IDENTITY');
+    cleanup.push(async () => { await charger.close({}); });
+    await charger.call('BootNotification', {
+      chargePointVendor: 'Tenant vendor',
+      chargePointModel: 'Tenant model'
+    });
+
+    const status = await server.app.inject({
+      method: 'GET',
+      url: `/api/charger-pairings/${pairingBody.id}`,
+      headers: { cookie }
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().charger).toMatchObject({
+      id: scopedChargerId,
+      chargePointVendor: 'Tenant vendor',
+      chargePointModel: 'Tenant model'
+    });
+
+    const chargersResponse = await server.app.inject({
+      method: 'GET',
+      url: '/api/chargers',
+      headers: { cookie }
+    });
+    expect(chargersResponse.statusCode).toBe(200);
+    expect(chargersResponse.json()).toEqual(expect.arrayContaining([expect.objectContaining({ id: scopedChargerId })]));
+  });
+
   it('uses the /ocpp/:chargerId path as the registered charger context', async () => {
     const server = await startTestServer();
     cleanup.push(() => { server.closeDb(); }, async () => { await server.app.close(); });

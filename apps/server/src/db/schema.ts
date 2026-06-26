@@ -1,7 +1,80 @@
 import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
+export const DEFAULT_TENANT_ID = 'default';
+
+export const tenants = sqliteTable(
+  'tenants',
+  {
+    id: text('id').primaryKey(),
+    publicId: text('public_id').notNull(),
+    name: text('name').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull()
+  },
+  (table) => ({
+    publicIdUnique: uniqueIndex('tenants_public_id_unique').on(table.publicId)
+  })
+);
+
+export const users = sqliteTable(
+  'users',
+  {
+    id: text('id').primaryKey(),
+    username: text('username').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    isSuperAdmin: integer('is_super_admin', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    disabledAt: integer('disabled_at', { mode: 'timestamp_ms' })
+  },
+  (table) => ({
+    usernameUnique: uniqueIndex('users_username_unique').on(table.username)
+  })
+);
+
+export const tenantMemberships = sqliteTable(
+  'tenant_memberships',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    userId: text('user_id').notNull(),
+    role: text('role').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+    revokedAt: integer('revoked_at', { mode: 'timestamp_ms' })
+  },
+  (table) => ({
+    tenantUserUnique: uniqueIndex('tenant_memberships_tenant_user_unique').on(table.tenantId, table.userId),
+    userIdx: index('tenant_memberships_user_id_idx').on(table.userId),
+    tenantIdx: index('tenant_memberships_tenant_id_idx').on(table.tenantId)
+  })
+);
+
+export const tenantInvites = sqliteTable(
+  'tenant_invites',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    codeHash: text('code_hash').notNull(),
+    role: text('role').notNull(),
+    createdByUserId: text('created_by_user_id').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    redeemedAt: integer('redeemed_at', { mode: 'timestamp_ms' }),
+    redeemedByUserId: text('redeemed_by_user_id'),
+    revokedAt: integer('revoked_at', { mode: 'timestamp_ms' })
+  },
+  (table) => ({
+    codeHashUnique: uniqueIndex('tenant_invites_code_hash_unique').on(table.codeHash),
+    tenantIdx: index('tenant_invites_tenant_id_idx').on(table.tenantId)
+  })
+);
+
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
+  userId: text('user_id'),
+  role: text('role').notNull().default('owner'),
   username: text('username').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
@@ -12,6 +85,8 @@ export const apiTokens = sqliteTable(
   'api_tokens',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
+    userId: text('user_id'),
     name: text('name').notNull(),
     scope: text('scope').notNull(),
     tokenHash: text('token_hash').notNull(),
@@ -29,26 +104,37 @@ export const apiTokens = sqliteTable(
 
 export const onboardingSettings = sqliteTable('onboarding_settings', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
   skippedAt: integer('skipped_at', { mode: 'timestamp_ms' })
 });
 
 export const appSettings = sqliteTable('app_settings', {
   key: text('key').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   value: text('value').notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull()
 });
 
-export const tags = sqliteTable('tags', {
-  id: text('id').primaryKey(),
-  uuid: text('uuid').notNull().unique(),
-  label: text('label'),
-  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull()
-});
+export const tags = sqliteTable(
+  'tags',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
+    uuid: text('uuid').notNull(),
+    label: text('label'),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull()
+  },
+  (table) => ({
+    tenantUuidUnique: uniqueIndex('tags_tenant_uuid_unique').on(table.tenantId, table.uuid)
+  })
+);
 
 export const chargers = sqliteTable('chargers', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
+  credentialHash: text('credential_hash'),
   label: text('label'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   firstSeenAt: integer('first_seen_at', { mode: 'timestamp_ms' }).notNull(),
@@ -65,6 +151,7 @@ export const tagChargerAccess = sqliteTable(
   'tag_charger_access',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
     tagId: text('tag_id').notNull(),
     chargerId: text('charger_id').notNull(),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
@@ -80,6 +167,7 @@ export const tagChargerAccess = sqliteTable(
 
 export const chargerConnections = sqliteTable('charger_connections', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   chargerId: text('charger_id').notNull(),
   connectedAt: integer('connected_at', { mode: 'timestamp_ms' }).notNull(),
   disconnectedAt: integer('disconnected_at', { mode: 'timestamp_ms' })
@@ -87,6 +175,7 @@ export const chargerConnections = sqliteTable('charger_connections', {
 
 export const chargingSessions = sqliteTable('charging_sessions', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   chargerId: text('charger_id').notNull(),
   connectorId: integer('connector_id').notNull(),
   transactionId: integer('transaction_id').notNull(),
@@ -103,6 +192,7 @@ export const remoteStopRequests = sqliteTable(
   'remote_stop_requests',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
     sessionId: text('session_id').notNull(),
     chargerId: text('charger_id').notNull(),
     transactionId: integer('transaction_id').notNull(),
@@ -121,6 +211,7 @@ export const remoteStopRequests = sqliteTable(
 
 export const meterSamples = sqliteTable('meter_samples', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   chargerId: text('charger_id').notNull(),
   transactionId: integer('transaction_id'),
   connectorId: integer('connector_id').notNull(),
@@ -141,6 +232,7 @@ export const meterGapEvents = sqliteTable(
   'meter_gap_events',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
     chargerId: text('charger_id').notNull(),
     connectorId: integer('connector_id').notNull(),
     previousSessionId: text('previous_session_id'),
@@ -164,6 +256,7 @@ export const meterGapEvents = sqliteTable(
 
 export const proxyTargets = sqliteTable('proxy_targets', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   chargerId: text('charger_id'),
   name: text('name').notNull(),
   url: text('url').notNull(),
@@ -182,6 +275,7 @@ export const chargerProxyAssignments = sqliteTable(
   'charger_proxy_assignments',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
     chargerId: text('charger_id').notNull(),
     proxyTargetId: text('proxy_target_id').notNull(),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
@@ -203,6 +297,7 @@ export const chargerProxyAssignments = sqliteTable(
 
 export const proxySessionMappings = sqliteTable('proxy_session_mappings', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   chargerId: text('charger_id').notNull(),
   proxyTargetId: text('proxy_target_id').notNull(),
   localTransactionId: integer('local_transaction_id').notNull(),
@@ -215,6 +310,7 @@ export const proxyTagMappings = sqliteTable(
   'proxy_tag_mappings',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
     proxyTargetId: text('proxy_target_id').notNull(),
     localIdTag: text('local_id_tag').notNull(),
     outboundIdTag: text('outbound_id_tag').notNull(),
@@ -229,6 +325,7 @@ export const proxyTagMappings = sqliteTable(
 
 export const logs = sqliteTable('logs', {
   id: text('id').primaryKey(),
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
   level: text('level').notNull(),
   category: text('category').notNull().default('system'),
   message: text('message').notNull(),
@@ -242,6 +339,7 @@ export const communicationJournal = sqliteTable(
   'communication_journal',
   {
     id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     direction: text('direction').notNull(),
     sourceType: text('source_type').notNull(),
@@ -274,5 +372,25 @@ export const communicationJournal = sqliteTable(
     messageTypeIdx: index('communication_journal_message_type_idx').on(table.messageType),
     messageTypeCreatedAtIdx: index('communication_journal_message_type_created_at_idx').on(table.messageType, table.createdAt, table.id),
     transactionCreatedAtIdx: index('communication_journal_transaction_created_at_idx').on(table.transactionId, table.createdAt, table.id)
+  })
+);
+
+export const chargerPairingSessions = sqliteTable(
+  'charger_pairing_sessions',
+  {
+    id: text('id').primaryKey(),
+    tenantId: text('tenant_id').notNull(),
+    pairingCodeHash: text('pairing_code_hash').notNull(),
+    basicAuthUsername: text('basic_auth_username'),
+    basicAuthPasswordHash: text('basic_auth_password_hash'),
+    chargerId: text('charger_id'),
+    createdByUserId: text('created_by_user_id').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    consumedAt: integer('consumed_at', { mode: 'timestamp_ms' })
+  },
+  (table) => ({
+    codeHashUnique: uniqueIndex('charger_pairing_sessions_code_hash_unique').on(table.pairingCodeHash),
+    tenantIdx: index('charger_pairing_sessions_tenant_id_idx').on(table.tenantId)
   })
 );

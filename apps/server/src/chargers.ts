@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppConfig } from './config.js';
-import { requireAdmin, verifyAdminPassword } from './auth.js';
+import { getTenantId, requireAdmin, verifyAdminPassword } from './auth.js';
 import type { Database } from './db/client.js';
 import {
   chargerConnections,
@@ -52,6 +52,7 @@ export function registerChargerRoutes(
 ) {
   app.get('/api/chargers', async (request, reply) => {
     if (await requireAdmin(request, reply, db)) return;
+    const tenantId = getTenantId(request);
 
     const parsed = ListChargersQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -61,6 +62,7 @@ export function registerChargerRoutes(
     const rows = db
       .select()
       .from(chargers)
+      .where(eq(chargers.tenantId, tenantId))
       .orderBy(desc(chargers.lastSeenAt))
       .all()
       .filter((row) => {
@@ -110,13 +112,14 @@ export function registerChargerRoutes(
 
   app.patch<{ Params: { id: string } }>('/api/chargers/:id', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = UpdateChargerSchema.safeParse(request.body);
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_charger', details: body.error.flatten() });
     }
 
-    const existing = db.select().from(chargers).where(eq(chargers.id, request.params.id)).limit(1).get();
+    const existing = db.select().from(chargers).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, request.params.id))).limit(1).get();
     if (!existing) {
       return reply.code(404).send({ error: 'charger_not_found' });
     }
@@ -127,7 +130,7 @@ export function registerChargerRoutes(
       updatedAt: new Date()
     };
 
-    db.update(chargers).set(update).where(eq(chargers.id, request.params.id)).run();
+    db.update(chargers).set(update).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, request.params.id))).run();
 
     recordLogEntry(db, liveUpdates, {
       level: 'info',
@@ -163,13 +166,14 @@ export function registerChargerRoutes(
 
   app.post<{ Params: { id: string } }>('/api/chargers/:id/meter-gaps/scan', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = ScanMeterGapsSchema.safeParse(request.body ?? {});
     if (!body.success) {
       return reply.code(400).send({ error: 'invalid_meter_gap_scan', details: body.error.flatten() });
     }
 
-    const charger = db.select().from(chargers).where(eq(chargers.id, request.params.id)).limit(1).get();
+    const charger = db.select().from(chargers).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, request.params.id))).limit(1).get();
     if (!charger) {
       return reply.code(404).send({ error: 'charger_not_found' });
     }
@@ -202,6 +206,7 @@ export function registerChargerRoutes(
 
   app.delete<{ Params: { id: string } }>('/api/chargers/:id', async (request, reply) => {
     if (await requireAdmin(request, reply, db, 'write')) return;
+    const tenantId = getTenantId(request);
 
     const body = DeleteChargerSchema.safeParse(request.body);
     if (!body.success) {
@@ -222,7 +227,7 @@ export function registerChargerRoutes(
       return reply.code(403).send({ error: 'invalid_admin_password' });
     }
 
-    const charger = db.select().from(chargers).where(eq(chargers.id, request.params.id)).limit(1).get();
+    const charger = db.select().from(chargers).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, request.params.id))).limit(1).get();
     if (!charger) {
       return reply.code(404).send({ error: 'charger_not_found' });
     }
@@ -230,7 +235,7 @@ export function registerChargerRoutes(
     const proxyTargetIds = db
       .select({ id: proxyTargets.id })
       .from(proxyTargets)
-      .where(eq(proxyTargets.chargerId, request.params.id))
+      .where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.chargerId, request.params.id)))
       .all()
       .map((row) => row.id);
 
@@ -244,27 +249,30 @@ export function registerChargerRoutes(
     const now = new Date();
     const deletedCounts = db.transaction((tx) => {
       const counts = {
-        chargerProxyAssignments: tx.delete(chargerProxyAssignments).where(eq(chargerProxyAssignments.chargerId, request.params.id)).run().changes,
-        tagChargerAccess: tx.delete(tagChargerAccess).where(eq(tagChargerAccess.chargerId, request.params.id)).run().changes,
-        proxySessionMappings: tx.delete(proxySessionMappings).where(eq(proxySessionMappings.chargerId, request.params.id)).run().changes,
-        chargingSessions: tx.delete(chargingSessions).where(eq(chargingSessions.chargerId, request.params.id)).run().changes,
-        meterSamples: tx.delete(meterSamples).where(eq(meterSamples.chargerId, request.params.id)).run().changes,
-        chargerConnections: tx.delete(chargerConnections).where(eq(chargerConnections.chargerId, request.params.id)).run().changes,
-        logs: tx.delete(logs).where(eq(logs.chargerId, request.params.id)).run().changes,
+        chargerProxyAssignments: tx.delete(chargerProxyAssignments).where(and(eq(chargerProxyAssignments.tenantId, tenantId), eq(chargerProxyAssignments.chargerId, request.params.id))).run().changes,
+        tagChargerAccess: tx.delete(tagChargerAccess).where(and(eq(tagChargerAccess.tenantId, tenantId), eq(tagChargerAccess.chargerId, request.params.id))).run().changes,
+        proxySessionMappings: tx.delete(proxySessionMappings).where(and(eq(proxySessionMappings.tenantId, tenantId), eq(proxySessionMappings.chargerId, request.params.id))).run().changes,
+        chargingSessions: tx.delete(chargingSessions).where(and(eq(chargingSessions.tenantId, tenantId), eq(chargingSessions.chargerId, request.params.id))).run().changes,
+        meterSamples: tx.delete(meterSamples).where(and(eq(meterSamples.tenantId, tenantId), eq(meterSamples.chargerId, request.params.id))).run().changes,
+        chargerConnections: tx.delete(chargerConnections).where(and(eq(chargerConnections.tenantId, tenantId), eq(chargerConnections.chargerId, request.params.id))).run().changes,
+        logs: tx.delete(logs).where(and(eq(logs.tenantId, tenantId), eq(logs.chargerId, request.params.id))).run().changes,
         communicationJournal: tx
           .delete(communicationJournal)
           .where(
-            or(
-              eq(communicationJournal.chargerId, request.params.id),
-              proxyTargetIds.length > 0 ? inArray(communicationJournal.proxyTargetId, proxyTargetIds) : eq(communicationJournal.proxyTargetId, '__never__')
+            and(
+              eq(communicationJournal.tenantId, tenantId),
+              or(
+                eq(communicationJournal.chargerId, request.params.id),
+                proxyTargetIds.length > 0 ? inArray(communicationJournal.proxyTargetId, proxyTargetIds) : eq(communicationJournal.proxyTargetId, '__never__')
+              )
             )
           )
           .run().changes,
         proxyTagMappings: proxyTargetIds.length
-          ? tx.delete(proxyTagMappings).where(inArray(proxyTagMappings.proxyTargetId, proxyTargetIds)).run().changes
+          ? tx.delete(proxyTagMappings).where(and(eq(proxyTagMappings.tenantId, tenantId), inArray(proxyTagMappings.proxyTargetId, proxyTargetIds))).run().changes
           : 0,
-        proxyTargets: tx.delete(proxyTargets).where(eq(proxyTargets.chargerId, request.params.id)).run().changes,
-        chargers: tx.delete(chargers).where(eq(chargers.id, request.params.id)).run().changes
+        proxyTargets: tx.delete(proxyTargets).where(and(eq(proxyTargets.tenantId, tenantId), eq(proxyTargets.chargerId, request.params.id))).run().changes,
+        chargers: tx.delete(chargers).where(and(eq(chargers.tenantId, tenantId), eq(chargers.id, request.params.id))).run().changes
       };
 
       return counts;
