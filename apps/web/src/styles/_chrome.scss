@@ -1,0 +1,43 @@
+.topbar .live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-text-quiet);
+  padding: 0 11px;
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.06em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
+}
+
+.topbar .live-indicator::before {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--wa-border-radius-circle);
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 13%, transparent);
+  content: "";
+}
+
+.topbar .live-indicator-live {
+  border-color: color-mix(in srgb, var(--wa-color-success-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-success-fill-quiet) 68%, var(--wa-color-surface-default));
+  color: var(--wa-color-success-on-quiet);
+}
+
+.topbar .live-indicator-connecting {
+  border-color: color-mix(in srgb, var(--wa-color-warning-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-warning-fill-quiet) 68%, var(--wa-color-surface-default));
+  color: var(--wa-color-warning-on-quiet);
+}
+
+.topbar .live-indicator-stale {
+  border-color: color-mix(in srgb, var(--wa-color-danger-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-danger-fill-quiet) 68%, var(--wa-color-surface-default));
+  color: var(--wa-color-danger-on-quiet);
+}
