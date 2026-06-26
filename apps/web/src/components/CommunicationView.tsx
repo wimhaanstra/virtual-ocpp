@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Copy, Download, RefreshCcw, SlidersHorizontal, Trash2, X } from "lucide-react";
 import type { CommunicationJournalFilters, CommunicationJournalItem, CommunicationJournalStorageSummary, ProxyTarget } from "../types";
 import { buildCommunicationSummary, formatDateTime, formatTime, stringifyPayload } from "../app-helpers";
@@ -323,156 +323,147 @@ export function CommunicationView({
         {communicationJournal.length === 0 ? (
           <p>No communication rows match these filters.</p>
         ) : (
-          <div className="table-wrap communication-table-wrap">
-            <table className="communication-table">
-              <thead>
-                <tr>
-                  <th aria-label="Expand"></th>
-                  <th>Time</th>
-                  <th>Direction</th>
-                  <th>Source</th>
-                  <th>Target</th>
-                  <th>Method</th>
-                  <th>Message type</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groupedJournal.map((group) => (
-                  <Fragment key={group.dateKey}>
-                    <tr className="session-date-row">
-                      <td colSpan={7}>{group.label}</td>
-                    </tr>
-                    {group.items.map((item) => {
-                      const isExpanded = expandedCommunicationJournalId === item.id;
-                      const payloadText = stringifyPayload(item.payload);
+          <div className="communication-card-list record-list">
+            {groupedJournal.map((group) => (
+              <section className="communication-date-group" key={group.dateKey} aria-label={group.label}>
+                <p className="eyebrow">{group.label}</p>
+                <div className="record-list">
+                  {group.items.map((item) => {
+                    const isExpanded = expandedCommunicationJournalId === item.id;
+                    const payloadText = stringifyPayload(item.payload);
 
-                      return (
-                        <Fragment key={item.id}>
-                          <tr
-                            className="communication-row"
-                            tabIndex={0}
-                            onClick={() => onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
+                    return (
+                      <article
+                        className="communication-card record-card"
+                        key={item.id}
+                        tabIndex={0}
+                        onClick={() => onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
+                          }
+                        }}
+                      >
+                        <div className="record-card__summary">
+                          <div>
+                            <p className="mono communication-card__method">{item.ocppMethod || item.messageType}</p>
+                            <p className="status-copy">{buildCommunicationSummary(item)}</p>
+                          </div>
+                          <div className="action-row compact-action-row">
+                            <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
+                            <Button
+                              type="button"
+                              className="button-secondary icon-button session-expand-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
                                 onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
-                              }
-                            }}
-                          >
-                            <td data-label="Expand">
-                              <Button
-                                type="button"
-                                className="button-secondary icon-button session-expand-button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  onExpandedCommunicationJournalIdChange(isExpanded ? null : item.id);
-                                }}
-                                aria-expanded={isExpanded}
-                                aria-controls={`journal-payload-${item.id}`}
-                                aria-label={isExpanded ? "Hide communication details" : "Show communication details"}
-                                title={isExpanded ? "Hide communication details" : "Show communication details"}
-                              >
-                                {isExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-                              </Button>
-                            </td>
-                            <td data-label="Time">{formatTime(item.createdAt)}</td>
-                            <td data-label="Direction">
-                              <span className={`pill ${item.direction === "inbound" ? "pill-good" : "pill-neutral"}`}>{item.direction}</span>
-                            </td>
-                            <td data-label="Source">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</td>
-                            <td data-label="Target">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</td>
-                            <td className="mono" data-label="Method">{item.ocppMethod || "-"}</td>
-                            <td data-label="Message type">{item.messageType}</td>
-                          </tr>
-                          {isExpanded ? (
-                            <tr key={`${item.id}-payload`}>
-                              <td id={`journal-payload-${item.id}`} className="communication-expanded" colSpan={7}>
-                                <div className="communication-expanded__grid">
-                                  <div>
-                                    <div className="communication-payload-header">
-                                      <p className="eyebrow">Payload</p>
-                                      <Button
-                                        type="button"
-                                        className="button-secondary icon-button"
-                                        onClick={() => void copyPayload(item)}
-                                        title="Copy payload"
-                                        aria-label="Copy payload"
-                                      >
-                                        {copiedPayloadId === item.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                                      </Button>
-                                    </div>
-                                    <pre className="communication-payload">{payloadText}</pre>
-                                  </div>
-                                  <div className="communication-details">
-                                    <p>
-                                      <span className="eyebrow">Summary</span>
-                                      <span>{buildCommunicationSummary(item)}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Time</span>
-                                      <span>{formatDateTime(item.createdAt)}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Direction</span>
-                                      <span>{item.direction}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Message type</span>
-                                      <span>{item.messageType}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Method</span>
-                                      <span className="mono">{item.ocppMethod || "-"}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Source</span>
-                                      <span className="mono">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Target</span>
-                                      <span className="mono">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Charger</span>
-                                      <span className="mono">{item.chargerId || "-"}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Proxy target</span>
-                                      <span className="mono">
-                                        {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
-                                      </span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Transaction</span>
-                                      <span className="mono">{item.transactionId ?? "-"}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Correlation</span>
-                                      <span className="mono">{item.correlationId || "-"}</span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Error</span>
-                                      <span className="mono">
-                                        {item.errorCode ? item.errorCode : "-"}
-                                        {item.errorDescription ? ` - ${item.errorDescription}` : ""}
-                                      </span>
-                                    </p>
-                                    <p>
-                                      <span className="eyebrow">Tag</span>
-                                      <span className="mono">{item.idTag || "-"}</span>
-                                    </p>
-                                  </div>
+                              }}
+                              aria-expanded={isExpanded}
+                              aria-controls={`journal-payload-${item.id}`}
+                              aria-label={isExpanded ? "Hide communication details" : "Show communication details"}
+                              title={isExpanded ? "Hide communication details" : "Show communication details"}
+                            >
+                              {isExpanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="record-card__meta communication-card__meta">
+                          <span>{formatTime(item.createdAt)}</span>
+                          <span>{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
+                          <span aria-hidden="true">→</span>
+                          <span>{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
+                          <span>{item.messageType}</span>
+                        </div>
+                        {isExpanded ? (
+                          <div id={`journal-payload-${item.id}`} className="communication-expanded record-card__details">
+                            <div className="communication-expanded__grid">
+                              <div>
+                                <div className="communication-payload-header">
+                                  <p className="eyebrow">Payload</p>
+                                  <Button
+                                    type="button"
+                                    className="button-secondary icon-button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void copyPayload(item);
+                                    }}
+                                    title="Copy payload"
+                                    aria-label="Copy payload"
+                                  >
+                                    {copiedPayloadId === item.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+                                  </Button>
                                 </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+                                <pre className="communication-payload">{payloadText}</pre>
+                              </div>
+                              <div className="communication-details">
+                                <p>
+                                  <span className="eyebrow">Summary</span>
+                                  <span>{buildCommunicationSummary(item)}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Time</span>
+                                  <span>{formatDateTime(item.createdAt)}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Direction</span>
+                                  <span>{item.direction}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Message type</span>
+                                  <span>{item.messageType}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Method</span>
+                                  <span className="mono">{item.ocppMethod || "-"}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Source</span>
+                                  <span className="mono">{renderEndpointBadge(item.sourceType, item.sourceId, onRenderEndpoint)}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Target</span>
+                                  <span className="mono">{renderEndpointBadge(item.targetType, item.targetId, onRenderEndpoint)}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Charger</span>
+                                  <span className="mono">{item.chargerId || "-"}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Proxy target</span>
+                                  <span className="mono">
+                                    {item.proxyTargetId ? <span title={item.proxyTargetId}>{formatProxyTargetLabel(item.proxyTargetId)}</span> : "-"}
+                                  </span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Transaction</span>
+                                  <span className="mono">{item.transactionId ?? "-"}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Correlation</span>
+                                  <span className="mono">{item.correlationId || "-"}</span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Error</span>
+                                  <span className="mono">
+                                    {item.errorCode ? item.errorCode : "-"}
+                                    {item.errorDescription ? ` - ${item.errorDescription}` : ""}
+                                  </span>
+                                </p>
+                                <p>
+                                  <span className="eyebrow">Tag</span>
+                                  <span className="mono">{item.idTag || "-"}</span>
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         )}
         <div ref={loadMoreRef} className="communication-load-more">

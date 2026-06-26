@@ -3296,8 +3296,8 @@ describe("App", () => {
     expect(screen.getByRole("heading", { name: "Sessions" })).toBeInTheDocument();
     expect(await screen.findByText("1.65 kWh")).toBeInTheDocument();
     expect(screen.getByText("Missing stop?")).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Live" })).toBeInTheDocument();
-    expect(screen.getByRole("columnheader", { name: "Energy used" })).toBeInTheDocument();
+    expect(screen.getByText("Live")).toBeInTheDocument();
+    expect(screen.getByText("Energy used")).toBeInTheDocument();
     expect(screen.getAllByText("1.65 kWh").length).toBeGreaterThan(0);
     expect(screen.getByText(/7\.2 kW/, { selector: ".session-live-value" })).toHaveTextContent("1.65 kWh");
     fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));

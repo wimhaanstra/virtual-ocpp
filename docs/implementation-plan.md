@@ -46,6 +46,7 @@ This plan tracks the remaining implementation slices for Virtual OCPP. It should
 - Communication export and purge increment 1: operators can export the currently filtered redacted communication journal as CSV, retention purge is explicit, and destructive filtered purge requires a constrained scope plus `PURGE` confirmation.
 - Settings display preferences increment 1: Settings now exposes a browser-persisted 12-hour/24-hour timestamp preference that applies to dashboard, session, settings, and communication timestamp rendering.
 - Transactionless MeterValues live stats increment 1: active-session live stats now match OCPP 1.6 `MeterValues` without transaction ids by charger, connector, and sample time window, expose connector/time source labels, and show temperature plus phase current metadata when supplied.
+- Web Awesome UI foundation: the frontend now builds against public Web Awesome, uses SCSS partials with amber token overrides, renders shared buttons through Web Awesome, and converts sessions plus communication results to card/list rows.
 
 ## Next Candidate Slices
 

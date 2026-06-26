@@ -1,0 +1,31 @@
+:root {
+  font-family: var(--wa-font-family-body);
+}
+
+body {
+  background: var(--wa-color-surface-lowered);
+}
+
+wa-button::part(base),
+wa-input::part(base),
+wa-select::part(base),
+wa-textarea::part(base) {
+  border-radius: var(--wa-border-radius-s);
+}
+
+wa-button.icon-button::part(base),
+wa-button.sidebar-collapse-button::part(base) {
+  inline-size: 34px;
+  min-inline-size: 34px;
+  padding-inline: 0;
+}
+
+wa-button.button-danger {
+  --wa-color-neutral-fill-loud: var(--wa-color-danger-fill-loud);
+  --wa-color-neutral-on-loud: var(--wa-color-danger-on-loud);
+}
+
+wa-button.button-danger svg {
+  color: var(--app-danger-icon);
+  stroke-width: 2.25;
+}

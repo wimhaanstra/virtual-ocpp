@@ -45,6 +45,19 @@ The protected frontend uses client-side routes:
 
 The selected charger context is stored in `?chargerId=...`, so refresh and back/forward keep the current charger. Vite handles local deep links during development, and the production Fastify server serves the same SPA fallback.
 
+## Frontend Styling
+
+The web app uses the public `@awesome.me/webawesome` package plus project SCSS. The committed source must build without private Web Awesome Pro registry access. If you have Pro access locally, keep any Cloudsmith `.npmrc` outside the repository and do not add Pro-only components to required application code.
+
+Styles are organized from `apps/web/src/styles/index.scss`:
+
+- Web Awesome base styles are imported first.
+- `_tokens.scss` bridges the amber brand color and existing light/dark theme preferences to Web Awesome design tokens.
+- `_base.scss`, `_components.scss`, and `_lists.scss` hold shared app-level overrides.
+- `_legacy.scss` contains migrated historical styles and should shrink as screens move to Web Awesome primitives.
+
+Prefer Web Awesome React exports for primitives such as buttons, cards, dialogs, inputs, selects, badges/tags, copy buttons, and callouts. Operational result views should use card/list rows rather than adding new table layouts.
+
 ## Settings And Onboarding
 
 The Settings page is the operator entry point for onboarding state:

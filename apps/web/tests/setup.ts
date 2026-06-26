@@ -24,3 +24,27 @@ Object.defineProperty(window, "EventSource", {
   value: undefined,
   writable: true
 });
+
+if (!HTMLElement.prototype.attachInternals) {
+  Object.defineProperty(HTMLElement.prototype, "attachInternals", {
+    configurable: true,
+    value() {
+      return {
+        ariaLabel: "",
+        ariaLabelledByElements: null,
+        ariaDescribedByElements: null,
+        form: null,
+        labels: [],
+        role: "",
+        states: new Set(),
+        validationMessage: "",
+        validity: {},
+        willValidate: false,
+        checkValidity: () => true,
+        reportValidity: () => true,
+        setFormValue: () => undefined,
+        setValidity: () => undefined
+      };
+    }
+  });
+}

@@ -1,0 +1,40 @@
+.record-list {
+  display: grid;
+  gap: var(--app-list-row-gap);
+}
+
+.record-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--wa-border-radius-m);
+  background: var(--wa-color-surface-default);
+}
+
+.record-card__summary,
+.record-card__meta,
+.record-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.record-card__summary {
+  justify-content: space-between;
+}
+
+.record-card__meta {
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: var(--wa-font-size-s);
+}
+
+.record-card__actions {
+  justify-content: flex-end;
+}
+
+.record-card__details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}

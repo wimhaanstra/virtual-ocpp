@@ -308,6 +308,8 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
+    document.documentElement.classList.toggle("wa-dark", theme === "dark");
+    document.documentElement.classList.toggle("wa-light", theme === "light");
     setStoredPreference("virtual-ocpp-theme", theme);
   }, [theme]);
 

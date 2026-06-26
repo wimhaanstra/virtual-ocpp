@@ -1,0 +1,69 @@
+:root,
+:root.wa-light {
+  --wa-color-brand-05: #1f1300;
+  --wa-color-brand-10: #3a2200;
+  --wa-color-brand-20: #653b00;
+  --wa-color-brand-30: #924f00;
+  --wa-color-brand-40: #c66d00;
+  --wa-color-brand-50: #ff9d00;
+  --wa-color-brand-60: #ffb33d;
+  --wa-color-brand-70: #ffc76b;
+  --wa-color-brand-80: #ffd99a;
+  --wa-color-brand-90: #ffedcc;
+  --wa-color-brand-95: #fff7e8;
+
+  --wa-border-radius-s: 2px;
+  --wa-border-radius-m: 4px;
+  --wa-border-radius-l: 6px;
+  --wa-border-radius-pill: 999px;
+  --wa-shadow-blur-scale: 0.25;
+
+  --app-page-gap: clamp(14px, 2vw, 22px);
+  --app-panel-padding: clamp(14px, 2vw, 20px);
+  --app-list-row-gap: 10px;
+  --app-danger-icon: #fff7ed;
+}
+
+:root[data-theme="dark"],
+:root[data-theme="dark"].wa-dark {
+  --background: var(--wa-color-surface-lowered);
+  --background-elevated: var(--wa-color-surface-raised);
+  --background-panel: var(--wa-color-surface-default);
+  --foreground: var(--wa-color-text-normal);
+  --muted: var(--wa-color-text-quiet);
+  --panel: var(--wa-color-surface-default);
+  --panel-subtle: var(--wa-color-neutral-fill-quiet);
+  --line: var(--wa-color-surface-border);
+  --accent: var(--wa-color-brand-fill-loud);
+  --accent-strong: var(--wa-color-brand-on-normal);
+  --accent-contrast: #1f1300;
+  --success: var(--wa-color-success-on-normal);
+  --warning: var(--wa-color-warning-on-normal);
+  --danger: var(--wa-color-danger-on-normal);
+  --danger-contrast: var(--wa-color-danger-on-loud);
+  --danger-surface: var(--wa-color-danger-fill-loud);
+  --radius: var(--wa-border-radius-s);
+  --shadow: none;
+}
+
+:root[data-theme="light"],
+:root[data-theme="light"].wa-light {
+  --background: var(--wa-color-surface-lowered);
+  --background-elevated: var(--wa-color-surface-raised);
+  --background-panel: var(--wa-color-surface-default);
+  --foreground: var(--wa-color-text-normal);
+  --muted: var(--wa-color-text-quiet);
+  --panel: var(--wa-color-surface-default);
+  --panel-subtle: var(--wa-color-neutral-fill-quiet);
+  --line: var(--wa-color-surface-border);
+  --accent: var(--wa-color-brand-fill-loud);
+  --accent-strong: var(--wa-color-brand-on-normal);
+  --accent-contrast: #1f1300;
+  --success: var(--wa-color-success-on-normal);
+  --warning: var(--wa-color-warning-on-normal);
+  --danger: var(--wa-color-danger-on-normal);
+  --danger-contrast: var(--wa-color-danger-on-loud);
+  --danger-surface: var(--wa-color-danger-fill-loud);
+  --radius: var(--wa-border-radius-s);
+  --shadow: none;
+}
