@@ -154,7 +154,7 @@ export function DashboardView({
                       : primaryActiveSession
                         ? primarySessionAwaitingMeterValues
                           ? "Charging"
-                          : `Transaction ${primaryActiveSession.transactionId}`
+                          : "Active session"
                         : chargingStatsStatus === "loading"
                           ? "Loading stats"
                           : "No active session"}
@@ -169,18 +169,17 @@ export function DashboardView({
                 {chargingStats.map((stats) => (
                   <article className="charging-session-card" key={stats.sessionId}>
                     <div className="charging-session-card__header">
-                      {chargingStats.length > 1 ? (
-                        <p className="mono charging-session-card__title">
-                          {stats.chargerId} / tx {stats.transactionId}
+                      <div className="charging-session-card__heading">
+                        <h4>Transaction {stats.transactionId}</h4>
+                        <p className="charging-session-card__meta">
+                          <span>{stats.chargerId}</span>
+                          <span>Connector {stats.connectorId}</span>
+                          <span>Started {formatDuration(stats.elapsedSeconds)} ago</span>
                         </p>
-                      ) : null}
-                      <span className={`pill ${stats.latestSampleAt === null ? "pill-warning" : "pill-good"}`}>Charging</span>
+                      </div>
+                      <span className={`charging-state-badge ${stats.latestSampleAt === null ? "charging-state-badge-pending" : "charging-state-badge-live"}`}>Charging</span>
                     </div>
                     <div className="charging-session-summary">
-                      <div>
-                        <span>Transaction</span>
-                        <strong>{stats.transactionId}</strong>
-                      </div>
                       <div>
                         <span>Tag</span>
                         <strong>{stats.idTag ?? "None"}</strong>
@@ -189,10 +188,23 @@ export function DashboardView({
                         <span>Start meter</span>
                         <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
                       </div>
-                      <div>
-                        <span>Status</span>
-                        <strong className="charging-session-status">Charging</strong>
-                      </div>
+                      {stats.latestSampleAt === null ? (
+                        <div>
+                          <span>MeterValues</span>
+                          <strong>Pending</strong>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <span>Last sample</span>
+                            <strong>{formatDateTime(stats.latestSampleAt)}</strong>
+                          </div>
+                          <div>
+                            <span>Match</span>
+                            <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="charging-stats-grid">
                       <div>
@@ -222,11 +234,6 @@ export function DashboardView({
                         </div>
                       ) : null}
                     </div>
-                    <p className="status-copy">
-                      {stats.latestSampleAt === null
-                        ? `Charging, waiting for first MeterValues. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}.`
-                        : `Charging. Started ${formatDuration(stats.elapsedSeconds)} ago on connector ${stats.connectorId}; last meter sample ${formatDateTime(stats.latestSampleAt)} (${formatSampleAssociation(stats.sampleAssociation)}).`}
-                    </p>
                     <div className="action-row compact-action-row">
                       <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
                         <ArrowRight aria-hidden="true" />

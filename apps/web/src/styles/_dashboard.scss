@@ -99,6 +99,77 @@
   border-top: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
 }
 
+.charger-live-panel .charging-session-card__header {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.charger-live-panel .charging-session-card__heading {
+  min-width: 0;
+}
+
+.charger-live-panel .charging-session-card__heading h4 {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-m);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.charger-live-panel .charging-session-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 5px 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-s);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.charger-live-panel .charging-session-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.charger-live-panel .charging-session-card__meta span + span::before {
+  content: "";
+  width: 3px;
+  height: 3px;
+  margin-right: 10px;
+  border-radius: var(--wa-border-radius-circle);
+  background: var(--wa-color-text-quiet);
+  opacity: 0.55;
+}
+
+.charger-live-panel .charging-state-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--wa-border-radius-pill);
+  padding: 5px 10px;
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.08em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
+}
+
+.charger-live-panel .charging-state-badge-live {
+  border-color: color-mix(in srgb, var(--wa-color-success-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-success-fill-quiet) 72%, var(--wa-color-surface-default));
+  color: var(--wa-color-success-on-quiet);
+}
+
+.charger-live-panel .charging-state-badge-pending {
+  border-color: color-mix(in srgb, var(--wa-color-warning-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-warning-fill-quiet) 72%, var(--wa-color-surface-default));
+  color: var(--wa-color-warning-on-quiet);
+}
+
 .charger-live-panel .charging-session-summary,
 .charger-live-panel .charging-stats-grid {
   display: flex;
@@ -157,6 +228,23 @@
 @media (max-width: 720px) {
   .charger-dashboard-stack .charger-dashboard-hero__header {
     align-items: flex-start;
+  }
+
+  .charger-live-panel .charging-session-card__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .charger-live-panel .charging-state-badge {
+    align-self: flex-start;
+  }
+
+  .charger-live-panel .charging-session-card__meta {
+    flex-direction: column;
+  }
+
+  .charger-live-panel .charging-session-card__meta span + span::before {
+    display: none;
   }
 
   .charger-dashboard-stack .charger-dashboard-metrics article,

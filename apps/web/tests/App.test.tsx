@@ -827,15 +827,16 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Charging" })).toBeInTheDocument();
-    expect(screen.getByText(/waiting for first MeterValues/i)).toBeInTheDocument();
-    expect(screen.getByText("Transaction")).toBeInTheDocument();
-    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Transaction 42" })).toBeInTheDocument();
+    expect(screen.getByText("Connector 1")).toBeInTheDocument();
+    expect(screen.getByText(/Started .* ago/i)).toBeInTheDocument();
     expect(screen.getByText("Tag")).toBeInTheDocument();
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
     expect(screen.getByText("Start meter")).toBeInTheDocument();
     expect(screen.getByText("1.00 kWh")).toBeInTheDocument();
-    expect(screen.getByText("Charging", { selector: ".charging-session-status" })).toBeInTheDocument();
-    expect(screen.getByText(/Charging, waiting for first MeterValues\./)).toBeInTheDocument();
+    expect(screen.getByText("MeterValues")).toBeInTheDocument();
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.getByText("Charging", { selector: ".charging-state-badge" })).toBeInTheDocument();
     fireEvent.click(sidebar.getByRole("button", { name: "Diagnostics" }));
     expect(await screen.findByRole("heading", { name: "Diagnostics", level: 1 })).toBeInTheDocument();
     expect(screen.getByText("1.50 kWh gap")).toBeInTheDocument();
