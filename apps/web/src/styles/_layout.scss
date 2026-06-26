@@ -1,8 +1,8 @@
 .content {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top right, color-mix(in srgb, var(--wa-color-brand-fill-quiet) 38%, transparent), transparent 34rem),
-    linear-gradient(180deg, color-mix(in srgb, var(--wa-color-surface-lowered) 82%, var(--wa-color-surface-raised)) 0%, var(--wa-color-surface-lowered) 36rem);
+    radial-gradient(circle at top right, color-mix(in srgb, var(--wa-color-brand-fill-quiet) 20%, transparent), transparent 34rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--wa-color-surface-default) 94%, var(--wa-color-surface-lowered)) 0%, color-mix(in srgb, var(--wa-color-surface-default) 90%, var(--wa-color-surface-lowered)) 36rem);
   padding: 20px 24px 24px;
 }
 
