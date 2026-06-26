@@ -9,7 +9,6 @@ type SessionsViewProps = {
   busy: boolean;
   chargingSessions: ChargingSession[];
   chargingStats: ChargingStats[];
-  selectedChargerLabel: string;
   onForceClose: (session: ChargingSession) => void;
   onProxyStopRecovery: (session: ChargingSession) => void;
   onRefresh: () => void;
@@ -21,7 +20,6 @@ export function SessionsView({
   busy,
   chargingSessions,
   chargingStats,
-  selectedChargerLabel,
   onForceClose,
   onProxyStopRecovery,
   onRefresh,
@@ -31,44 +29,62 @@ export function SessionsView({
   const groupedSessions = groupSessionsByDate(chargingSessions);
 
   return (
-    <section className="panel table-panel">
-      <div className="topbar-actions">
+    <section className="sessions-page">
+      <div className="dashboard-section-header">
         <div>
           <p className="eyebrow">Charging</p>
           <h2>Recent sessions</h2>
-          <p className="status-copy">Scoped to {selectedChargerLabel}.</p>
         </div>
-        <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
-          <RefreshCcw aria-hidden="true" />
-        </Button>
+        <div className="dashboard-section-header__actions">
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
+            <RefreshCcw aria-hidden="true" />
+          </Button>
+        </div>
       </div>
       {chargingSessions.length === 0 ? (
-        <p>No charging sessions recorded yet.</p>
+        <p className="dashboard-empty-state">No charging sessions recorded yet.</p>
       ) : (
-        <div className="charging-session-stack">
+        <div className="sessions-date-stack">
           {groupedSessions.map((group) => (
-            <section key={group.dateKey} aria-label={group.label}>
-              <p className="eyebrow">{group.label}</p>
-              <div className="charging-session-stack">
-                {group.sessions.map((session) => {
-                  const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
-                  const expanded = expandedSessionId === session.id;
+            <section className="sessions-date-group" key={group.dateKey} aria-label={group.label}>
+              <div className="sessions-date-group__header">
+                <p className="eyebrow">{group.label}</p>
+              </div>
+              <div className="sessions-table-wrap">
+                <table className="sessions-table">
+                  <thead>
+                    <tr>
+                      <th aria-label="Expand session details" />
+                      <th>Started</th>
+                      <th>Ended</th>
+                      <th>Energy used</th>
+                      <th>Live</th>
+                      <th>Status</th>
+                      <th className="sessions-table__actions-heading">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.sessions.map((session) => {
+                      const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
+                      const expanded = expandedSessionId === session.id;
 
-                  return (
-                    <SessionListItem
-                      key={session.id}
-                      activeSessionAudit={activeSessionAudit}
-                      busy={busy}
-                      expanded={expanded}
-                      liveStats={liveStats}
-                      onForceClose={onForceClose}
-                      onProxyStopRecovery={onProxyStopRecovery}
-                      onRemoteStop={onRemoteStop}
-                      onToggleExpanded={() => setExpandedSessionId(expanded ? null : session.id)}
-                      session={session}
-                    />
-                  );
-                })}
+                      return (
+                        <SessionListItem
+                          key={session.id}
+                          activeSessionAudit={activeSessionAudit}
+                          busy={busy}
+                          expanded={expanded}
+                          liveStats={liveStats}
+                          onForceClose={onForceClose}
+                          onProxyStopRecovery={onProxyStopRecovery}
+                          onRemoteStop={onRemoteStop}
+                          onToggleExpanded={() => setExpandedSessionId(expanded ? null : session.id)}
+                          session={session}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </section>
           ))}

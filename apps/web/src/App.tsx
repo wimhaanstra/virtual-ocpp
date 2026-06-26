@@ -2201,27 +2201,16 @@ export default function App() {
             onTimeFormatChange={updateTimeFormat}
           />
         ) : activeView === "Sessions" ? (
-          <>
-            <ChargerContextSwitcher
-              chargers={chargers}
-              selectedChargerId={selectedChargerId}
-              selectedChargerLabel={selectedChargerLabel}
-              status={selectedConnectionStatus}
-              statusTone={selectedConnectionTone}
-              onSelectCharger={setSelectedChargerId}
-            />
-            <SessionsView
-              activeSessionAudit={activeSessionAudit}
-              busy={busy}
-              chargingSessions={chargingSessions}
-              chargingStats={chargingStats}
-              selectedChargerLabel={selectedChargerLabel}
-              onForceClose={(session) => void previewForceCloseChargingSession(session)}
-              onProxyStopRecovery={startProxyStopRecovery}
-              onRefresh={() => void loadScopedData(selectedChargerId)}
-              onRemoteStop={startRemoteStopChargingSession}
-            />
-          </>
+          <SessionsView
+            activeSessionAudit={activeSessionAudit}
+            busy={busy}
+            chargingSessions={chargingSessions}
+            chargingStats={chargingStats}
+            onForceClose={(session) => void previewForceCloseChargingSession(session)}
+            onProxyStopRecovery={startProxyStopRecovery}
+            onRefresh={() => void loadScopedData(selectedChargerId)}
+            onRemoteStop={startRemoteStopChargingSession}
+          />
         ) : activeView === "Communication" ? (
           <CommunicationView
             busy={busy}
