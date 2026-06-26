@@ -9,7 +9,6 @@ type DiagnosticsViewProps = {
   busy: boolean;
   meterGapEvents: MeterGapEvent[];
   selectedChargerId: string;
-  selectedChargerLabel: string;
   onGetConfiguration: (chargerId: string, keys: string[]) => Promise<unknown>;
   onChangeConfiguration: (chargerId: string, key: string, value: string) => Promise<unknown>;
   onTriggerMessage: (chargerId: string, requestedMessage: string, connectorId: number | null) => Promise<unknown>;
@@ -24,7 +23,6 @@ export function DiagnosticsView({
   busy,
   meterGapEvents,
   selectedChargerId,
-  selectedChargerLabel,
   onGetConfiguration,
   onChangeConfiguration,
   onTriggerMessage,
@@ -36,14 +34,13 @@ export function DiagnosticsView({
   const auditItems = activeSessionAudit?.items.filter((item) => item.warnings.length > 0) ?? [];
 
   return (
-    <section className="home-stack diagnostics-stack">
-      <section className="diagnostics-hero">
+    <section className="diagnostics-page">
+      <section className="diagnostics-page-header">
         <div>
           <p className="eyebrow">Problem solving</p>
-          <h2>Diagnostics</h2>
-          <p className="status-copy">Run OCPP checks, review missing stop warnings, and recover possible missed meter gaps for {selectedChargerLabel}.</p>
+          <h1>Diagnostics</h1>
         </div>
-        <span className="pill pill-neutral mono">{selectedChargerId || "No charger selected"}</span>
+        <span className="pill overview-status-pill pill-neutral mono">{selectedChargerId || "No charger selected"}</span>
       </section>
 
       <ChargerDiagnosticsPanel
@@ -54,15 +51,13 @@ export function DiagnosticsView({
         onTriggerMessage={onTriggerMessage}
       />
 
-      <section className="panel table-panel">
-        <div className="topbar-actions page-section-header">
+      <section className="diagnostics-section">
+        <div className="dashboard-section-header">
           <div>
             <p className="eyebrow">Recovery</p>
             <h2>Meter gaps</h2>
-            <p className="status-copy">Possible missed charging between a previous stop meter and a later session start meter.</p>
           </div>
-          <Button type="button" className="button-secondary" onClick={onScanMeterGaps} disabled={busy || !selectedChargerId}>
-            Scan
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onScanMeterGaps} disabled={busy || !selectedChargerId} title="Scan meter gaps" aria-label="Scan meter gaps">
             <RefreshCcw aria-hidden="true" />
           </Button>
         </div>
@@ -71,16 +66,16 @@ export function DiagnosticsView({
             {meterGapEvents.slice(0, 3).map((event) => (
               <article key={event.id}>
                 <div>
-                  <strong>{formatEnergyWh(event.deltaWh)} gap</strong>
-                  <p className="status-copy">
+                  <h3>{formatEnergyWh(event.deltaWh)} gap</h3>
+                  <p>
                     Connector {event.connectorId} · {formatDateTime(event.previousStoppedAt)} to {formatDateTime(event.newStartedAt)}
                   </p>
                 </div>
-                <div className="action-row compact-action-row">
-                  <span className="pill pill-warning">{event.status}</span>
+                <div className="diagnostics-item__actions">
+                  <span className="pill overview-status-pill pill-warning">{event.status}</span>
                   <Button
                     type="button"
-                    className="button-secondary icon-button"
+                    className="button-secondary icon-button overview-icon-action"
                     onClick={() => onSubmitMeterGap(event)}
                     disabled={busy}
                     title="Submit recovery"
@@ -90,7 +85,7 @@ export function DiagnosticsView({
                   </Button>
                   <Button
                     type="button"
-                    className="button-ghost icon-button"
+                    className="button-ghost icon-button overview-icon-action"
                     onClick={() => onDismissMeterGap(event)}
                     disabled={busy}
                     title="Dismiss gap"
@@ -103,42 +98,40 @@ export function DiagnosticsView({
             ))}
           </div>
         ) : (
-          <p>No pending meter gaps.</p>
+          <p className="dashboard-empty-state">No pending meter gaps.</p>
         )}
       </section>
 
-      <section className="panel table-panel">
-        <div className="topbar-actions page-section-header">
+      <section className="diagnostics-section">
+        <div className="dashboard-section-header">
           <div>
             <p className="eyebrow">Session audit</p>
             <h2>Missing stop checks</h2>
-            <p className="status-copy">Flagged active sessions scoped to {selectedChargerLabel}.</p>
           </div>
-          <Button type="button" className="button-secondary" onClick={onOpenSessions}>
-            Sessions
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open sessions" aria-label="Open sessions">
             <ArrowRight aria-hidden="true" />
           </Button>
         </div>
         {auditItems.length === 0 ? (
-          <p>No active sessions need attention.</p>
+          <p className="dashboard-empty-state">No active sessions need attention.</p>
         ) : (
           <div className="session-audit-list">
             {auditItems.map((item) => (
               <article className="session-audit-item" key={item.sessionId}>
-                <div className="proxy-health-item__header">
+                <div className="diagnostics-item__header">
                   <div>
                     <h3>Transaction {item.transactionId}</h3>
-                    <p className="status-copy">
+                    <p>
                       Connector {item.connectorId}
                       {item.latestMeterWh !== null ? `; latest meter ${formatEnergyWh(item.latestMeterWh)}` : ""}
                       {item.latestStatus ? `; status ${item.latestStatus}` : ""}
                     </p>
                   </div>
-                  <span className="pill pill-warning">Needs review</span>
+                  <span className="pill overview-status-pill pill-warning">Needs review</span>
                 </div>
-                <p className="status-copy">{item.warnings[0]?.message}</p>
-                <div className="action-row compact-action-row">
-                  <Button type="button" className="button-secondary icon-button" onClick={onOpenSessions} title="Open sessions" aria-label={`Open session ${item.transactionId}`}>
+                <p>{item.warnings[0]?.message}</p>
+                <div className="diagnostics-item__actions">
+                  <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open sessions" aria-label={`Open session ${item.transactionId}`}>
                     <ArrowRight aria-hidden="true" />
                   </Button>
                 </div>

@@ -821,7 +821,7 @@ describe("App", () => {
     expect(screen.getByText("Pending")).toBeInTheDocument();
     expect(screen.getByText("Charging", { selector: ".charging-state-badge" })).toBeInTheDocument();
     fireEvent.click(sidebar.getByRole("button", { name: "Diagnostics" }));
-    expect(await screen.findByRole("heading", { name: "Diagnostics", level: 1 })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByRole("heading", { name: "Diagnostics", level: 1 }).length).toBeGreaterThan(0));
     expect(screen.getByText("1.50 kWh gap")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Submit meter gap gap-1" }));

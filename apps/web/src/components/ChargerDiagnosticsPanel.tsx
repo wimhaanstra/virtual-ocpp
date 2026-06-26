@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { CheckCircle2, RefreshCcw, Send, TriangleAlert } from "lucide-react";
+import { CheckCircle2, RefreshCcw, Send } from "lucide-react";
 import { Button } from "./ui/button";
 
 type CommandState = {
@@ -202,20 +202,16 @@ export function ChargerDiagnosticsPanel({
   }
 
   return (
-    <section className="panel table-panel charger-diagnostics-panel" aria-label="Charger diagnostics and configuration">
-      <div className="topbar-actions page-section-header">
+    <section className="charger-diagnostics-panel" aria-label="Charger diagnostics and configuration">
+      <div className="dashboard-section-header">
         <div>
           <p className="eyebrow">Diagnostics</p>
           <h2>Configuration commands</h2>
-          <p className="status-copy">
-            Sends protected OCPP 1.6 commands to the connected charger and records each exchange in the communication journal.
-          </p>
         </div>
-        <TriangleAlert aria-hidden="true" />
       </div>
 
       {!selectedChargerId ? (
-        <p>Select a charger context to use diagnostics commands.</p>
+        <p className="dashboard-empty-state">Select a charger context to use diagnostics commands.</p>
       ) : (
         <div className="command-grid">
           <form className="command-card" onSubmit={submitGetConfiguration}>

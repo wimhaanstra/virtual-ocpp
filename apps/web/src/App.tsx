@@ -2144,30 +2144,19 @@ export default function App() {
             onNavigate={navigateToView}
           />
         ) : activeView === "Diagnostics" ? (
-          <>
-            <ChargerContextSwitcher
-              chargers={chargers}
-              selectedChargerId={selectedChargerId}
-              selectedChargerLabel={selectedChargerLabel}
-              status={selectedConnectionStatus}
-              statusTone={selectedConnectionTone}
-              onSelectCharger={setSelectedChargerId}
-            />
-            <DiagnosticsView
-              activeSessionAudit={activeSessionAudit}
-              busy={busy}
-              meterGapEvents={meterGapEvents}
-              selectedChargerId={selectedChargerId}
-              selectedChargerLabel={selectedChargerLabel}
-              onChangeConfiguration={(chargerId, key, value) => changeChargerConfiguration(chargerId, key, value)}
-              onDismissMeterGap={(event) => void dismissMeterGap(event)}
-              onGetConfiguration={(chargerId, keys) => getChargerConfiguration(chargerId, keys)}
-              onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
-              onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
-              onSubmitMeterGap={(event) => void openMeterGapSubmit(event)}
-              onTriggerMessage={(chargerId, requestedMessage, connectorId) => triggerChargerMessage(chargerId, requestedMessage, connectorId)}
-            />
-          </>
+          <DiagnosticsView
+            activeSessionAudit={activeSessionAudit}
+            busy={busy}
+            meterGapEvents={meterGapEvents}
+            selectedChargerId={selectedChargerId}
+            onChangeConfiguration={(chargerId, key, value) => changeChargerConfiguration(chargerId, key, value)}
+            onDismissMeterGap={(event) => void dismissMeterGap(event)}
+            onGetConfiguration={(chargerId, keys) => getChargerConfiguration(chargerId, keys)}
+            onOpenSessions={() => openSessionsForCharger(selectedChargerId)}
+            onScanMeterGaps={() => void scanMeterGaps(selectedChargerId)}
+            onSubmitMeterGap={(event) => void openMeterGapSubmit(event)}
+            onTriggerMessage={(chargerId, requestedMessage, connectorId) => triggerChargerMessage(chargerId, requestedMessage, connectorId)}
+          />
         ) : activeView === "Chargers" ? (
           <ChargersView
             busy={busy}
