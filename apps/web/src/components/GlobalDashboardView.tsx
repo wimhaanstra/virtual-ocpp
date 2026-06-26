@@ -117,17 +117,42 @@ export function GlobalDashboardView({
 
                 return (
                   <article className="record-card registry-card runtime-status-card" key={charger.id}>
-                    <div className="record-card__summary">
+                    <div className="runtime-status-card__header">
                       <div>
                         <div className="record-card__title">{getChargerDisplayLabel(charger)}</div>
                         <div className="record-card__subtitle mono">{chargerId}</div>
                       </div>
-                      <span className={`pill ${getChargerConnectionTone(charger)}`}>
-                        {getChargerConnectionLabel(charger)}
-                      </span>
+                      <div className="runtime-status-card__controls">
+                        <span className={`pill ${getChargerConnectionTone(charger)}`}>
+                          {getChargerConnectionLabel(charger)}
+                        </span>
+                        <div className="action-row compact-action-row">
+                          <Button
+                            type="button"
+                            className="button-secondary icon-button"
+                            onClick={() => onOpenCommunication({ sourceType: "charger", sourceId: chargerId }, chargerId)}
+                            title="Show charger communication"
+                            aria-label={`Show communication for ${chargerId}`}
+                          >
+                            <MessageSquareText aria-hidden="true" />
+                          </Button>
+                          <Button
+                            type="button"
+                            className="button-secondary icon-button"
+                            onClick={() => {
+                              onSelectCharger(chargerId);
+                              onNavigate("Charger dashboard");
+                            }}
+                            title="Open charger dashboard"
+                            aria-label="Open charger dashboard"
+                          >
+                            <ArrowRight aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                     {warning ? <p className="notice notice-warning compact-notice">{warning}</p> : null}
-                    <dl className="detail-grid compact-detail-grid">
+                    <dl className="overview-stat-grid">
                       <div>
                         <dt>Active</dt>
                         <dd>
@@ -145,31 +170,6 @@ export function GlobalDashboardView({
                         <dd>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</dd>
                       </div>
                     </dl>
-                    <div className="record-card__actions">
-                      <div className="action-row compact-action-row">
-                        <Button
-                          type="button"
-                          className="button-secondary icon-button"
-                          onClick={() => onOpenCommunication({ sourceType: "charger", sourceId: chargerId }, chargerId)}
-                          title="Show charger communication"
-                          aria-label={`Show communication for ${chargerId}`}
-                        >
-                          <MessageSquareText aria-hidden="true" />
-                        </Button>
-                        <Button
-                          type="button"
-                          className="button-secondary icon-button"
-                          onClick={() => {
-                            onSelectCharger(chargerId);
-                            onNavigate("Charger dashboard");
-                          }}
-                          title="Open charger dashboard"
-                          aria-label="Open charger dashboard"
-                        >
-                          <ArrowRight aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </div>
                   </article>
                 );
               })}
@@ -197,7 +197,7 @@ export function GlobalDashboardView({
 
                 return (
                   <article key={session.id}>
-                    <div>
+                    <div className="global-session-card__body">
                       <strong>Transaction {session.transactionId}</strong>
                       <p className="status-copy">
                         {session.chargerId} · connector {session.connectorId} · {formatDuration(Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000))}
