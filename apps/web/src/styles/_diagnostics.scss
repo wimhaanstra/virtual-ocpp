@@ -35,6 +35,7 @@
 
 .command-card {
   display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
   gap: 12px;
   min-width: 0;
   border: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
@@ -49,6 +50,13 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  align-self: end;
+  margin-top: auto;
+}
+
+.command-card__footer .command-action-button {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .command-card__header h3 {
