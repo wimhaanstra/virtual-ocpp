@@ -164,7 +164,7 @@ export function SettingsView({
           </div>
         </div>
 
-        <SettingsDetailList items={retentionDetails} />
+        <SettingsPropertyTable items={retentionDetails} />
 
         <div className="settings-inline-form">
           <SettingsNumberInput label="Retention hours" value={retentionDraft} min={1} max={8760} step={1} disabled={busy} onChange={setRetentionDraft} />
@@ -208,6 +208,19 @@ export function SettingsView({
 function SettingsDetailList({ items }: { items: Array<{ label: string; value: string | number }> }) {
   return (
     <dl className="settings-status-grid">
+      {items.map((item) => (
+        <div key={item.label}>
+          <dt>{item.label}</dt>
+          <dd>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function SettingsPropertyTable({ items }: { items: Array<{ label: string; value: string | number }> }) {
+  return (
+    <dl className="settings-property-table">
       {items.map((item) => (
         <div key={item.label}>
           <dt>{item.label}</dt>
