@@ -108,82 +108,71 @@ export function GlobalDashboardView({
           {orderedChargers.length === 0 ? (
             <p>No chargers have connected yet.</p>
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Charger</th>
-                    <th>Status</th>
-                    <th>Active sessions</th>
-                    <th>Live charge</th>
-                    <th>Last seen</th>
-                    <th aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {orderedChargers.map((charger) => {
-                    const chargerId = getChargerContextId(charger);
-                    const sessions = getActiveSessions(chargerId, chargingSessions);
-                    const stats = getLatestChargingStats(chargerId, chargingStats);
-                    const warning = charger.connectionWarning?.message;
+            <div className="record-list registry-list runtime-status-list">
+              {orderedChargers.map((charger) => {
+                const chargerId = getChargerContextId(charger);
+                const sessions = getActiveSessions(chargerId, chargingSessions);
+                const stats = getLatestChargingStats(chargerId, chargingStats);
+                const warning = charger.connectionWarning?.message;
 
-                    return (
-                      <tr key={charger.id}>
-                        <td>
-                          <strong>{getChargerDisplayLabel(charger)}</strong>
-                          <span className="status-copy mono">{chargerId}</span>
-                        </td>
-                        <td>
-                          <span className={`pill ${getChargerConnectionTone(charger)}`}>
-                            {getChargerConnectionLabel(charger)}
-                          </span>
-                          {warning ? <div className="status-copy">{warning}</div> : null}
-                        </td>
-                        <td>
+                return (
+                  <article className="record-card registry-card runtime-status-card" key={charger.id}>
+                    <div className="record-card__summary">
+                      <div>
+                        <div className="record-card__title">{getChargerDisplayLabel(charger)}</div>
+                        <div className="record-card__subtitle mono">{chargerId}</div>
+                      </div>
+                      <span className={`pill ${getChargerConnectionTone(charger)}`}>
+                        {getChargerConnectionLabel(charger)}
+                      </span>
+                    </div>
+                    {warning ? <p className="notice notice-warning compact-notice">{warning}</p> : null}
+                    <dl className="detail-grid compact-detail-grid">
+                      <div>
+                        <dt>Active</dt>
+                        <dd>
                           <button className="inline-drilldown" type="button" onClick={() => onOpenSessions(chargerId)}>
                             {sessions.length}
                           </button>
-                        </td>
-                        <td>
-                          {stats ? (
-                            <span>
-                              {formatPowerW(stats.latestPowerW)} · {formatEnergyWh(stats.energyUsedWh)}
-                            </span>
-                          ) : (
-                            <span className="status-copy">Idle</span>
-                          )}
-                        </td>
-                        <td>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</td>
-                        <td>
-                          <div className="action-row compact-action-row">
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button"
-                              onClick={() => onOpenCommunication({ sourceType: "charger", sourceId: chargerId }, chargerId)}
-                              title="Show charger communication"
-                              aria-label={`Show communication for ${chargerId}`}
-                            >
-                              <MessageSquareText aria-hidden="true" />
-                            </Button>
-                            <Button
-                              type="button"
-                              className="button-secondary icon-button"
-                              onClick={() => {
-                                onSelectCharger(chargerId);
-                                onNavigate("Charger dashboard");
-                              }}
-                              title="Open charger dashboard"
-                              aria-label="Open charger dashboard"
-                            >
-                              <ArrowRight aria-hidden="true" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Live charge</dt>
+                        <dd>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : "Idle"}</dd>
+                      </div>
+                      <div>
+                        <dt>Last seen</dt>
+                        <dd>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</dd>
+                      </div>
+                    </dl>
+                    <div className="record-card__actions">
+                      <div className="action-row compact-action-row">
+                        <Button
+                          type="button"
+                          className="button-secondary icon-button"
+                          onClick={() => onOpenCommunication({ sourceType: "charger", sourceId: chargerId }, chargerId)}
+                          title="Show charger communication"
+                          aria-label={`Show communication for ${chargerId}`}
+                        >
+                          <MessageSquareText aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          className="button-secondary icon-button"
+                          onClick={() => {
+                            onSelectCharger(chargerId);
+                            onNavigate("Charger dashboard");
+                          }}
+                          title="Open charger dashboard"
+                          aria-label="Open charger dashboard"
+                        >
+                          <ArrowRight aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

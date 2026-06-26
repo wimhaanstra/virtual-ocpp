@@ -90,7 +90,14 @@ export function AppChrome({
         <div className="sidebar-top">
           <div className="brand">
             <div className="brand-title">
-              <PlugZap aria-hidden="true" />
+              <span className="brand-window-dots" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span className="brand-mark">
+                <PlugZap aria-hidden="true" />
+              </span>
               <span className="sidebar-label">Virtual OCPP</span>
             </div>
             <Button
@@ -163,7 +170,6 @@ export function AppChrome({
               aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
             >
               <SunMoon aria-hidden="true" />
-              <span className="sidebar-label">Theme</span>
             </Button>
             <Button
               type="button"
@@ -174,7 +180,6 @@ export function AppChrome({
               aria-label="Sign out"
             >
               <LogOut aria-hidden="true" />
-              <span className="sidebar-label">Sign out</span>
             </Button>
           </div>
           <p className="app-version" title={appVersion ? `Virtual OCPP ${appVersion}` : "Version unavailable"}>
