@@ -2121,7 +2121,6 @@ export default function App() {
             onOpenCommunication={(filters, chargerId) => openCommunicationForFilters(filters, chargerId)}
             onOpenSessions={openSessionsForCharger}
             onNavigate={navigateToView}
-            onRefresh={() => void loadScopedData("")}
             onSelectCharger={setSelectedChargerId}
           />
         ) : activeView === "Charger dashboard" ? (

@@ -1,5 +1,5 @@
 .global-dashboard {
-  gap: 12px;
+  gap: 18px;
 }
 
 .global-dashboard-hero {
@@ -53,7 +53,7 @@
 
 .global-dashboard-main {
   grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.72fr);
-  gap: 14px;
+  gap: 20px;
 }
 
 .overview-section {
@@ -69,6 +69,82 @@
 
 .overview-section > .page-section-header h2 {
   margin-bottom: 0;
+}
+
+wa-button.overview-section-action::part(base) {
+  min-height: 36px;
+  border-color: var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-text-normal);
+  padding-inline: 13px 11px;
+}
+
+wa-button.overview-section-action {
+  border-radius: var(--wa-border-radius-pill);
+  background: transparent;
+}
+
+wa-button.overview-section-action.button-secondary:hover {
+  background: transparent;
+}
+
+wa-button.overview-section-action::part(label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: var(--wa-line-height-condensed);
+}
+
+wa-button.overview-section-action::part(base):hover {
+  border-color: var(--wa-color-brand-border-normal);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
+}
+
+.overview-section-action svg {
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+
+wa-button.overview-icon-action {
+  border-radius: 12px;
+  background: transparent;
+}
+
+wa-button.overview-icon-action.button-secondary:hover {
+  background: transparent;
+}
+
+wa-button.overview-icon-action::part(base) {
+  inline-size: 36px;
+  min-inline-size: 36px;
+  min-height: 36px;
+  border-color: var(--wa-color-surface-border);
+  border-radius: 12px;
+  background: var(--wa-color-neutral-fill-quiet);
+  color: var(--wa-color-text-quiet);
+  padding-inline: 0;
+}
+
+wa-button.overview-icon-action::part(label) {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  line-height: 0;
+}
+
+wa-button.overview-icon-action::part(base):hover {
+  border-color: var(--wa-color-brand-border-normal);
+  background: var(--wa-color-brand-fill-quiet);
+  color: var(--wa-color-brand-on-quiet);
+}
+
+.overview-icon-action svg {
+  width: 16px;
+  height: 16px;
 }
 
 .runtime-status-list {
@@ -95,6 +171,24 @@
   display: grid;
   justify-items: end;
   gap: 8px;
+}
+
+.overview-status-pill {
+  border-radius: var(--wa-border-radius-pill);
+  padding: 5px 10px;
+  letter-spacing: 0.08em;
+}
+
+.overview-status-pill.pill-good {
+  border-color: color-mix(in srgb, var(--wa-color-success-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-success-fill-quiet) 72%, var(--wa-color-surface-default));
+  color: var(--wa-color-success-on-quiet);
+}
+
+.overview-status-pill.pill-warning {
+  border-color: color-mix(in srgb, var(--wa-color-warning-border-normal) 72%, var(--wa-color-surface-border));
+  background: color-mix(in srgb, var(--wa-color-warning-fill-quiet) 72%, var(--wa-color-surface-default));
+  color: var(--wa-color-warning-on-quiet);
 }
 
 .overview-stat-grid {

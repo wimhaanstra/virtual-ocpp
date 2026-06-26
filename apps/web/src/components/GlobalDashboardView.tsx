@@ -1,4 +1,4 @@
-import { ArrowRight, BatteryCharging, Gauge, MessageSquareText, RefreshCcw, TriangleAlert } from "lucide-react";
+import { ArrowRight, BatteryCharging, Gauge, MessageSquareText, TriangleAlert } from "lucide-react";
 import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats, CommunicationJournalFilters, MeterGapEvent } from "../types";
 import {
   formatDateTime,
@@ -24,7 +24,6 @@ type GlobalDashboardViewProps = {
   onOpenCommunication: (filters: Partial<CommunicationJournalFilters>, chargerId: string) => void;
   onOpenSessions: (chargerId: string) => void;
   onNavigate: (view: ActiveView) => void;
-  onRefresh: () => void;
   onSelectCharger: (chargerId: string) => void;
 };
 
@@ -47,7 +46,6 @@ export function GlobalDashboardView({
   onOpenCommunication,
   onOpenSessions,
   onNavigate,
-  onRefresh,
   onSelectCharger
 }: GlobalDashboardViewProps) {
   const orderedChargers = sortChargers(chargers);
@@ -63,9 +61,6 @@ export function GlobalDashboardView({
           <h2>Fleet status</h2>
           <p className="status-copy">A compact view of live charger connectivity and active charging across the installation.</p>
         </div>
-        <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh dashboard" aria-label="Refresh dashboard">
-          <RefreshCcw aria-hidden="true" />
-        </Button>
       </section>
 
       <section className="global-metrics" aria-label="Fleet metrics">
@@ -100,7 +95,7 @@ export function GlobalDashboardView({
               <p className="eyebrow">Chargers</p>
               <h2>Runtime status</h2>
             </div>
-            <Button type="button" className="button-secondary" onClick={() => onNavigate("Chargers")}>
+            <Button type="button" className="button-secondary overview-section-action" onClick={() => onNavigate("Chargers")}>
               Manage
               <ArrowRight aria-hidden="true" />
             </Button>
@@ -123,13 +118,17 @@ export function GlobalDashboardView({
                         <div className="record-card__subtitle mono">{chargerId}</div>
                       </div>
                       <div className="runtime-status-card__controls">
-                        <span className={`pill ${getChargerConnectionTone(charger)}`}>
+                        <span
+                          className={`pill overview-status-pill ${getChargerConnectionTone(charger)}`}
+                          title={warning || undefined}
+                          aria-label={warning ? `${getChargerConnectionLabel(charger)}: ${warning}` : getChargerConnectionLabel(charger)}
+                        >
                           {getChargerConnectionLabel(charger)}
                         </span>
                         <div className="action-row compact-action-row">
                           <Button
                             type="button"
-                            className="button-secondary icon-button"
+                            className="button-secondary icon-button overview-icon-action"
                             onClick={() => onOpenCommunication({ sourceType: "charger", sourceId: chargerId }, chargerId)}
                             title="Show charger communication"
                             aria-label={`Show communication for ${chargerId}`}
@@ -138,7 +137,7 @@ export function GlobalDashboardView({
                           </Button>
                           <Button
                             type="button"
-                            className="button-secondary icon-button"
+                            className="button-secondary icon-button overview-icon-action"
                             onClick={() => {
                               onSelectCharger(chargerId);
                               onNavigate("Charger dashboard");
@@ -151,7 +150,6 @@ export function GlobalDashboardView({
                         </div>
                       </div>
                     </div>
-                    {warning ? <p className="notice notice-warning compact-notice">{warning}</p> : null}
                     <dl className="overview-stat-grid">
                       <div
                         className="overview-stat-chip-clickable"
@@ -190,7 +188,7 @@ export function GlobalDashboardView({
               <p className="eyebrow">Charging</p>
               <h2>Active sessions</h2>
             </div>
-            <Button type="button" className="button-secondary" onClick={() => onNavigate("Sessions")}>
+            <Button type="button" className="button-secondary overview-section-action" onClick={() => onNavigate("Sessions")}>
               Sessions
               <ArrowRight aria-hidden="true" />
             </Button>
@@ -213,7 +211,7 @@ export function GlobalDashboardView({
                     <div className="global-session-actions">
                       <span>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : formatEnergyWh(session.stopMeterWh)}</span>
                       <div className="action-row compact-action-row">
-                        <Button type="button" className="button-secondary icon-button" onClick={() => onOpenSessions(session.chargerId)} title="Open sessions" aria-label={`Open sessions for ${session.chargerId}`}>
+                        <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onOpenSessions(session.chargerId)} title="Open sessions" aria-label={`Open sessions for ${session.chargerId}`}>
                           <ArrowRight aria-hidden="true" />
                         </Button>
                       </div>
