@@ -237,6 +237,11 @@ export function getTagAccessForCharger(tag: Tag, chargerId: string) {
   return null;
 }
 
+export function getTagUsageForCharger(tag: Tag, chargerId: string) {
+  if (!chargerId || !Array.isArray(tag.chargerUsage)) return null;
+  return tag.chargerUsage.find((usage) => usage.chargerId === chargerId) ?? null;
+}
+
 export function formatDateTime(value: string | null) {
   if (!value) return "-";
   return new Date(value).toLocaleString(undefined, {

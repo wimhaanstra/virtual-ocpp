@@ -566,6 +566,27 @@ describe('app', () => {
       enabled: true
     });
 
+    tempDb.db.insert(chargingSessions).values([
+      {
+        id: 'session-old',
+        chargerId: 'CHARGER-TAGS',
+        connectorId: 1,
+        transactionId: 41,
+        idTag: 'TAG-001',
+        startedAt: new Date('2026-06-19T09:15:00.000Z'),
+        status: 'stopped'
+      },
+      {
+        id: 'session-latest',
+        chargerId: 'CHARGER-TAGS',
+        connectorId: 1,
+        transactionId: 42,
+        idTag: 'TAG-001',
+        startedAt: new Date('2026-06-19T10:15:00.000Z'),
+        status: 'active'
+      }
+    ]).run();
+
     const listed = await app.inject({
       method: 'GET',
       url: '/api/tags',
@@ -574,6 +595,16 @@ describe('app', () => {
     expect(listed.statusCode).toBe(200);
     expect(listed.json()[0]).toMatchObject({
       id: tagId,
+      lastUsedAt: '2026-06-19T10:15:00.000Z',
+      lastUsedChargerId: 'CHARGER-TAGS',
+      lastUsedTransactionId: 42,
+      chargerUsage: [
+        {
+          chargerId: 'CHARGER-TAGS',
+          lastUsedAt: '2026-06-19T10:15:00.000Z',
+          lastUsedTransactionId: 42
+        }
+      ],
       chargerAccess: [
         {
           chargerId: 'CHARGER-TAGS',

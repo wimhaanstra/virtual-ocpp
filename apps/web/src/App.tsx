@@ -2294,20 +2294,11 @@ export default function App() {
           </>
         ) : activeView === "Tag access" ? (
           <>
-            <ChargerContextSwitcher
-              chargers={chargers}
-              selectedChargerId={selectedChargerId}
-              selectedChargerLabel={selectedChargerLabel}
-              status={selectedConnectionStatus}
-              statusTone={selectedConnectionTone}
-              onSelectCharger={setSelectedChargerId}
-            />
             <TagAccessView
               busy={busy}
               selectedChargerId={selectedChargerId}
               selectedChargerLabel={selectedChargerLabel}
               tags={tags}
-              onRefresh={() => void loadTags()}
               onToggleAccess={(tag) => void toggleTagAccess(tag)}
             />
           </>

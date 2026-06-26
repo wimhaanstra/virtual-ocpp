@@ -8,6 +8,10 @@ type TestTag = {
   label: string | null;
   enabled: boolean;
   createdAt: string;
+  lastUsedAt?: string | null;
+  lastUsedChargerId?: string | null;
+  lastUsedTransactionId?: number | null;
+  chargerUsage?: Array<{ chargerId: string; lastUsedAt: string; lastUsedTransactionId: number }>;
   chargerAccess?: Array<{ chargerId: string; enabled: boolean; updatedAt?: string }>;
 };
 
@@ -162,16 +166,6 @@ const emptyVisibilityResponses = (url: string, method: string, init?: RequestIni
 
   return null;
 };
-
-async function chooseChargerFromContextSwitcher(chargerId: string) {
-  const contextStrip = within(screen.getByRole("region", { name: "Selected charger" }));
-  fireEvent.click(contextStrip.getByRole("button", { name: /^(Select|Switch)$/ }));
-
-  const picker = await screen.findByRole("dialog", { name: "Select charger" });
-  fireEvent.click(within(picker).getByRole("button", { name: new RegExp(chargerId) }));
-
-  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Select charger" })).not.toBeInTheDocument());
-}
 
 function buildCommunicationSettingsResponse(retentionHours = 24, rowCount = 0) {
   return {
@@ -1865,7 +1859,6 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
 
     expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
-    expect(screen.getByText("Select a charger context to grant or revoke access for its tags.")).toBeInTheDocument();
     expect(screen.getByText("No charger is selected.")).toBeInTheDocument();
   });
 
@@ -3369,6 +3362,10 @@ describe("App", () => {
               label: "Main RFID",
               enabled: true,
               createdAt: "2026-06-19T08:00:00.000Z",
+              lastUsedAt: "2026-06-19T09:05:00.000Z",
+              lastUsedChargerId: selectedChargerId,
+              lastUsedTransactionId: 42,
+              chargerUsage: [{ chargerId: selectedChargerId, lastUsedAt: "2026-06-19T09:05:00.000Z", lastUsedTransactionId: 42 }],
               chargerAccess: [{ chargerId: selectedChargerId, enabled: true }]
             }
           ]),
@@ -3550,6 +3547,10 @@ describe("App", () => {
       label: "Main RFID",
       enabled: true,
       createdAt: "2026-06-19T08:00:00.000Z",
+      lastUsedAt: "2026-06-19T10:15:00.000Z",
+      lastUsedChargerId: selectedChargerId,
+      lastUsedTransactionId: 42,
+      chargerUsage: [{ chargerId: selectedChargerId, lastUsedAt: "2026-06-19T10:15:00.000Z", lastUsedTransactionId: 42 }],
       chargerAccess: []
     };
 
@@ -3622,16 +3623,15 @@ describe("App", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
+    window.history.replaceState({}, "", `/tag-access?chargerId=${selectedChargerId}`);
     render(<App />);
 
-    expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
-
-    const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
-    fireEvent.click(sidebar.getByRole("button", { name: "Tag access" }));
-    await chooseChargerFromContextSwitcher(selectedChargerId);
-
     expect(await screen.findByRole("heading", { name: "Tag access", level: 2 })).toBeInTheDocument();
+    expect(await screen.findByText("0/1 allowed")).toBeInTheDocument();
     expect(await screen.findByText("Blocked")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for tag Main RFID" }));
+    expect(screen.getByText("Last used globally")).toBeInTheDocument();
+    expect(screen.getAllByText("42").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Grant access" }));
 
     await screen.findByText("Tag access granted for the selected charger.");

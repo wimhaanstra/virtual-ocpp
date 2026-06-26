@@ -4,6 +4,10 @@ export type Tag = {
   label: string | null;
   enabled: boolean;
   createdAt: string;
+  lastUsedAt?: string | null;
+  lastUsedChargerId?: string | null;
+  lastUsedTransactionId?: number | null;
+  chargerUsage?: TagChargerUsage[] | null;
   chargerAccess?: ChargerAccessState[] | Record<string, boolean> | null;
   allowedChargerIds?: string[] | null;
 };
@@ -11,6 +15,13 @@ export type Tag = {
 export type ChargerAccessState = {
   chargerId: string;
   enabled: boolean;
+  updatedAt?: string;
+};
+
+export type TagChargerUsage = {
+  chargerId: string;
+  lastUsedAt: string;
+  lastUsedTransactionId: number;
 };
 
 export type LiveUpdateTopic =

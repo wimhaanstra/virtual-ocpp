@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from './auth.js';
 import type { Database } from './db/client.js';
-import { chargers, tagChargerAccess, tags } from './db/schema.js';
+import { chargers, chargingSessions, tagChargerAccess, tags } from './db/schema.js';
 import type { LiveUpdateBus } from './live-updates.js';
 import { recordLogEntry } from './log-writer.js';
 
@@ -29,6 +29,7 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
     if (await requireAdmin(request, reply, db)) return;
 
     const accessRows = db.select().from(tagChargerAccess).all();
+    const usageByTag = getTagUsageByIdTag(db);
     return db
       .select()
       .from(tags)
@@ -39,6 +40,14 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
         label: tag.label,
         enabled: tag.enabled,
         createdAt: tag.createdAt.toISOString(),
+        lastUsedAt: usageByTag.get(tag.uuid)?.lastUsedAt.toISOString() ?? null,
+        lastUsedChargerId: usageByTag.get(tag.uuid)?.chargerId ?? null,
+        lastUsedTransactionId: usageByTag.get(tag.uuid)?.transactionId ?? null,
+        chargerUsage: Array.from(usageByTag.get(tag.uuid)?.byCharger.values() ?? []).map((usage) => ({
+          chargerId: usage.chargerId,
+          lastUsedAt: usage.lastUsedAt.toISOString(),
+          lastUsedTransactionId: usage.transactionId
+        })),
         chargerAccess: accessRows
           .filter((access) => access.tagId === tag.id)
           .map((access) => ({
@@ -231,6 +240,61 @@ export function registerTagRoutes(app: FastifyInstance, db: Database, liveUpdate
 
     return { ok: true };
   });
+}
+
+type TagUsage = {
+  chargerId: string;
+  transactionId: number;
+  lastUsedAt: Date;
+};
+
+type TagUsageAggregate = TagUsage & {
+  byCharger: Map<string, TagUsage>;
+};
+
+function getTagUsageByIdTag(db: Database) {
+  const usageByTag = new Map<string, TagUsageAggregate>();
+  const sessionRows = db
+    .select({
+      chargerId: chargingSessions.chargerId,
+      idTag: chargingSessions.idTag,
+      transactionId: chargingSessions.transactionId,
+      startedAt: chargingSessions.startedAt
+    })
+    .from(chargingSessions)
+    .all();
+
+  for (const session of sessionRows) {
+    if (!session.idTag) continue;
+
+    const usage: TagUsage = {
+      chargerId: session.chargerId,
+      transactionId: session.transactionId,
+      lastUsedAt: session.startedAt
+    };
+    const existing = usageByTag.get(session.idTag);
+
+    if (!existing) {
+      usageByTag.set(session.idTag, {
+        ...usage,
+        byCharger: new Map([[usage.chargerId, usage]])
+      });
+      continue;
+    }
+
+    if (usage.lastUsedAt > existing.lastUsedAt) {
+      existing.chargerId = usage.chargerId;
+      existing.transactionId = usage.transactionId;
+      existing.lastUsedAt = usage.lastUsedAt;
+    }
+
+    const existingChargerUsage = existing.byCharger.get(usage.chargerId);
+    if (!existingChargerUsage || usage.lastUsedAt > existingChargerUsage.lastUsedAt) {
+      existing.byCharger.set(usage.chargerId, usage);
+    }
+  }
+
+  return usageByTag;
 }
 
 function recordTagLog(db: Database, liveUpdates: LiveUpdateBus | undefined, message: string, metadata: Record<string, unknown>) {
