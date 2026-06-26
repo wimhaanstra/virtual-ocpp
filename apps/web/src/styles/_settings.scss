@@ -1,0 +1,203 @@
+.settings-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  min-width: 0;
+}
+
+.settings-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-section-header {
+  align-items: flex-start;
+}
+
+.settings-section-header .dashboard-section-header__actions {
+  flex-wrap: wrap;
+}
+
+.settings-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--wa-color-surface-border) 86%, var(--wa-color-text-quiet));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--wa-color-surface-default) 96%, var(--wa-color-neutral-fill-quiet));
+  padding: 14px;
+}
+
+.settings-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.settings-card__header h3 {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-m);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+  letter-spacing: 0;
+}
+
+.settings-card__header p,
+.settings-danger-zone p {
+  margin: 4px 0 0;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-s);
+  line-height: 1.35;
+}
+
+.settings-status-grid {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0;
+}
+
+.settings-status-grid > div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--wa-color-surface-border);
+  border-radius: var(--wa-border-radius-pill);
+  background: var(--wa-color-neutral-fill-quiet);
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.settings-status-grid dt {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.04em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
+}
+
+.settings-status-grid dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--wa-line-height-condensed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-inline-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) auto;
+  align-items: end;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.settings-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.settings-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(190px, 260px) auto;
+  align-items: end;
+  gap: 12px;
+  border-top: 1px solid var(--wa-color-surface-border);
+  padding-top: 12px;
+}
+
+.settings-danger-zone strong {
+  display: block;
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+  line-height: var(--wa-line-height-condensed);
+}
+
+.settings-wa-control {
+  width: 100%;
+}
+
+.settings-wa-control::part(base) {
+  min-height: 38px;
+  border-radius: var(--wa-border-radius-m);
+  background: var(--wa-color-surface-raised);
+}
+
+.settings-wa-control::part(label),
+.settings-time-group::part(form-control-label) {
+  color: var(--wa-color-text-quiet);
+  font-size: var(--wa-font-size-xs);
+  font-weight: var(--wa-font-weight-action);
+  letter-spacing: 0.08em;
+  line-height: var(--wa-line-height-condensed);
+  text-transform: uppercase;
+}
+
+.settings-time-group::part(radios) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.settings-time-group wa-radio::part(label) {
+  color: var(--wa-color-text-normal);
+  font-size: var(--wa-font-size-s);
+}
+
+.settings-time-control {
+  width: fit-content;
+}
+
+@media (max-width: 940px) {
+  .settings-card-grid,
+  .settings-danger-zone {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-inline-form {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .settings-section-header {
+    flex-direction: column;
+  }
+
+  .settings-section-header .dashboard-section-header__actions,
+  .settings-action-row {
+    justify-content: flex-start;
+  }
+
+  .settings-inline-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-status-grid > div {
+    white-space: normal;
+  }
+}

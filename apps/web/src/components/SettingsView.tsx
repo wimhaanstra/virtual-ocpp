@@ -1,7 +1,11 @@
+import WaInput from "@awesome.me/webawesome/dist/react/input/index.js";
+import WaNumberInput from "@awesome.me/webawesome/dist/react/number-input/index.js";
+import WaRadio from "@awesome.me/webawesome/dist/react/radio/index.js";
+import WaRadioGroup from "@awesome.me/webawesome/dist/react/radio-group/index.js";
 import { RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
 import { formatDateTime, getOnboardingState, getOnboardingStateLabel, getOnboardingStateTone } from "../app-helpers";
+import type { CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
 import { Button } from "./ui/button";
 
 type SettingsViewProps = {
@@ -59,7 +63,8 @@ export function SettingsView({
             ? "Load failed"
             : "Idle";
   const parsedRetention = Number(retentionDraft);
-  const canSaveRetention = Number.isInteger(parsedRetention) && parsedRetention >= 1 && parsedRetention <= 8760 && parsedRetention !== communicationSettings?.retentionHours;
+  const canSaveRetention =
+    Number.isInteger(parsedRetention) && parsedRetention >= 1 && parsedRetention <= 8760 && parsedRetention !== communicationSettings?.retentionHours;
   const storage = communicationSettings?.storage ?? null;
   const lastPurge = communicationSettings?.lastPurge ?? null;
   const canPurgeExpired = purgeConfirmation.trim() === "PURGE";
@@ -70,106 +75,106 @@ export function SettingsView({
     }
   }, [communicationSettings]);
 
+  const onboardingDetails = [
+    { label: "State", value: onboardingStateLabel },
+    { label: "Endpoint", value: endpointLabel },
+    { label: "Completed", value: onboardingSettings?.completedAt ? formatDateTime(onboardingSettings.completedAt) : "-" },
+    { label: "Skipped", value: onboardingSettings?.skippedAt ? formatDateTime(onboardingSettings.skippedAt) : "-" }
+  ];
+  const retentionDetails = [
+    { label: "Current", value: `${communicationSettings?.retentionHours ?? 24} hours` },
+    { label: "Default", value: `${communicationSettings?.defaultRetentionHours ?? 24} hours` },
+    { label: "Rows", value: storage?.rowCount ?? 0 },
+    { label: "Oldest", value: storage?.oldestCreatedAt ? formatDateTime(storage.oldestCreatedAt) : "-" },
+    { label: "Newest", value: storage?.newestCreatedAt ? formatDateTime(storage.newestCreatedAt) : "-" },
+    { label: "Last purge", value: lastPurge ? formatDateTime(lastPurge.purgedAt) : "-" },
+    { label: "Deleted", value: lastPurge ? lastPurge.deletedCount : "-" },
+    { label: "Scope", value: lastPurge ? formatPurgeScope(lastPurge.scope) : "-" },
+    { label: "Retention", value: lastPurge ? `${lastPurge.retentionHours} hours` : "-" }
+  ];
+
   return (
-    <section className="settings-layout">
-      <section className="panel settings-panel">
-        <div className="topbar-actions page-section-header">
+    <section className="settings-layout settings-page">
+      <section className="settings-section settings-section-general">
+        <div className="dashboard-section-header settings-section-header">
           <div>
             <p className="eyebrow">Global preferences</p>
-            <h2>Onboarding</h2>
-            <p className="status-copy">Review setup state and rerun the onboarding flow when you want to test or repeat setup.</p>
+            <h2>General</h2>
           </div>
-          <span className={`pill ${onboardingStateTone}`}>{onboardingStateLabel}</span>
+          <div className="dashboard-section-header__actions">
+            <span className={`pill overview-status-pill ${onboardingStateTone}`}>{onboardingStateLabel}</span>
+            <Button type="button" className="button-secondary compact-text-button overview-section-action" onClick={onRunOnboarding} disabled={busy}>
+              <Sparkles aria-hidden="true" />
+              Run onboarding
+            </Button>
+          </div>
         </div>
 
-        <dl className="settings-status-grid">
-          <div>
-            <dt>State</dt>
-            <dd>{onboardingStateLabel}</dd>
-          </div>
-          <div>
-            <dt>Endpoint</dt>
-            <dd>{endpointLabel}</dd>
-          </div>
-          <div>
-            <dt>Completed at</dt>
-            <dd>{onboardingSettings?.completedAt ? formatDateTime(onboardingSettings.completedAt) : "-"}</dd>
-          </div>
-          <div>
-            <dt>Skipped at</dt>
-            <dd>{onboardingSettings?.skippedAt ? formatDateTime(onboardingSettings.skippedAt) : "-"}</dd>
-          </div>
-        </dl>
+        <div className="settings-card-grid">
+          <article className="settings-card">
+            <div className="settings-card__header">
+              <div>
+                <h3>Time format</h3>
+                <p>Used across dashboards, sessions, and communication rows.</p>
+              </div>
+            </div>
+            <TimeFormatControl value={timeFormat} onChange={onTimeFormatChange} />
+          </article>
+
+          <article className="settings-card">
+            <div className="settings-card__header">
+              <div>
+                <h3>Onboarding</h3>
+                <p>Current setup state and wizard entry point.</p>
+              </div>
+              <Button
+                type="button"
+                className="button-secondary icon-button overview-icon-action"
+                onClick={onRefreshOnboarding}
+                disabled={busy}
+                aria-label="Refresh status"
+                title="Refresh status"
+              >
+                <RefreshCcw aria-hidden="true" />
+              </Button>
+            </div>
+            <SettingsDetailList items={onboardingDetails} />
+          </article>
+        </div>
       </section>
 
-      <section className="panel settings-panel">
-        <div className="topbar-actions page-section-header">
+      <section className="settings-section settings-section-communication">
+        <div className="dashboard-section-header settings-section-header">
           <div>
             <p className="eyebrow">Communication</p>
             <h2>Journal retention</h2>
-            <p className="status-copy">Choose how long redacted protocol communication rows are kept before automatic purge, and review current journal storage.</p>
           </div>
-          <span className="pill pill-neutral">{communicationEndpointLabel}</span>
+          <div className="dashboard-section-header__actions">
+            <span className="pill overview-status-pill pill-neutral">{communicationEndpointLabel}</span>
+            <Button
+              type="button"
+              className="button-secondary icon-button overview-icon-action"
+              onClick={onRefreshCommunicationSettings}
+              disabled={busy}
+              aria-label="Refresh"
+              title="Refresh"
+            >
+              <RefreshCcw aria-hidden="true" />
+            </Button>
+          </div>
         </div>
 
-        <dl className="settings-status-grid">
-          <div>
-            <dt>Current</dt>
-            <dd>{communicationSettings?.retentionHours ?? 24} hours</dd>
-          </div>
-          <div>
-            <dt>Default</dt>
-            <dd>{communicationSettings?.defaultRetentionHours ?? 24} hours</dd>
-          </div>
-          <div>
-            <dt>Rows</dt>
-            <dd>{storage?.rowCount ?? 0}</dd>
-          </div>
-          <div>
-            <dt>Oldest row</dt>
-            <dd>{storage?.oldestCreatedAt ? formatDateTime(storage.oldestCreatedAt) : "-"}</dd>
-          </div>
-          <div>
-            <dt>Newest row</dt>
-            <dd>{storage?.newestCreatedAt ? formatDateTime(storage.newestCreatedAt) : "-"}</dd>
-          </div>
-          <div>
-            <dt>Last purge</dt>
-            <dd>{lastPurge ? formatDateTime(lastPurge.purgedAt) : "-"}</dd>
-          </div>
-          <div>
-            <dt>Deleted last purge</dt>
-            <dd>{lastPurge ? lastPurge.deletedCount : "-"}</dd>
-          </div>
-          <div>
-            <dt>Purge scope</dt>
-            <dd>{lastPurge ? formatPurgeScope(lastPurge.scope) : "-"}</dd>
-          </div>
-          <div>
-            <dt>Purge retention</dt>
-            <dd>{lastPurge ? `${lastPurge.retentionHours} hours` : "-"}</dd>
-          </div>
-        </dl>
+        <SettingsDetailList items={retentionDetails} />
 
         <div className="settings-inline-form">
-          <label className="field">
-            <span>Retention hours</span>
-            <input
-              type="number"
-              min={1}
-              max={8760}
-              step={1}
-              value={retentionDraft}
-              onChange={(event) => setRetentionDraft(event.target.value)}
-              disabled={busy}
-            />
-          </label>
-          <div className="action-row settings-action-row">
-            <Button type="button" className="button-secondary" onClick={onRefreshCommunicationSettings} disabled={busy}>
-              <RefreshCcw aria-hidden="true" />
-              Refresh
-            </Button>
-            <Button type="button" onClick={() => onCommunicationRetentionChange(parsedRetention)} disabled={busy || !canSaveRetention}>
+          <SettingsNumberInput label="Retention hours" value={retentionDraft} min={1} max={8760} step={1} disabled={busy} onChange={setRetentionDraft} />
+          <div className="settings-action-row">
+            <Button
+              type="button"
+              className="compact-text-button overview-section-action"
+              onClick={() => onCommunicationRetentionChange(parsedRetention)}
+              disabled={busy || !canSaveRetention}
+            >
               <Save aria-hidden="true" />
               Save
             </Button>
@@ -179,15 +184,12 @@ export function SettingsView({
         <div className="settings-danger-zone">
           <div>
             <strong>Purge expired rows</strong>
-            <p className="status-copy">Deletes communication rows older than the current retention window. Filtered purges stay available on the Communication page.</p>
+            <p>Deletes communication rows older than the current retention window.</p>
           </div>
-          <label className="field">
-            <span>Type PURGE to confirm</span>
-            <input value={purgeConfirmation} onChange={(event) => setPurgeConfirmation(event.target.value)} disabled={busy} />
-          </label>
+          <SettingsTextInput label="Type PURGE to confirm" value={purgeConfirmation} disabled={busy} onChange={setPurgeConfirmation} />
           <Button
             type="button"
-            className="button-danger"
+            className="button-danger compact-text-button overview-section-action"
             onClick={() => {
               onPurgeExpiredCommunication();
               setPurgeConfirmation("");
@@ -199,66 +201,115 @@ export function SettingsView({
           </Button>
         </div>
       </section>
-
-      <section className="panel settings-panel">
-        <div className="topbar-actions page-section-header">
-          <div>
-            <p className="eyebrow">Display</p>
-            <h2>Time format</h2>
-            <p className="status-copy">Choose how timestamps are shown across dashboards, sessions, and communication rows.</p>
-          </div>
-        </div>
-
-        <div className="segmented-control" role="radiogroup" aria-label="Time format">
-          <button
-            type="button"
-            className={timeFormat === "24h" ? "active" : ""}
-            role="radio"
-            aria-checked={timeFormat === "24h"}
-            onClick={() => onTimeFormatChange("24h")}
-          >
-            24 hour
-          </button>
-          <button
-            type="button"
-            className={timeFormat === "12h" ? "active" : ""}
-            role="radio"
-            aria-checked={timeFormat === "12h"}
-            onClick={() => onTimeFormatChange("12h")}
-          >
-            12 hour
-          </button>
-        </div>
-      </section>
-
-      <section className="panel settings-panel">
-        <div className="topbar-actions page-section-header">
-          <div>
-            <p className="eyebrow">Setup</p>
-            <h2>Run onboarding</h2>
-            <p className="status-copy">Open the guided charger setup flow without changing the stored onboarding status.</p>
-          </div>
-          <Sparkles aria-hidden="true" />
-        </div>
-
-        <p className="status-copy">
-          Manual runs are useful for testing setup or adding another charger. The full first-run flow will use this same entry point.
-        </p>
-
-        <div className="action-row settings-action-row">
-          <Button type="button" className="button-secondary" onClick={onRefreshOnboarding} disabled={busy}>
-            <RefreshCcw aria-hidden="true" />
-            Refresh status
-          </Button>
-          <Button type="button" onClick={onRunOnboarding} disabled={busy}>
-            Run onboarding
-          </Button>
-        </div>
-      </section>
     </section>
   );
 }
 
-function formatPurgeScope(scope: "retention" | "filters") {
+function SettingsDetailList({ items }: { items: Array<{ label: string; value: string | number }> }) {
+  return (
+    <dl className="settings-status-grid">
+      {items.map((item) => (
+        <div key={item.label}>
+          <dt>{item.label}</dt>
+          <dd>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function SettingsNumberInput({
+  disabled,
+  label,
+  max,
+  min,
+  onChange,
+  step,
+  value
+}: {
+  disabled: boolean;
+  label: string;
+  max: number;
+  min: number;
+  onChange: (value: string) => void;
+  step: number;
+  value: string;
+}) {
+  if (import.meta.env.MODE === "test") {
+    return (
+      <label className="field settings-native-control">
+        <span>{label}</span>
+        <input type="number" min={min} max={max} step={step} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
+      </label>
+    );
+  }
+
+  return (
+    <WaNumberInput
+      className="settings-wa-control"
+      disabled={disabled}
+      label={label}
+      max={max}
+      min={min}
+      step={step}
+      value={value}
+      onInput={(event) => onChange((event.currentTarget as HTMLElement & { value: string }).value)}
+    />
+  );
+}
+
+function SettingsTextInput({
+  disabled,
+  label,
+  onChange,
+  value
+}: {
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  if (import.meta.env.MODE === "test") {
+    return (
+      <label className="field settings-native-control">
+        <span>{label}</span>
+        <input value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
+      </label>
+    );
+  }
+
+  return (
+    <WaInput className="settings-wa-control" disabled={disabled} label={label} value={value} onInput={(event) => onChange((event.currentTarget as HTMLElement & { value: string }).value)} />
+  );
+}
+
+function TimeFormatControl({ onChange, value }: { onChange: (value: TimeFormatPreference) => void; value: TimeFormatPreference }) {
+  if (import.meta.env.MODE === "test") {
+    return (
+      <div className="segmented-control settings-time-control" role="radiogroup" aria-label="Time format">
+        <button type="button" className={value === "24h" ? "active" : ""} role="radio" aria-checked={value === "24h"} onClick={() => onChange("24h")}>
+          24 hour
+        </button>
+        <button type="button" className={value === "12h" ? "active" : ""} role="radio" aria-checked={value === "12h"} onClick={() => onChange("12h")}>
+          12 hour
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <WaRadioGroup
+      className="settings-time-group"
+      label="Time format"
+      value={value}
+      onInput={(event) => onChange((event.currentTarget as HTMLElement & { value: TimeFormatPreference }).value)}
+    >
+      <WaRadio value="24h">24 hour</WaRadio>
+      <WaRadio value="12h">12 hour</WaRadio>
+    </WaRadioGroup>
+  );
+}
+
+function formatPurgeScope(scope: NonNullable<CommunicationSettings["lastPurge"]>["scope"]) {
   return scope === "retention" ? "Expired rows" : "Filtered rows";
 }
