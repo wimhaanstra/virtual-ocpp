@@ -1,4 +1,5 @@
-import { Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Pencil, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import type { ChargerRegistryRow } from "../types";
 import { formatDateTime, getChargerConnectionLabel, getChargerConnectionTone } from "../app-helpers";
 import { Button } from "./ui/button";
@@ -17,91 +18,204 @@ function getChargerStatus(charger: ChargerRegistryRow) {
 }
 
 export function ChargersView({ busy, chargers, onAddCharger, onEditLabel, onRefresh, onDelete }: ChargersViewProps) {
+  const [expandedChargerId, setExpandedChargerId] = useState<string | null>(null);
+
   return (
-    <section className="panel table-panel">
-      <div className="topbar-actions page-section-header">
+    <section className="chargers-page">
+      <div className="dashboard-section-header">
         <div>
           <p className="eyebrow">Registry</p>
           <h2>Chargers</h2>
-          <p className="status-copy">Global charger registry with rename and destructive delete actions.</p>
         </div>
-        <div className="action-row compact-action-row">
-          <Button type="button" className="button-secondary icon-button" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
+        <div className="dashboard-section-header__actions">
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onRefresh} disabled={busy} title="Refresh" aria-label="Refresh">
             <RefreshCcw aria-hidden="true" />
           </Button>
-          <Button type="button" className="icon-button" onClick={onAddCharger} disabled={busy} title="Add charger" aria-label="Add charger">
+          <Button type="button" className="icon-button overview-icon-action" onClick={onAddCharger} disabled={busy} title="Add charger" aria-label="Add charger">
             <Plus aria-hidden="true" />
           </Button>
         </div>
       </div>
       {chargers.length === 0 ? (
-        <p>No chargers registered yet.</p>
+        <p className="dashboard-empty-state">No chargers registered yet.</p>
       ) : (
-        <div className="record-list registry-list charger-list">
-          {chargers.map((charger) => {
-            const status = getChargerStatus(charger);
-            const hardware = [charger.chargePointVendor, charger.chargePointModel].filter(Boolean).join(" / ");
+        <div className="sessions-table-wrap chargers-table-wrap">
+          <table className="sessions-table chargers-table">
+            <thead>
+              <tr>
+                <th aria-label="Expand charger details" />
+                <th>Charger</th>
+                <th>Status</th>
+                <th>Last seen</th>
+                <th>Hardware</th>
+                <th className="sessions-table__actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chargers.map((charger) => {
+                const status = getChargerStatus(charger);
+                const hardware = [charger.chargePointVendor, charger.chargePointModel].filter(Boolean).join(" / ");
+                const expanded = expandedChargerId === charger.id;
 
-            return (
-              <article className="record-card registry-card charger-card" key={charger.id}>
-                <div className="record-card__summary">
-                  <div>
-                    <div className="record-card__title">{charger.label?.trim() || "Unlabeled"}</div>
-                    <div className="record-card__subtitle mono">{charger.id}</div>
-                  </div>
-                  <span className={`pill ${status.tone}`}>{status.label}</span>
-                </div>
-                {charger.connectionWarning ? <p className="notice notice-warning compact-notice">{charger.connectionWarning.message}</p> : null}
-                <dl className="detail-grid compact-detail-grid">
-                  <div>
-                    <dt>First seen</dt>
-                    <dd>{formatDateTime(charger.firstSeenAt ?? null)}</dd>
-                  </div>
-                  <div>
-                    <dt>Last seen</dt>
-                    <dd>{formatDateTime(charger.lastSeenAt ?? null)}</dd>
-                  </div>
-                  <div>
-                    <dt>Connected at</dt>
-                    <dd>{formatDateTime(charger.connectedAt ?? null)}</dd>
-                  </div>
-                  <div>
-                    <dt>Hardware</dt>
-                    <dd>
-                      {hardware || "-"}
-                      {charger.firmwareVersion ? <span className="detail-subvalue mono">Firmware {charger.firmwareVersion}</span> : null}
-                    </dd>
-                  </div>
-                </dl>
-                <div className="record-card__actions">
-                  <div className="action-row compact-action-row">
-                    <Button
-                      type="button"
-                      className="button-secondary icon-button"
-                      onClick={() => onEditLabel(charger)}
-                      disabled={busy}
-                      title="Edit label"
-                      aria-label="Edit label"
-                    >
-                      <Pencil aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      className="button-danger icon-button"
-                      onClick={() => onDelete(charger)}
-                      disabled={busy}
-                      title="Delete charger"
-                      aria-label="Delete"
-                    >
-                      <Trash2 aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+                return (
+                  <ChargerTableRow
+                    busy={busy}
+                    charger={charger}
+                    expanded={expanded}
+                    hardware={hardware}
+                    key={charger.id}
+                    onDelete={onDelete}
+                    onEditLabel={onEditLabel}
+                    onToggleExpanded={() => setExpandedChargerId(expanded ? null : charger.id)}
+                    status={status}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
+  );
+}
+
+type ChargerTableRowProps = {
+  busy: boolean;
+  charger: ChargerRegistryRow;
+  expanded: boolean;
+  hardware: string;
+  onDelete: (charger: ChargerRegistryRow) => void;
+  onEditLabel: (charger: ChargerRegistryRow) => void;
+  onToggleExpanded: () => void;
+  status: ReturnType<typeof getChargerStatus>;
+};
+
+function ChargerTableRow({ busy, charger, expanded, hardware, onDelete, onEditLabel, onToggleExpanded, status }: ChargerTableRowProps) {
+  return (
+    <>
+      <tr
+        className="session-table-row charger-table-row"
+        tabIndex={0}
+        onClick={onToggleExpanded}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggleExpanded();
+          }
+        }}
+      >
+        <td className="session-table-cell session-table-cell--expand">
+          <Button
+            type="button"
+            className="button-secondary icon-button overview-icon-action session-expand-button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleExpanded();
+            }}
+            title={expanded ? "Hide charger details" : "Show charger details"}
+            aria-label={`${expanded ? "Hide" : "Show"} details for charger ${charger.id}`}
+          >
+            {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+          </Button>
+        </td>
+        <td>
+          <div className="session-table-primary">
+            <strong>{charger.label?.trim() || "Unlabeled"}</strong>
+            <span className="mono">{charger.id}</span>
+          </div>
+        </td>
+        <td>
+          <span className={`pill overview-status-pill ${status.tone}`}>{status.label}</span>
+        </td>
+        <td>
+          <strong>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</strong>
+        </td>
+        <td>
+          <div className="session-table-primary">
+            <strong>{hardware || "-"}</strong>
+            <span>{charger.firmwareVersion ? `Firmware ${charger.firmwareVersion}` : "Firmware -"}</span>
+          </div>
+        </td>
+        <td className="session-table-cell session-table-cell--actions" onClick={(event) => event.stopPropagation()}>
+          <div className="dashboard-item__actions session-table-actions">
+            <Button
+              type="button"
+              className="button-secondary icon-button overview-icon-action"
+              onClick={() => onEditLabel(charger)}
+              disabled={busy}
+              title="Edit label"
+              aria-label="Edit label"
+            >
+              <Pencil aria-hidden="true" />
+            </Button>
+            <Button
+              type="button"
+              className="button-danger icon-button overview-icon-action"
+              onClick={() => onDelete(charger)}
+              disabled={busy}
+              title="Delete charger"
+              aria-label="Delete"
+            >
+              <Trash2 aria-hidden="true" />
+            </Button>
+          </div>
+        </td>
+      </tr>
+      {expanded ? (
+        <tr className="session-detail-table-row charger-detail-table-row">
+          <td colSpan={6}>
+            {charger.connectionWarning ? (
+              <div className="session-audit-row charger-warning-row">
+                <div className="session-audit-inline">{charger.connectionWarning.message}</div>
+              </div>
+            ) : null}
+            <div className="session-detail-row">
+              <div className="session-detail-grid">
+                <span className="session-detail-item">
+                  <span>Charger ID</span>
+                  <strong className="mono">{charger.id}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Label</span>
+                  <strong>{charger.label?.trim() || "Unlabeled"}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>First seen</span>
+                  <strong>{formatDateTime(charger.firstSeenAt ?? null)}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Last seen</span>
+                  <strong>{formatDateTime(charger.lastSeenAt ?? null)}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Connected</span>
+                  <strong>{formatDateTime(charger.connectedAt ?? null)}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Disconnected</span>
+                  <strong>{formatDateTime(charger.disconnectedAt ?? null)}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Vendor</span>
+                  <strong>{charger.chargePointVendor || "-"}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Model</span>
+                  <strong>{charger.chargePointModel || "-"}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Firmware</span>
+                  <strong>{charger.firmwareVersion || "-"}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Updated</span>
+                  <strong>{formatDateTime(charger.updatedAt ?? null)}</strong>
+                </span>
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }

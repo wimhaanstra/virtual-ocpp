@@ -2524,9 +2524,9 @@ describe("App", () => {
     expect(screen.getByText("Registered")).toBeInTheDocument();
     expect(screen.getByText("Connected")).toBeInTheDocument();
 
-    const firstCard = screen.getByText("SMART-EVSE-1").closest("article");
-    expect(firstCard).not.toBeNull();
-    fireEvent.click(within(firstCard as HTMLElement).getByRole("button", { name: "Edit label" }));
+    const firstRow = screen.getByText("SMART-EVSE-1").closest("tr");
+    expect(firstRow).not.toBeNull();
+    fireEvent.click(within(firstRow as HTMLElement).getByRole("button", { name: "Edit label" }));
     expect(screen.getByRole("heading", { name: "Edit charger label" })).toBeInTheDocument();
     expect(screen.getByLabelText("Label")).toHaveValue("Garage");
     fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Garage rear" } });
@@ -2535,9 +2535,9 @@ describe("App", () => {
     expect(patchBody).toEqual({ label: "Garage rear" });
     expect(screen.getAllByText("Garage rear").length).toBeGreaterThan(0);
 
-    const secondCard = screen.getByText("SMART-EVSE-2").closest("article");
-    expect(secondCard).not.toBeNull();
-    fireEvent.click(within(secondCard as HTMLElement).getByRole("button", { name: "Delete" }));
+    const secondRow = screen.getByText("SMART-EVSE-2").closest("tr");
+    expect(secondRow).not.toBeNull();
+    fireEvent.click(within(secondRow as HTMLElement).getByRole("button", { name: "Delete" }));
     expect(screen.getByRole("heading", { name: "Delete charger" })).toBeInTheDocument();
     const deleteButton = screen.getByRole("button", { name: "Delete charger" });
     expect(deleteButton).toBeDisabled();
