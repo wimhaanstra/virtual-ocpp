@@ -66,6 +66,21 @@
   color: var(--wa-color-brand-fill-loud);
 }
 
+.command-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 34px;
+  border-radius: 10px;
+  padding: 7px 12px;
+}
+
+.command-action-button svg {
+  width: 16px;
+  height: 16px;
+}
+
 .command-card .field {
   gap: 6px;
 }

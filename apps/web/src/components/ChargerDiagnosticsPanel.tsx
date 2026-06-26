@@ -220,7 +220,13 @@ export function ChargerDiagnosticsPanel({
                 <p className="eyebrow">GetConfiguration</p>
                 <h3>Read charger settings</h3>
               </div>
-              <Button type="submit" className="button-secondary icon-button" disabled={busy || getCommandState.status === "loading"} aria-label="Get configuration">
+              <Button
+                type="submit"
+                className="button-secondary icon-button overview-icon-action"
+                disabled={busy || getCommandState.status === "loading"}
+                title="Get configuration"
+                aria-label="Get configuration"
+              >
                 <RefreshCcw aria-hidden="true" />
               </Button>
             </div>
@@ -304,7 +310,8 @@ export function ChargerDiagnosticsPanel({
             </label>
             <div className="command-card__footer">
               <p className="status-copy">Only allowlisted operational keys are accepted by the backend.</p>
-              <Button type="submit" disabled={busy || !resolvedChangeKey.trim()}>
+              <Button type="submit" className="button-secondary command-action-button" disabled={busy || !resolvedChangeKey.trim()}>
+                <CheckCircle2 aria-hidden="true" />
                 Apply
               </Button>
             </div>
@@ -346,7 +353,8 @@ export function ChargerDiagnosticsPanel({
             </label>
             <div className="command-card__footer">
               <p className="status-copy">The charger may return Accepted, Rejected, or NotImplemented depending on firmware support.</p>
-              <Button type="submit" disabled={busy}>
+              <Button type="submit" className="button-secondary command-action-button" disabled={busy}>
+                <Send aria-hidden="true" />
                 Trigger
               </Button>
             </div>
