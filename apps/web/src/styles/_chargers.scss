@@ -12,25 +12,12 @@
   border-radius: 16px;
 }
 
-.charger-table-row .session-table-primary strong,
-.charger-table-row > td > strong {
-  font-size: var(--wa-font-size-s);
-}
-
-.charger-detail-table-row td {
-  padding-left: 56px;
-}
-
-.charger-detail-table-row .charger-warning-row {
+.charger-warning-row {
   margin-top: 10px;
 }
 
 @media (max-width: 720px) {
   .chargers-table {
     min-width: 780px;
-  }
-
-  .charger-detail-table-row td {
-    padding-left: 10px;
   }
 }

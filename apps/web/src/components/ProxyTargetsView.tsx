@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
+import { Pencil, Plus, Power, PowerOff, Trash2 } from "lucide-react";
 import { formatTagMappingCount } from "../app-helpers";
 import type { ProxyTarget } from "../types";
+import { ExpandableDataTable, type ExpandableDataTableColumn } from "./ExpandableDataTable";
 import { Button } from "./ui/button";
 
 type ProxyTargetsViewProps = {
@@ -30,6 +31,64 @@ export function ProxyTargetsView({
   onToggle
 }: ProxyTargetsViewProps) {
   const [expandedTargetId, setExpandedTargetId] = useState<string | null>(null);
+  const expandedTargetIds = new Set(expandedTargetId ? [expandedTargetId] : []);
+  const columns: Array<ExpandableDataTableColumn<ProxyTarget>> = [
+    {
+      key: "target",
+      header: "Target",
+      render: (target) => (
+        <div className="session-table-primary">
+          <strong className="table-truncate" title={target.name}>
+            {target.name}
+          </strong>
+          <span className="mono table-truncate" title={target.id}>
+            {target.id}
+          </span>
+        </div>
+      )
+    },
+    {
+      key: "station",
+      header: "Station ID",
+      render: (target) => (
+        <span className="mono table-truncate" title={target.stationId || "Default"}>
+          {target.stationId || "Default"}
+        </span>
+      )
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (target) => <span className={`pill overview-status-pill ${target.enabled ? "pill-good" : "pill-warning"}`}>{target.enabled ? "Enabled" : "Disabled"}</span>
+    },
+    {
+      key: "actions",
+      headingClassName: "sessions-table__actions-heading",
+      header: "Actions",
+      cellClassName: "session-table-cell session-table-cell--actions",
+      stopPropagation: true,
+      render: (target) => (
+        <div className="dashboard-item__actions session-table-actions">
+          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onEdit(target)} disabled={busy} title="Edit proxy target" aria-label="Edit">
+            <Pencil aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            className="button-secondary icon-button overview-icon-action"
+            onClick={() => onToggle(target)}
+            disabled={busy || (!target.enabled && enabledLimitReached)}
+            title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
+            aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
+          >
+            {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
+          </Button>
+          <Button type="button" className="button-danger icon-button overview-icon-action" onClick={() => onDelete(target)} disabled={busy} title="Delete proxy target" aria-label="Delete">
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      )
+    }
+  ];
 
   return (
     <section className="proxy-targets-page">
@@ -50,181 +109,67 @@ export function ProxyTargetsView({
       {proxyTargets.length === 0 ? (
         <p className="dashboard-empty-state">No proxy targets configured yet.</p>
       ) : (
-        <div className="sessions-table-wrap">
-          <table className="sessions-table">
-            <thead>
-              <tr>
-                <th aria-label="Expand proxy target details" />
-                <th>Target</th>
-                <th>Station ID</th>
-                <th>Status</th>
-                <th className="sessions-table__actions-heading">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {proxyTargets.map((target) => {
-                const expanded = expandedTargetId === target.id;
-
-                return (
-                  <ProxyTargetTableRow
-                    key={target.id}
-                    busy={busy}
-                    enabledLimitReached={enabledLimitReached}
-                    expanded={expanded}
-                    onDelete={onDelete}
-                    onEdit={onEdit}
-                    onToggle={onToggle}
-                    onToggleExpanded={() => setExpandedTargetId(expanded ? null : target.id)}
-                    target={target}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ExpandableDataTable
+          columns={columns}
+          expandedRowIds={expandedTargetIds}
+          getRowDetailsLabel={(target) => `proxy target ${target.name}`}
+          getRowId={(target) => target.id}
+          onToggleRow={(targetId) => setExpandedTargetId(expandedTargetId === targetId ? null : targetId)}
+          renderExpandedRow={(target) => <ProxyTargetDetails target={target} />}
+          rows={proxyTargets}
+        />
       )}
     </section>
   );
 }
 
-type ProxyTargetTableRowProps = {
-  busy: boolean;
-  enabledLimitReached: boolean;
-  expanded: boolean;
-  target: ProxyTarget;
-  onDelete: (target: ProxyTarget) => void;
-  onEdit: (target: ProxyTarget) => void;
-  onToggle: (target: ProxyTarget) => void;
-  onToggleExpanded: () => void;
-};
-
-function ProxyTargetTableRow({
-  busy,
-  enabledLimitReached,
-  expanded,
-  target,
-  onDelete,
-  onEdit,
-  onToggle,
-  onToggleExpanded
-}: ProxyTargetTableRowProps) {
+function ProxyTargetDetails({ target }: { target: ProxyTarget }) {
+  const mappings = formatMappings(target.tagMappings);
   return (
-    <>
-      <tr
-        className="session-table-row"
-        tabIndex={0}
-        onClick={onToggleExpanded}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            onToggleExpanded();
-          }
-        }}
-      >
-        <td className="session-table-cell session-table-cell--expand">
-          <Button
-            type="button"
-            className="button-secondary icon-button overview-icon-action session-expand-button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleExpanded();
-            }}
-            title={expanded ? "Hide proxy target details" : "Show proxy target details"}
-            aria-label={`${expanded ? "Hide" : "Show"} details for proxy target ${target.name}`}
-          >
-            {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-          </Button>
-        </td>
-        <td>
-          <div className="session-table-primary">
-            <strong className="table-truncate" title={target.name}>
-              {target.name}
-            </strong>
-            <span className="mono table-truncate" title={target.id}>
-              {target.id}
-            </span>
-          </div>
-        </td>
-        <td>
-          <span className="mono table-truncate" title={target.stationId || "Default"}>
-            {target.stationId || "Default"}
-          </span>
-        </td>
-        <td>
-          <span className={`pill overview-status-pill ${target.enabled ? "pill-good" : "pill-warning"}`}>{target.enabled ? "Enabled" : "Disabled"}</span>
-        </td>
-        <td className="session-table-cell session-table-cell--actions" onClick={(event) => event.stopPropagation()}>
-          <div className="dashboard-item__actions session-table-actions">
-            <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onEdit(target)} disabled={busy} title="Edit proxy target" aria-label="Edit">
-              <Pencil aria-hidden="true" />
-            </Button>
-            <Button
-              type="button"
-              className="button-secondary icon-button overview-icon-action"
-              onClick={() => onToggle(target)}
-              disabled={busy || (!target.enabled && enabledLimitReached)}
-              title={target.enabled ? "Disable proxy target" : "Enable proxy target"}
-              aria-label={target.enabled ? "Disable proxy target" : "Enable proxy target"}
-            >
-              {target.enabled ? <PowerOff aria-hidden="true" /> : <Power aria-hidden="true" />}
-            </Button>
-            <Button type="button" className="button-danger icon-button overview-icon-action" onClick={() => onDelete(target)} disabled={busy} title="Delete proxy target" aria-label="Delete">
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </div>
-        </td>
-      </tr>
-      {expanded ? (
-        <tr className="session-detail-table-row">
-          <td colSpan={5}>
-            <div className="session-detail-row">
-              <div className="session-detail-grid">
-                <span className="session-detail-item">
-                  <span>Mode</span>
-                  <strong>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</strong>
-                </span>
-                <span className="session-detail-item">
-                  <span>Outage</span>
-                  <strong>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</strong>
-                </span>
-                <span className="session-detail-item">
-                  <span>Recovery</span>
-                  <strong>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</strong>
-                </span>
-                <span className="session-detail-item">
-                <span>WebSocket URL</span>
-                  <strong className="mono table-truncate table-truncate-wide" title={target.url}>
-                    {target.url}
-                  </strong>
-              </span>
-                <span className="session-detail-item">
-                <span>Credentials</span>
-                <strong>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</strong>
-              </span>
-                <span className="session-detail-item">
-                <span>Username</span>
-                <strong>{target.hasUsername ? "Configured" : "None"}</strong>
-              </span>
-                <span className="session-detail-item">
-                <span>Password</span>
-                <strong>{target.hasBasicAuthPassword ? "Configured" : "None"}</strong>
-              </span>
-                <span className="session-detail-item">
-                <span>Tag mappings</span>
-                <strong>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</strong>
-              </span>
-                <span className="session-detail-item">
-                <span>Mappings</span>
-                  <strong className="table-truncate table-truncate-wide" title={formatMappings(target.tagMappings)}>
-                    {formatMappings(target.tagMappings)}
-                  </strong>
-              </span>
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <div className="session-detail-row">
+      <div className="session-detail-grid">
+        <span className="session-detail-item">
+          <span>Mode</span>
+          <strong>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Outage</span>
+          <strong>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Recovery</span>
+          <strong>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>WebSocket URL</span>
+          <strong className="mono table-truncate table-truncate-wide" title={target.url}>
+            {target.url}
+          </strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Credentials</span>
+          <strong>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Username</span>
+          <strong>{target.hasUsername ? "Configured" : "None"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Password</span>
+          <strong>{target.hasBasicAuthPassword ? "Configured" : "None"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Tag mappings</span>
+          <strong>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Mappings</span>
+          <strong className="table-truncate table-truncate-wide" title={mappings}>
+            {mappings}
+          </strong>
+        </span>
+      </div>
+    </div>
   );
 }
 

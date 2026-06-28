@@ -1,5 +1,6 @@
-import { Fragment, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, Gauge, MessageSquareText } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Gauge, MessageSquareText } from "lucide-react";
+import { ExpandableDataTable, type ExpandableDataTableColumn } from "./ExpandableDataTable";
 import { Button } from "./ui/button";
 import type {
   ActiveView,
@@ -36,8 +37,75 @@ export function DashboardView({
   onOpenSessions
 }: DashboardViewProps) {
   const [expandedChargingSessionId, setExpandedChargingSessionId] = useState<string | null>(null);
+  const expandedChargingSessionIds = new Set(expandedChargingSessionId ? [expandedChargingSessionId] : []);
   const primaryActiveSession = chargingStats[0] ?? null;
   const primarySessionAwaitingMeterValues = primaryActiveSession?.latestSampleAt === null;
+  const chargingSessionColumns: Array<ExpandableDataTableColumn<ChargingStats>> = [
+    {
+      key: "transaction",
+      header: "Transaction",
+      render: (stats) => (
+        <div className="session-table-primary">
+          <strong>Transaction {stats.transactionId}</strong>
+        </div>
+      )
+    },
+    {
+      key: "tag",
+      header: "Tag",
+      render: (stats) => (
+        <span className="mono table-truncate" title={stats.idTag ?? "None"}>
+          {stats.idTag ?? "None"}
+        </span>
+      )
+    },
+    {
+      key: "connector",
+      header: "Connector",
+      render: (stats) => stats.connectorId
+    },
+    {
+      key: "started",
+      header: "Started",
+      render: (stats) => (
+        <div className="session-table-primary">
+          <strong>{formatDuration(stats.elapsedSeconds)} ago</strong>
+        </div>
+      )
+    },
+    {
+      key: "energy",
+      header: "Energy",
+      render: (stats) => formatEnergyWh(stats.energyUsedWh)
+    },
+    {
+      key: "power",
+      header: "Power",
+      render: (stats) => formatPowerW(stats.latestPowerW)
+    },
+    {
+      key: "meter-values",
+      header: "MeterValues",
+      render: (stats) => (
+        <div className="session-table-primary">
+          <strong>{stats.latestSampleAt === null ? "Pending" : formatDateTime(stats.latestSampleAt)}</strong>
+          {stats.latestSampleAt === null ? <span>Awaiting sample</span> : null}
+        </div>
+      )
+    },
+    {
+      key: "actions",
+      headingClassName: "sessions-table__actions-heading",
+      headerAriaLabel: "Actions",
+      cellClassName: "session-table-cell session-table-cell--actions",
+      stopPropagation: true,
+      render: (stats) => (
+        <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
+          <ArrowRight aria-hidden="true" />
+        </Button>
+      )
+    }
+  ];
 
   return (
     <section className="home-stack charger-dashboard-stack">
@@ -65,119 +133,17 @@ export function DashboardView({
             {chargingStatsStatus === "error" ? (
               <p className="status-copy">Live meter stats could not be loaded. Recent sessions may still show active charging state.</p>
             ) : chargingStats.length > 0 ? (
-              <div className="sessions-table-wrap charger-dashboard-table-wrap">
-                <table className="sessions-table charging-session-table">
-                  <thead>
-                    <tr>
-                      <th aria-label="Expand session details" />
-                      <th>Transaction</th>
-                      <th>Tag</th>
-                      <th>Connector</th>
-                      <th>Started</th>
-                      <th>Energy</th>
-                      <th>Power</th>
-                      <th>MeterValues</th>
-                      <th className="sessions-table__actions-heading" aria-label="Actions"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {chargingStats.map((stats) => {
-                      const expanded = expandedChargingSessionId === stats.sessionId;
-                      const toggleExpanded = () => setExpandedChargingSessionId(expanded ? null : stats.sessionId);
-
-                      return (
-                        <Fragment key={stats.sessionId}>
-                          <tr
-                            className="session-table-row"
-                            tabIndex={0}
-                            onClick={toggleExpanded}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter" || event.key === " ") {
-                                event.preventDefault();
-                                toggleExpanded();
-                              }
-                            }}
-                          >
-                            <td className="session-table-cell session-table-cell--expand">
-                              <Button
-                                type="button"
-                                className="button-secondary icon-button overview-icon-action session-expand-button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  toggleExpanded();
-                                }}
-                                title={expanded ? "Hide session details" : "Show session details"}
-                                aria-label={`${expanded ? "Hide" : "Show"} details for session ${stats.transactionId}`}
-                              >
-                                {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
-                              </Button>
-                            </td>
-                            <td>
-                              <div className="session-table-primary">
-                                <strong>Transaction {stats.transactionId}</strong>
-                              </div>
-                            </td>
-                            <td className="mono">{stats.idTag ?? "None"}</td>
-                            <td>{stats.connectorId}</td>
-                            <td>
-                              <div className="session-table-primary">
-                                <strong>{formatDuration(stats.elapsedSeconds)} ago</strong>
-                              </div>
-                            </td>
-                            <td>{formatEnergyWh(stats.energyUsedWh)}</td>
-                            <td>{formatPowerW(stats.latestPowerW)}</td>
-                            <td>
-                              <div className="session-table-primary">
-                                <strong>{stats.latestSampleAt === null ? "Pending" : formatDateTime(stats.latestSampleAt)}</strong>
-                                {stats.latestSampleAt === null ? <span>Awaiting sample</span> : null}
-                              </div>
-                            </td>
-                            <td className="session-table-cell session-table-cell--actions" onClick={(event) => event.stopPropagation()}>
-                              <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
-                                <ArrowRight aria-hidden="true" />
-                              </Button>
-                            </td>
-                          </tr>
-                          {expanded ? (
-                            <tr className="session-detail-table-row">
-                              <td colSpan={9}>
-                                <div className="session-detail-row">
-                                  <div className="session-detail-grid">
-                                    <span className="session-detail-item">
-                                      <span>Start meter</span>
-                                      <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
-                                    </span>
-                                    <span className="session-detail-item">
-                                      <span>Current</span>
-                                      <strong>{formatDecimalUnit(stats.latestCurrentA ?? null, "A")}</strong>
-                                    </span>
-                                    <span className="session-detail-item">
-                                      <span>Voltage</span>
-                                      <strong>{formatDecimalUnit(stats.latestVoltageV ?? null, "V")}</strong>
-                                    </span>
-                                    <span className="session-detail-item">
-                                      <span>Temperature</span>
-                                      <strong>{formatDecimalUnit(stats.latestTemperatureC ?? null, "C")}</strong>
-                                    </span>
-                                    <span className="session-detail-item">
-                                      <span>Phase current</span>
-                                      <strong>{stats.latestCurrentPhasesA ? formatPhaseValues(stats.latestCurrentPhasesA, "A") : "-"}</strong>
-                                    </span>
-                                    <span className="session-detail-item">
-                                      <span>Sample match</span>
-                                      <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
-                                    </span>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <ExpandableDataTable
+                columns={chargingSessionColumns}
+                expandedRowIds={expandedChargingSessionIds}
+                getRowDetailsLabel={(stats) => `session ${stats.transactionId}`}
+                getRowId={(stats) => stats.sessionId}
+                onToggleRow={(sessionId) => setExpandedChargingSessionId(expandedChargingSessionId === sessionId ? null : sessionId)}
+                renderExpandedRow={(stats) => <ChargingStatsDetails stats={stats} />}
+                rows={chargingStats}
+                tableClassName="charging-session-table"
+                wrapClassName="charger-dashboard-table-wrap"
+              />
             ) : (
               <p className="status-copy">Start a charging session to see live meter values from OCPP MeterValues.</p>
             )}
@@ -255,6 +221,39 @@ export function DashboardView({
 
     </section>
 
+  );
+}
+
+function ChargingStatsDetails({ stats }: { stats: ChargingStats }) {
+  return (
+    <div className="session-detail-row">
+      <div className="session-detail-grid">
+        <span className="session-detail-item">
+          <span>Start meter</span>
+          <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Current</span>
+          <strong>{formatDecimalUnit(stats.latestCurrentA ?? null, "A")}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Voltage</span>
+          <strong>{formatDecimalUnit(stats.latestVoltageV ?? null, "V")}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Temperature</span>
+          <strong>{formatDecimalUnit(stats.latestTemperatureC ?? null, "C")}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Phase current</span>
+          <strong>{stats.latestCurrentPhasesA ? formatPhaseValues(stats.latestCurrentPhasesA, "A") : "-"}</strong>
+        </span>
+        <span className="session-detail-item">
+          <span>Sample match</span>
+          <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
+        </span>
+      </div>
+    </div>
   );
 }
 

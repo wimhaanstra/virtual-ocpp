@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCcw, SlidersHorizontal } from "lucide-react";
+import { Power, PowerOff, RefreshCcw, Send, SlidersHorizontal } from "lucide-react";
 import type { ActiveSessionAuditResponse, ChargingSession, ChargingStats, SessionSearchFilters, Tag } from "../types";
+import {
+  findAuditForSession,
+  formatDateTime,
+  formatEnergyWh,
+  formatPowerW,
+  formatTime,
+  getMeterSourceLabel
+} from "../app-helpers";
+import { ExpandableDataTable, type ExpandableDataTableColumn } from "./ExpandableDataTable";
 import { FilterField, FilterGrid, FilterPanel, FilterSelect } from "./FilterControls";
 import { Button } from "./ui/button";
-import { SessionListItem } from "./SessionListItem";
 
 type SessionsViewProps = {
   activeSessionAudit: ActiveSessionAuditResponse | null;
@@ -47,6 +55,108 @@ export function SessionsView({
   const activeFilterChips = buildActiveSessionFilterChips(sessionFilters);
   const groupedSessions = groupSessionsByDate(chargingSessions);
   const tagOptions = useMemo(() => buildTagFilterOptions(tags, draftFilters.idTag), [draftFilters.idTag, tags]);
+  const expandedSessionIds = new Set(expandedSessionId ? [expandedSessionId] : []);
+  const sessionColumns: Array<ExpandableDataTableColumn<ChargingSession>> = [
+    {
+      key: "started",
+      header: "Started",
+      render: (session) => (
+        <div className="session-table-primary">
+          <strong>{formatTime(session.startedAt)}</strong>
+          <span>Transaction {session.transactionId}</span>
+        </div>
+      )
+    },
+    {
+      key: "ended",
+      header: "Ended",
+      render: (session) => <strong>{session.stoppedAt ? formatTime(session.stoppedAt) : "Active"}</strong>
+    },
+    {
+      key: "energy",
+      header: "Energy used",
+      render: (session) => {
+        const liveStats = getLiveStatsForSession(session, chargingStats);
+        const meterSource = getSessionMeterSource(session, liveStats);
+        return (
+          <strong title={getMeterSourceLabel(meterSource)}>
+            {formatEnergyWh(getSessionEnergyUsedWh(session, liveStats))}
+          </strong>
+        );
+      }
+    },
+    {
+      key: "live",
+      header: "Live",
+      render: (session) => {
+        const liveStats = getLiveStatsForSession(session, chargingStats);
+        return (
+          <strong className="session-live-value">
+            {session.active && liveStats ? `${formatPowerW(liveStats.latestPowerW)} · ${formatEnergyWh(liveStats.energyUsedWh)}` : "-"}
+          </strong>
+        );
+      }
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (session) => {
+        const audit = findAuditForSession(activeSessionAudit, session);
+        return (
+          <div className="status-stack session-table-status">
+            <span className={`pill overview-status-pill ${session.active ? "pill-good" : "pill-neutral"}`}>{session.status}</span>
+            {audit && audit.warnings.length > 0 ? <span className="pill pill-warning">Missing stop?</span> : null}
+          </div>
+        );
+      }
+    },
+    {
+      key: "actions",
+      headingClassName: "sessions-table__actions-heading",
+      header: "Actions",
+      cellClassName: "session-table-cell session-table-cell--actions",
+      stopPropagation: true,
+      render: (session) => (
+        <div className="dashboard-item__actions session-table-actions">
+          {session.active ? (
+            <>
+              <Button
+                type="button"
+                className="button-secondary icon-button overview-icon-action"
+                onClick={() => onRemoteStop(session)}
+                disabled={busy}
+                title="Remote stop transaction"
+                aria-label={`Remote stop session ${session.transactionId}`}
+              >
+                <Power aria-hidden="true" />
+              </Button>
+              <Button
+                type="button"
+                className="button-secondary icon-button overview-icon-action"
+                onClick={() => onForceClose(session)}
+                disabled={busy}
+                title="Force close with preview"
+                aria-label={`Force close session ${session.transactionId}`}
+              >
+                <PowerOff aria-hidden="true" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              className="button-secondary icon-button overview-icon-action"
+              onClick={() => onProxyStopRecovery(session)}
+              disabled={busy}
+              title="Recover proxy stop"
+              aria-label={`Recover proxy stop for session ${session.transactionId}`}
+            >
+              <Send aria-hidden="true" />
+            </Button>
+          )}
+        </div>
+      )
+    }
+  ];
 
   useEffect(() => {
     setDraftFilters(sessionFilters);
@@ -158,42 +268,21 @@ export function SessionsView({
               <div className="sessions-date-group__header">
                 <p className="eyebrow">{group.label}</p>
               </div>
-              <div className="sessions-table-wrap">
-                <table className="sessions-table">
-                  <thead>
-                    <tr>
-                      <th aria-label="Expand session details" />
-                      <th>Started</th>
-                      <th>Ended</th>
-                      <th>Energy used</th>
-                      <th>Live</th>
-                      <th>Status</th>
-                      <th className="sessions-table__actions-heading">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.sessions.map((session) => {
-                      const liveStats = chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
-                      const expanded = expandedSessionId === session.id;
-
-                      return (
-                        <SessionListItem
-                          key={session.id}
-                          activeSessionAudit={activeSessionAudit}
-                          busy={busy}
-                          expanded={expanded}
-                          liveStats={liveStats}
-                          onForceClose={onForceClose}
-                          onProxyStopRecovery={onProxyStopRecovery}
-                          onRemoteStop={onRemoteStop}
-                          onToggleExpanded={() => setExpandedSessionId(expanded ? null : session.id)}
-                          session={session}
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <ExpandableDataTable
+                columns={sessionColumns}
+                expandedRowIds={expandedSessionIds}
+                getRowDetailsLabel={(session) => `session ${session.transactionId}`}
+                getRowId={(session) => session.id}
+                onToggleRow={(sessionId) => setExpandedSessionId(expandedSessionId === sessionId ? null : sessionId)}
+                renderExpandedRow={(session) => (
+                  <SessionDetails
+                    activeSessionAudit={activeSessionAudit}
+                    liveStats={getLiveStatsForSession(session, chargingStats)}
+                    session={session}
+                  />
+                )}
+                rows={group.sessions}
+              />
             </section>
           ))}
         </div>
@@ -209,6 +298,105 @@ export function SessionsView({
       </div>
     </section>
   );
+}
+
+type SessionDetailsProps = {
+  activeSessionAudit: ActiveSessionAuditResponse | null;
+  liveStats: ChargingStats | null;
+  session: ChargingSession;
+};
+
+function SessionDetails({ activeSessionAudit, liveStats, session }: SessionDetailsProps) {
+  const audit = findAuditForSession(activeSessionAudit, session);
+  const meterSource = getSessionMeterSource(session, liveStats);
+
+  return (
+    <>
+      {audit ? (
+        <div className="session-audit-row">
+          <div className="session-audit-inline">
+            <span>{audit.warnings[0]?.message ?? "No audit warnings."}</span>
+            <span>Latest meter: {formatEnergyWh(audit.latestMeterWh)}</span>
+            <span>Status: {audit.latestStatus ?? "-"}</span>
+            <span>Proxy mappings: {audit.proxyMappings.length}</span>
+          </div>
+        </div>
+      ) : null}
+      <div className="session-detail-row">
+        <div className="session-detail-grid">
+          <span className="session-detail-item">
+            <span>Charger</span>
+            <strong className="mono table-truncate" title={session.chargerId}>
+              {session.chargerId}
+            </strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Connector</span>
+            <strong>{session.connectorId}</strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Transaction</span>
+            <strong>{session.transactionId}</strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Tag</span>
+            <strong className="mono table-truncate" title={session.idTag || "None"}>
+              {session.idTag || "None"}
+            </strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Reason</span>
+            <strong>{session.stopReason || "-"}</strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Meter</span>
+            <strong>
+              {session.startMeterWh ?? "-"} / {session.stopMeterWh ?? "-"}
+            </strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Energy source</span>
+            <strong>{getMeterSourceLabel(meterSource)}</strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Started</span>
+            <strong>{formatDateTime(session.startedAt)}</strong>
+          </span>
+          <span className="session-detail-item">
+            <span>Ended</span>
+            <strong>{session.stoppedAt ? formatDateTime(session.stoppedAt) : "Active"}</strong>
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function getLiveStatsForSession(session: ChargingSession, chargingStats: ChargingStats[]) {
+  return chargingStats.find((entry) => entry.sessionId === session.id || entry.transactionId === session.transactionId) ?? null;
+}
+
+function getSessionEnergyUsedWh(session: ChargingSession, liveStats: ChargingStats | null) {
+  if (typeof session.startMeterWh !== "number") return null;
+
+  if (typeof session.stopMeterWh === "number") {
+    return Math.max(0, session.stopMeterWh - session.startMeterWh);
+  }
+
+  if (typeof liveStats?.energyUsedWh === "number") return liveStats.energyUsedWh;
+
+  if (typeof liveStats?.latestMeterWh === "number") {
+    return Math.max(0, liveStats.latestMeterWh - session.startMeterWh);
+  }
+
+  return null;
+}
+
+function getSessionMeterSource(session: ChargingSession, liveStats: ChargingStats | null) {
+  if (typeof session.stopMeterWh === "number" && typeof session.startMeterWh === "number") return "session-stop-meter";
+  if (typeof liveStats?.energyUsedWh === "number" || typeof liveStats?.latestMeterWh === "number") return "latest-meter-sample";
+  if (typeof session.startMeterWh === "number") return "start-meter";
+  return "unknown";
 }
 
 function validateSessionFilters(filters: SessionSearchFilters) {
