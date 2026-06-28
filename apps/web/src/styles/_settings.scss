@@ -12,6 +12,50 @@
   min-width: 0;
 }
 
+.settings-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--wa-color-surface-border);
+}
+
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--wa-color-text-quiet);
+  font: inherit;
+  font-size: var(--wa-font-size-s);
+  font-weight: var(--wa-font-weight-action);
+  line-height: var(--wa-line-height-condensed);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.settings-tab svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.settings-tab:hover {
+  color: var(--wa-color-text-normal);
+  background: var(--wa-color-neutral-fill-quiet);
+}
+
+.settings-tab-active {
+  border-bottom-color: var(--wa-color-brand-fill-normal);
+  color: var(--wa-color-text-normal);
+}
+
 .settings-section {
   display: grid;
   gap: 12px;

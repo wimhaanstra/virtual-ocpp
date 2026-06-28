@@ -37,18 +37,20 @@ type AccessTokensViewProps = {
   apiTokens: ApiToken[];
   apiTokensStatus: OnboardingSettingsStatus;
   busy: boolean;
+  embedded?: boolean;
   onCopyToken: (value: string) => void;
   onCreateToken: (input: { name: string; scope: ApiTokenScope; expiresAt: string | null }) => Promise<CreatedApiToken | null>;
   onRefresh: () => void;
   onRevoke: (tokenId: string) => void;
   onRotate: (tokenId: string) => Promise<CreatedApiToken | null>;
-  onBackToSettings: () => void;
+  onBackToSettings?: () => void;
 };
 
 export function AccessTokensView({
   apiTokens,
   apiTokensStatus,
   busy,
+  embedded = false,
   onBackToSettings,
   onCopyToken,
   onCreateToken,
@@ -103,10 +105,12 @@ export function AccessTokensView({
           </div>
           <div className="dashboard-section-header__actions">
             <span className="pill overview-status-pill pill-neutral">{statusLabel}</span>
-            <Button type="button" className="button-secondary compact-text-button overview-section-action" onClick={onBackToSettings} disabled={busy}>
-              <ArrowLeft aria-hidden="true" />
-              Settings
-            </Button>
+            {!embedded && onBackToSettings ? (
+              <Button type="button" className="button-secondary compact-text-button overview-section-action" onClick={onBackToSettings} disabled={busy}>
+                <ArrowLeft aria-hidden="true" />
+                Settings
+              </Button>
+            ) : null}
             <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onRefresh} disabled={busy} aria-label="Refresh tokens" title="Refresh tokens">
               <RefreshCcw aria-hidden="true" />
             </Button>

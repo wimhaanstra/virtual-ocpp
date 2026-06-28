@@ -76,6 +76,20 @@
   height: 16px;
 }
 
+.table-truncate {
+  display: inline-block;
+  max-width: min(34ch, 100%);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.table-truncate-wide {
+  max-width: min(58ch, 100%);
+}
+
 .compact-text-button {
   min-height: 34px;
   padding-inline: 10px;

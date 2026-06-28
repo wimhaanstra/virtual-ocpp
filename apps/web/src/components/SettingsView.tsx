@@ -2,14 +2,18 @@ import WaInput from "@awesome.me/webawesome/dist/react/input/index.js";
 import WaNumberInput from "@awesome.me/webawesome/dist/react/number-input/index.js";
 import WaRadio from "@awesome.me/webawesome/dist/react/radio/index.js";
 import WaRadioGroup from "@awesome.me/webawesome/dist/react/radio-group/index.js";
-import { KeyRound, RefreshCcw, Save, Sparkles, Trash2 } from "lucide-react";
+import { BookOpenText, KeyRound, RefreshCcw, Save, SlidersHorizontal, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatDateTime, getOnboardingState, getOnboardingStateLabel, getOnboardingStateTone } from "../app-helpers";
-import type { ActiveView, CommunicationSettings, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
+import type { ApiToken, ApiTokenScope, CommunicationSettings, CreatedApiToken, OnboardingSettings, OnboardingSettingsStatus, TimeFormatPreference } from "../types";
+import { AccessTokensView } from "./AccessTokensView";
 import { Button } from "./ui/button";
 
+export type SettingsTab = "general" | "onboarding" | "tokens" | "journal";
+
 type SettingsViewProps = {
-  apiTokenCount: number;
+  activeTab: SettingsTab;
+  apiTokens: ApiToken[];
   apiTokensStatus: OnboardingSettingsStatus;
   busy: boolean;
   communicationSettings: CommunicationSettings | null;
@@ -18,16 +22,29 @@ type SettingsViewProps = {
   onboardingSettingsStatus: OnboardingSettingsStatus;
   timeFormat: TimeFormatPreference;
   onCommunicationRetentionChange: (value: number) => void;
-  onNavigate: (view: ActiveView) => void;
+  onCopyToken: (value: string) => void;
+  onCreateToken: (input: { name: string; scope: ApiTokenScope; expiresAt: string | null }) => Promise<CreatedApiToken | null>;
   onPurgeExpiredCommunication: () => void;
   onRefreshCommunicationSettings: () => void;
+  onRefreshTokens: () => void;
   onRefreshOnboarding: () => void;
+  onRevokeToken: (tokenId: string) => void;
+  onRotateToken: (tokenId: string) => Promise<CreatedApiToken | null>;
   onRunOnboarding: () => void;
+  onTabChange: (tab: SettingsTab) => void;
   onTimeFormatChange: (value: TimeFormatPreference) => void;
 };
 
+const settingsTabs: Array<{ id: SettingsTab; label: string; icon: LucideIcon }> = [
+  { id: "general", label: "General", icon: SlidersHorizontal },
+  { id: "onboarding", label: "Onboarding", icon: Sparkles },
+  { id: "tokens", label: "Tokens", icon: KeyRound },
+  { id: "journal", label: "Journal", icon: BookOpenText }
+];
+
 export function SettingsView({
-  apiTokenCount,
+  activeTab,
+  apiTokens,
   apiTokensStatus,
   busy,
   communicationSettings,
@@ -36,11 +53,16 @@ export function SettingsView({
   onboardingSettingsStatus,
   timeFormat,
   onCommunicationRetentionChange,
-  onNavigate,
+  onCopyToken,
+  onCreateToken,
   onPurgeExpiredCommunication,
   onRefreshCommunicationSettings,
+  onRefreshTokens,
   onRefreshOnboarding,
+  onRevokeToken,
+  onRotateToken,
   onRunOnboarding,
+  onTabChange,
   onTimeFormatChange
 }: SettingsViewProps) {
   const [retentionDraft, setRetentionDraft] = useState("24");
@@ -74,17 +96,6 @@ export function SettingsView({
   const storage = communicationSettings?.storage ?? null;
   const lastPurge = communicationSettings?.lastPurge ?? null;
   const canPurgeExpired = purgeConfirmation.trim() === "PURGE";
-  const tokenStatusLabel =
-    apiTokensStatus === "loading"
-      ? "Loading"
-      : apiTokensStatus === "ready"
-        ? "Connected"
-        : apiTokensStatus === "unavailable"
-          ? "Unavailable"
-          : apiTokensStatus === "error"
-            ? "Load failed"
-            : "Idle";
-
   useEffect(() => {
     if (communicationSettings) {
       setRetentionDraft(String(communicationSettings.retentionHours));
@@ -111,38 +122,65 @@ export function SettingsView({
 
   return (
     <section className="settings-layout settings-page">
-      <section className="settings-section settings-section-general">
-        <div className="dashboard-section-header settings-section-header">
-          <div>
-            <p className="eyebrow">Global preferences</p>
-            <h2>General</h2>
-          </div>
-          <div className="dashboard-section-header__actions">
-            <span className={`pill overview-status-pill ${onboardingStateTone}`}>{onboardingStateLabel}</span>
-            <Button type="button" className="button-secondary compact-text-button overview-section-action" onClick={onRunOnboarding} disabled={busy}>
-              <Sparkles aria-hidden="true" />
-              Run onboarding
-            </Button>
-          </div>
-        </div>
+      <nav className="settings-tabs" role="tablist" aria-label="Settings sections">
+        {settingsTabs.map((tab) => {
+          const Icon = tab.icon;
+          const selected = activeTab === tab.id;
 
-        <div className="settings-card-grid">
-          <article className="settings-card">
-            <div className="settings-card__header">
-              <div>
-                <h3>Time format</h3>
-                <p>Used across dashboards, sessions, and communication rows.</p>
-              </div>
+          return (
+            <button
+              type="button"
+              className={`settings-tab ${selected ? "settings-tab-active" : ""}`}
+              role="tab"
+              aria-selected={selected}
+              aria-controls={`settings-panel-${tab.id}`}
+              id={`settings-tab-${tab.id}`}
+              onClick={() => onTabChange(tab.id)}
+              key={tab.id}
+            >
+              <Icon aria-hidden="true" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {activeTab === "general" ? (
+        <section className="settings-section settings-section-general" role="tabpanel" id="settings-panel-general" aria-labelledby="settings-tab-general">
+          <div className="dashboard-section-header settings-section-header">
+            <div>
+              <p className="eyebrow">Global preferences</p>
+              <h2>General</h2>
             </div>
-            <TimeFormatControl value={timeFormat} onChange={onTimeFormatChange} />
-          </article>
+          </div>
 
-          <article className="settings-card">
-            <div className="settings-card__header">
-              <div>
-                <h3>Onboarding</h3>
-                <p>Current setup state and wizard entry point.</p>
+          <div className="settings-card-grid">
+            <article className="settings-card">
+              <div className="settings-card__header">
+                <div>
+                  <h3>Time format</h3>
+                  <p>Used across dashboards, sessions, and communication rows.</p>
+                </div>
               </div>
+              <TimeFormatControl value={timeFormat} onChange={onTimeFormatChange} />
+            </article>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "onboarding" ? (
+        <section className="settings-section settings-section-onboarding" role="tabpanel" id="settings-panel-onboarding" aria-labelledby="settings-tab-onboarding">
+          <div className="dashboard-section-header settings-section-header">
+            <div>
+              <p className="eyebrow">Setup workflow</p>
+              <h2>Onboarding</h2>
+            </div>
+            <div className="dashboard-section-header__actions">
+              <span className={`pill overview-status-pill ${onboardingStateTone}`}>{onboardingStateLabel}</span>
+              <Button type="button" className="button-secondary compact-text-button overview-section-action" onClick={onRunOnboarding} disabled={busy}>
+                <Sparkles aria-hidden="true" />
+                Run onboarding
+              </Button>
               <Button
                 type="button"
                 className="button-secondary icon-button overview-icon-action"
@@ -154,100 +192,98 @@ export function SettingsView({
                 <RefreshCcw aria-hidden="true" />
               </Button>
             </div>
-            <SettingsDetailList items={onboardingDetails} />
-          </article>
-        </div>
-      </section>
-
-      <section className="settings-section settings-section-tokens">
-        <div className="dashboard-section-header settings-section-header">
-          <div>
-            <p className="eyebrow">API access</p>
-            <h2>Tokens</h2>
           </div>
-          <div className="dashboard-section-header__actions">
-            <span className="pill overview-status-pill pill-neutral">{tokenStatusLabel}</span>
-          </div>
-        </div>
 
-        <div className="settings-card-grid">
-          <article className="settings-card">
-            <div className="settings-card__header">
-              <div>
-                <h3>Token management</h3>
-                <p>Create, rotate, and revoke API tokens on a dedicated page.</p>
+          <div className="settings-card-grid">
+            <article className="settings-card">
+              <div className="settings-card__header">
+                <div>
+                  <h3>Setup state</h3>
+                  <p>Current setup state and wizard entry point.</p>
+                </div>
               </div>
-              <KeyRound aria-hidden="true" className="settings-card__icon" />
+              <SettingsDetailList items={onboardingDetails} />
+            </article>
+          </div>
+        </section>
+      ) : null}
+
+      {activeTab === "tokens" ? (
+        <section className="settings-section settings-section-tokens" role="tabpanel" id="settings-panel-tokens" aria-labelledby="settings-tab-tokens">
+          <AccessTokensView
+            apiTokens={apiTokens}
+            apiTokensStatus={apiTokensStatus}
+            busy={busy}
+            embedded
+            onCopyToken={onCopyToken}
+            onCreateToken={onCreateToken}
+            onRefresh={onRefreshTokens}
+            onRevoke={onRevokeToken}
+            onRotate={onRotateToken}
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "journal" ? (
+        <section className="settings-section settings-section-communication" role="tabpanel" id="settings-panel-journal" aria-labelledby="settings-tab-journal">
+          <div className="dashboard-section-header settings-section-header">
+            <div>
+              <p className="eyebrow">Communication</p>
+              <h2>Journal retention</h2>
             </div>
-            <SettingsDetailList items={[{ label: "Tokens", value: apiTokenCount }, { label: "Endpoint", value: tokenStatusLabel }]} />
-            <div className="settings-action-row">
-              <Button type="button" className="compact-text-button overview-section-action" onClick={() => onNavigate("Access tokens")} disabled={busy}>
-                <KeyRound aria-hidden="true" />
-                Manage tokens
+            <div className="dashboard-section-header__actions">
+              <span className="pill overview-status-pill pill-neutral">{communicationEndpointLabel}</span>
+              <Button
+                type="button"
+                className="button-secondary icon-button overview-icon-action"
+                onClick={onRefreshCommunicationSettings}
+                disabled={busy}
+                aria-label="Refresh"
+                title="Refresh"
+              >
+                <RefreshCcw aria-hidden="true" />
               </Button>
             </div>
-          </article>
-        </div>
-      </section>
-
-      <section className="settings-section settings-section-communication">
-        <div className="dashboard-section-header settings-section-header">
-          <div>
-            <p className="eyebrow">Communication</p>
-            <h2>Journal retention</h2>
           </div>
-          <div className="dashboard-section-header__actions">
-            <span className="pill overview-status-pill pill-neutral">{communicationEndpointLabel}</span>
+
+          <SettingsPropertyTable items={retentionDetails} />
+
+          <div className="settings-inline-form">
+            <SettingsNumberInput label="Retention hours" value={retentionDraft} min={1} max={8760} step={1} disabled={busy} onChange={setRetentionDraft} />
+            <div className="settings-action-row">
+              <Button
+                type="button"
+                className="compact-text-button overview-section-action"
+                onClick={() => onCommunicationRetentionChange(parsedRetention)}
+                disabled={busy || !canSaveRetention}
+              >
+                <Save aria-hidden="true" />
+                Save
+              </Button>
+            </div>
+          </div>
+
+          <div className="settings-danger-zone">
+            <div>
+              <strong>Purge expired rows</strong>
+              <p>Deletes communication rows older than the current retention window.</p>
+            </div>
+            <SettingsTextInput label="Type PURGE to confirm" value={purgeConfirmation} disabled={busy} onChange={setPurgeConfirmation} />
             <Button
               type="button"
-              className="button-secondary icon-button overview-icon-action"
-              onClick={onRefreshCommunicationSettings}
-              disabled={busy}
-              aria-label="Refresh"
-              title="Refresh"
+              className="button-danger compact-text-button overview-section-action"
+              onClick={() => {
+                onPurgeExpiredCommunication();
+                setPurgeConfirmation("");
+              }}
+              disabled={busy || !canPurgeExpired}
             >
-              <RefreshCcw aria-hidden="true" />
+              <Trash2 aria-hidden="true" />
+              Purge expired
             </Button>
           </div>
-        </div>
-
-        <SettingsPropertyTable items={retentionDetails} />
-
-        <div className="settings-inline-form">
-          <SettingsNumberInput label="Retention hours" value={retentionDraft} min={1} max={8760} step={1} disabled={busy} onChange={setRetentionDraft} />
-          <div className="settings-action-row">
-            <Button
-              type="button"
-              className="compact-text-button overview-section-action"
-              onClick={() => onCommunicationRetentionChange(parsedRetention)}
-              disabled={busy || !canSaveRetention}
-            >
-              <Save aria-hidden="true" />
-              Save
-            </Button>
-          </div>
-        </div>
-
-        <div className="settings-danger-zone">
-          <div>
-            <strong>Purge expired rows</strong>
-            <p>Deletes communication rows older than the current retention window.</p>
-          </div>
-          <SettingsTextInput label="Type PURGE to confirm" value={purgeConfirmation} disabled={busy} onChange={setPurgeConfirmation} />
-          <Button
-            type="button"
-            className="button-danger compact-text-button overview-section-action"
-            onClick={() => {
-              onPurgeExpiredCommunication();
-              setPurgeConfirmation("");
-            }}
-            disabled={busy || !canPurgeExpired}
-          >
-            <Trash2 aria-hidden="true" />
-            Purge expired
-          </Button>
-        </div>
-      </section>
+        </section>
+      ) : null}
     </section>
   );
 }

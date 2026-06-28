@@ -1,4 +1,5 @@
-import { ArrowRight, BatteryCharging, Gauge, MessagesSquare, TriangleAlert } from "lucide-react";
+import { Fragment, useState } from "react";
+import { ArrowRight, BatteryCharging, ChevronDown, ChevronRight, Gauge, MessagesSquare } from "lucide-react";
 import type { ActiveSessionAuditResponse, ActiveView, ChargerRegistryRow, ChargingSession, ChargingStats, CommunicationJournalFilters, MeterGapEvent } from "../types";
 import {
   formatDateTime,
@@ -48,20 +49,32 @@ export function GlobalDashboardView({
   onNavigate,
   onSelectCharger
 }: GlobalDashboardViewProps) {
+  const [expandedChargers, setExpandedChargers] = useState<Set<string>>(new Set());
+  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const orderedChargers = sortChargers(chargers);
   const connectedChargers = orderedChargers.filter((charger) => charger.active);
   const activeSessions = chargingSessions.filter((session) => session.active);
-  const flaggedSessions = activeSessionAudit?.items.filter((item) => item.warnings.length > 0) ?? [];
+
+  function toggleExpandedCharger(chargerId: string) {
+    setExpandedChargers((current) => {
+      const next = new Set(current);
+      if (next.has(chargerId)) next.delete(chargerId);
+      else next.add(chargerId);
+      return next;
+    });
+  }
+
+  function toggleExpandedSession(sessionId: string) {
+    setExpandedSessions((current) => {
+      const next = new Set(current);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  }
 
   return (
     <section className="global-dashboard">
-      <section className="global-dashboard-hero" aria-label="Global charger overview">
-        <div>
-          <p className="eyebrow">Operator overview</p>
-          <h2>Fleet status</h2>
-          <p className="status-copy">A compact view of live charger connectivity and active charging across the installation.</p>
-        </div>
-      </section>
 
       <section className="global-metrics" aria-label="Fleet metrics">
         <article>
@@ -80,11 +93,6 @@ export function GlobalDashboardView({
           <Gauge aria-hidden="true" />
           <span>Charging now</span>
           <strong>{chargingStatsStatus === "error" ? "-" : chargingStats.length}</strong>
-        </article>
-        <article>
-          <TriangleAlert aria-hidden="true" />
-          <span>Needs attention</span>
-          <strong>{flaggedSessions.length + meterGapEvents.length}</strong>
         </article>
       </section>
 
@@ -105,29 +113,76 @@ export function GlobalDashboardView({
           {orderedChargers.length === 0 ? (
             <p>No chargers have connected yet.</p>
           ) : (
-            <div className="record-list registry-list runtime-status-list">
+            <div className="overview-table-wrap">
+              <table className="overview-table runtime-status-table">
+                <thead>
+                  <tr>
+                    <th aria-label="Expand row"></th>
+                    <th>Charger</th>
+                    <th>State</th>
+                    <th>Active</th>
+                    <th>Live charge</th>
+                    <th>Last seen</th>
+                    <th aria-label="Actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
               {orderedChargers.map((charger) => {
                 const chargerId = getChargerContextId(charger);
                 const sessions = getActiveSessions(chargerId, chargingSessions);
                 const stats = getLatestChargingStats(chargerId, chargingStats);
                 const warning = charger.connectionWarning?.message;
+                const expanded = expandedChargers.has(chargerId);
+                const label = getChargerConnectionLabel(charger);
+                const tone = getChargerConnectionTone(charger);
 
                 return (
-                  <article className="record-card registry-card runtime-status-card" key={charger.id}>
-                    <div className="runtime-status-card__header">
-                      <div>
-                        <div className="record-card__title">{getChargerDisplayLabel(charger)}</div>
-                        <div className="record-card__subtitle mono">{chargerId}</div>
-                      </div>
-                      <div className="runtime-status-card__controls">
-                        <span
-                          className={`pill overview-status-pill ${getChargerConnectionTone(charger)}`}
-                          title={warning || undefined}
-                          aria-label={warning ? `${getChargerConnectionLabel(charger)}: ${warning}` : getChargerConnectionLabel(charger)}
+                  <Fragment key={charger.id}>
+                    <tr
+                      className="overview-table-row"
+                      tabIndex={0}
+                      onClick={() => toggleExpandedCharger(chargerId)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleExpandedCharger(chargerId);
+                        }
+                      }}
+                    >
+                      <td className="overview-table-expander-cell">
+                        <Button
+                          className="button-secondary icon-button overview-icon-action session-expand-button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpandedCharger(chargerId);
+                          }}
+                          title={expanded ? "Hide charger details" : "Show charger details"}
+                          aria-label={`${expanded ? "Hide" : "Show"} details for charger ${chargerId}`}
                         >
-                          {getChargerConnectionLabel(charger)}
+                          {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+                        </Button>
+                      </td>
+                      <td>
+                        <div className="overview-table-primary">{getChargerDisplayLabel(charger)}</div>
+                        <div className="overview-table-subtitle overview-table-id mono" title={chargerId}>
+                          {chargerId}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`pill overview-status-pill ${tone}`} title={warning || undefined} aria-label={warning ? `${label}: ${warning}` : label}>
+                          {label}
                         </span>
-                        <div className="action-row compact-action-row runtime-status-card__actions">
+                      </td>
+                      <td>
+                        <button className="overview-cell-link" type="button" onClick={() => onOpenSessions(chargerId)}>
+                          {sessions.length}
+                        </button>
+                      </td>
+                      <td>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : "Idle"}</td>
+                      <td>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</td>
+                      <td onClick={(event) => event.stopPropagation()}>
+                        <div className="action-row compact-action-row overview-table-actions">
                           <Button
                             type="button"
                             className="button-secondary icon-button overview-icon-action"
@@ -150,36 +205,54 @@ export function GlobalDashboardView({
                             <ArrowRight aria-hidden="true" />
                           </Button>
                         </div>
-                      </div>
-                    </div>
-                    <dl className="overview-stat-grid">
-                      <div
-                        className="overview-stat-chip-clickable"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => onOpenSessions(chargerId)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            onOpenSessions(chargerId);
-                          }
-                        }}
-                      >
-                        <dt>Active</dt>
-                        <dd>{sessions.length}</dd>
-                      </div>
-                      <div>
-                        <dt>Live charge</dt>
-                        <dd>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : "Idle"}</dd>
-                      </div>
-                      <div>
-                        <dt>Last seen</dt>
-                        <dd>{formatDateTime(charger.lastSeenAt ?? charger.connectedAt ?? charger.updatedAt ?? null)}</dd>
-                      </div>
-                    </dl>
-                  </article>
+                      </td>
+                    </tr>
+                    {expanded ? (
+                      <tr className="overview-table-detail-row">
+                        <td colSpan={7}>
+                          {warning ? (
+                            <div className="session-audit-row overview-warning-row">
+                              <div className="session-audit-inline">{warning}</div>
+                            </div>
+                          ) : null}
+                          <div className="session-detail-row">
+                            <div className="session-detail-grid">
+                              <span className="session-detail-item">
+                                <span>Charger ID</span>
+                                <strong className="overview-table-id mono" title={chargerId}>
+                                  {chargerId}
+                                </strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Last boot</span>
+                                <strong>{formatDateTime(charger.lastBootAt ?? null)}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Vendor</span>
+                                <strong>{charger.chargePointVendor || "-"}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Model</span>
+                                <strong>{charger.chargePointModel || "-"}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Firmware</span>
+                                <strong>{charger.firmwareVersion || "-"}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Updated</span>
+                                <strong>{formatDateTime(charger.updatedAt ?? null)}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
@@ -200,29 +273,110 @@ export function GlobalDashboardView({
           {activeSessions.length === 0 ? (
             <p>No active sessions.</p>
           ) : (
-            <div className="global-session-list">
+            <div className="overview-table-wrap">
+              <table className="overview-table active-sessions-table">
+                <thead>
+                  <tr>
+                    <th aria-label="Expand row"></th>
+                    <th>Transaction</th>
+                    <th>Charger</th>
+                    <th>Connector</th>
+                    <th>Duration</th>
+                    <th>Energy / power</th>
+                    <th aria-label="Actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
               {activeSessions.map((session) => {
                 const stats = chargingStats.find((entry) => entry.sessionId === session.id) ?? null;
+                const expanded = expandedSessions.has(session.id);
 
                 return (
-                  <article key={session.id}>
-                    <div className="global-session-card__body">
-                      <strong>Transaction {session.transactionId}</strong>
-                      <p className="status-copy">
-                        {session.chargerId} · connector {session.connectorId} · {formatDuration(Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000))}
-                      </p>
-                    </div>
-                    <div className="global-session-actions">
-                      <span>{stats ? `${formatPowerW(stats.latestPowerW)} · ${formatEnergyWh(stats.energyUsedWh)}` : formatEnergyWh(session.stopMeterWh)}</span>
-                      <div className="action-row compact-action-row">
-                        <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onOpenSessions(session.chargerId)} title="Open sessions" aria-label={`Open sessions for ${session.chargerId}`}>
-                          <ArrowRight aria-hidden="true" />
+                  <Fragment key={session.id}>
+                    <tr
+                      className="overview-table-row"
+                      tabIndex={0}
+                      onClick={() => toggleExpandedSession(session.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          toggleExpandedSession(session.id);
+                        }
+                      }}
+                    >
+                      <td className="overview-table-expander-cell">
+                        <Button
+                          className="button-secondary icon-button overview-icon-action session-expand-button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleExpandedSession(session.id);
+                          }}
+                          title={expanded ? "Hide session details" : "Show session details"}
+                          aria-label={`${expanded ? "Hide" : "Show"} details for session ${session.transactionId}`}
+                        >
+                          {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
                         </Button>
-                      </div>
-                    </div>
-                  </article>
+                      </td>
+                      <td>
+                        <div className="overview-table-primary">Transaction {session.transactionId}</div>
+                        <div className="overview-table-subtitle">{session.status}</div>
+                      </td>
+                      <td>
+                        <span className="overview-table-id mono" title={session.chargerId}>
+                          {session.chargerId}
+                        </span>
+                      </td>
+                      <td>{session.connectorId}</td>
+                      <td>{formatDuration(Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000))}</td>
+                      <td>{stats ? `${formatEnergyWh(stats.energyUsedWh)} · ${formatPowerW(stats.latestPowerW)}` : formatEnergyWh(session.stopMeterWh)}</td>
+                      <td onClick={(event) => event.stopPropagation()}>
+                        <div className="action-row compact-action-row overview-table-actions">
+                          <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onOpenSessions(session.chargerId)} title="Open sessions" aria-label={`Open sessions for ${session.chargerId}`}>
+                            <ArrowRight aria-hidden="true" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded ? (
+                      <tr className="overview-table-detail-row">
+                        <td colSpan={7}>
+                          <div className="session-detail-row">
+                            <div className="session-detail-grid">
+                              <span className="session-detail-item">
+                                <span>Started</span>
+                                <strong>{formatDateTime(session.startedAt)}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>ID tag</span>
+                                <strong className="mono">{session.idTag ?? "None"}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Meter</span>
+                                <strong>{formatEnergyWh(stats?.latestMeterWh ?? session.stopMeterWh)}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Latest sample</span>
+                                <strong>{formatDateTime(stats?.latestSampleAt ?? null)}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Association</span>
+                                <strong>{stats?.sampleAssociation ?? "-"}</strong>
+                              </span>
+                              <span className="session-detail-item">
+                                <span>Start meter</span>
+                                <strong>{formatEnergyWh(session.startMeterWh)}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
+                </tbody>
+              </table>
             </div>
           )}
         </section>

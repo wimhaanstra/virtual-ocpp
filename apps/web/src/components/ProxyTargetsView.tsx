@@ -50,18 +50,15 @@ export function ProxyTargetsView({
       {proxyTargets.length === 0 ? (
         <p className="dashboard-empty-state">No proxy targets configured yet.</p>
       ) : (
-        <div className="proxy-targets-table-wrap">
-          <table className="proxy-targets-table">
+        <div className="sessions-table-wrap">
+          <table className="sessions-table">
             <thead>
               <tr>
                 <th aria-label="Expand proxy target details" />
-                <th>Name</th>
+                <th>Target</th>
                 <th>Station ID</th>
-                <th>Mode</th>
-                <th>Outage</th>
-                <th>Recovery</th>
                 <th>Status</th>
-                <th className="proxy-targets-table__actions-heading">Actions</th>
+                <th className="sessions-table__actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -114,7 +111,7 @@ function ProxyTargetTableRow({
   return (
     <>
       <tr
-        className="proxy-target-table-row"
+        className="session-table-row"
         tabIndex={0}
         onClick={onToggleExpanded}
         onKeyDown={(event) => {
@@ -124,10 +121,10 @@ function ProxyTargetTableRow({
           }
         }}
       >
-        <td className="proxy-targets-table-cell proxy-targets-table-cell--expand">
+        <td className="session-table-cell session-table-cell--expand">
           <Button
             type="button"
-            className="button-secondary icon-button overview-icon-action"
+            className="button-secondary icon-button overview-icon-action session-expand-button"
             onClick={(event) => {
               event.stopPropagation();
               onToggleExpanded();
@@ -139,17 +136,25 @@ function ProxyTargetTableRow({
           </Button>
         </td>
         <td>
-          <strong>{target.name}</strong>
+          <div className="session-table-primary">
+            <strong className="table-truncate" title={target.name}>
+              {target.name}
+            </strong>
+            <span className="mono table-truncate" title={target.id}>
+              {target.id}
+            </span>
+          </div>
         </td>
-        <td className="mono">{target.stationId || "Default"}</td>
-        <td>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</td>
-        <td>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</td>
-        <td>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</td>
+        <td>
+          <span className="mono table-truncate" title={target.stationId || "Default"}>
+            {target.stationId || "Default"}
+          </span>
+        </td>
         <td>
           <span className={`pill overview-status-pill ${target.enabled ? "pill-good" : "pill-warning"}`}>{target.enabled ? "Enabled" : "Disabled"}</span>
         </td>
-        <td className="proxy-targets-table-cell proxy-targets-table-cell--actions" onClick={(event) => event.stopPropagation()}>
-          <div className="dashboard-item__actions proxy-targets-table-actions">
+        <td className="session-table-cell session-table-cell--actions" onClick={(event) => event.stopPropagation()}>
+          <div className="dashboard-item__actions session-table-actions">
             <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={() => onEdit(target)} disabled={busy} title="Edit proxy target" aria-label="Edit">
               <Pencil aria-hidden="true" />
             </Button>
@@ -170,33 +175,51 @@ function ProxyTargetTableRow({
         </td>
       </tr>
       {expanded ? (
-        <tr className="proxy-target-detail-table-row">
-          <td colSpan={8}>
-            <div className="proxy-target-detail-grid">
-              <span className="proxy-target-detail-item proxy-target-detail-item--wide">
+        <tr className="session-detail-table-row">
+          <td colSpan={5}>
+            <div className="session-detail-row">
+              <div className="session-detail-grid">
+                <span className="session-detail-item">
+                  <span>Mode</span>
+                  <strong>{target.mode === "deny-capable" ? "Deny capable" : "Monitor only"}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Outage</span>
+                  <strong>{target.outagePolicy === "fail-closed" ? "Fail closed" : "Fail open"}</strong>
+                </span>
+                <span className="session-detail-item">
+                  <span>Recovery</span>
+                  <strong>{target.allowRecoverySubmissions ? "Allowed" : "Off"}</strong>
+                </span>
+                <span className="session-detail-item">
                 <span>WebSocket URL</span>
-                <strong className="mono">{target.url}</strong>
+                  <strong className="mono table-truncate table-truncate-wide" title={target.url}>
+                    {target.url}
+                  </strong>
               </span>
-              <span className="proxy-target-detail-item">
+                <span className="session-detail-item">
                 <span>Credentials</span>
                 <strong>{target.hasUsername || target.hasBasicAuthPassword ? "Configured" : "None"}</strong>
               </span>
-              <span className="proxy-target-detail-item">
+                <span className="session-detail-item">
                 <span>Username</span>
                 <strong>{target.hasUsername ? "Configured" : "None"}</strong>
               </span>
-              <span className="proxy-target-detail-item">
+                <span className="session-detail-item">
                 <span>Password</span>
                 <strong>{target.hasBasicAuthPassword ? "Configured" : "None"}</strong>
               </span>
-              <span className="proxy-target-detail-item">
+                <span className="session-detail-item">
                 <span>Tag mappings</span>
                 <strong>{formatTagMappingCount(target.tagMappings?.length ?? 0)}</strong>
               </span>
-              <span className="proxy-target-detail-item proxy-target-detail-item--wide">
+                <span className="session-detail-item">
                 <span>Mappings</span>
-                <strong>{formatMappings(target.tagMappings)}</strong>
+                  <strong className="table-truncate table-truncate-wide" title={formatMappings(target.tagMappings)}>
+                    {formatMappings(target.tagMappings)}
+                  </strong>
               </span>
+              </div>
             </div>
           </td>
         </tr>

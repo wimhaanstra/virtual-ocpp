@@ -44,16 +44,15 @@ export function TagAccessView({ busy, selectedChargerId, selectedChargerLabel, t
       {tags.length === 0 ? (
         <p className="dashboard-empty-state">No tags configured yet.</p>
       ) : (
-        <div className="tag-access-table-wrap">
-          <table className="tag-access-table">
+        <div className="sessions-table-wrap">
+          <table className="sessions-table">
             <thead>
               <tr>
                 <th aria-label="Expand tag access details" />
                 <th>Tag</th>
                 <th>Last used</th>
-                <th>Tag state</th>
                 <th>Access</th>
-                <th className="tag-access-table__actions-heading">Actions</th>
+                <th className="sessions-table__actions-heading">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -107,7 +106,7 @@ function TagAccessTableRow({
   return (
     <>
       <tr
-        className="tag-access-table-row"
+        className="session-table-row"
         tabIndex={0}
         onClick={onToggleExpanded}
         onKeyDown={(event) => {
@@ -117,10 +116,10 @@ function TagAccessTableRow({
           }
         }}
       >
-        <td className="tag-access-table-cell tag-access-table-cell--expand">
+        <td className="session-table-cell session-table-cell--expand">
           <Button
             type="button"
-            className="button-secondary icon-button overview-icon-action"
+            className="button-secondary icon-button overview-icon-action session-expand-button"
             onClick={(event) => {
               event.stopPropagation();
               onToggleExpanded();
@@ -132,20 +131,21 @@ function TagAccessTableRow({
           </Button>
         </td>
         <td>
-          <div className="tag-access-table-primary">
-            <strong>{tag.label || "Unlabeled"}</strong>
-            <span className="mono">{tag.uuid}</span>
+          <div className="session-table-primary">
+            <strong className="table-truncate" title={tag.label || "Unlabeled"}>
+              {tag.label || "Unlabeled"}
+            </strong>
+            <span className="mono table-truncate" title={tag.uuid}>
+              {tag.uuid}
+            </span>
           </div>
         </td>
         <td>{formatDateTime(tag.lastUsedAt ?? null)}</td>
         <td>
-          <span className={`pill overview-status-pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>{tag.enabled ? "Enabled" : "Disabled"}</span>
-        </td>
-        <td>
           <span className={`pill overview-status-pill ${allowed ? "pill-good" : "pill-warning"}`}>{allowed ? "Allowed" : "Blocked"}</span>
         </td>
-        <td className="tag-access-table-cell tag-access-table-cell--actions" onClick={(event) => event.stopPropagation()}>
-          <div className="dashboard-item__actions tag-access-table-actions">
+        <td className="session-table-cell session-table-cell--actions" onClick={(event) => event.stopPropagation()}>
+          <div className="dashboard-item__actions session-table-actions">
             <Button
               type="button"
               className="button-secondary icon-button overview-icon-action"
@@ -160,41 +160,59 @@ function TagAccessTableRow({
         </td>
       </tr>
       {expanded ? (
-        <tr className="tag-access-detail-table-row">
-          <td colSpan={6}>
-            <div className="tag-access-detail-grid">
-              <span className="tag-access-detail-item">
+        <tr className="session-detail-table-row">
+          <td colSpan={5}>
+            <div className="session-detail-row">
+              <div className="session-detail-grid">
+                <span className="session-detail-item">
+                  <span>Tag state</span>
+                  <strong>
+                    <span className={`pill overview-status-pill ${tag.enabled ? "pill-good" : "pill-warning"}`}>{tag.enabled ? "Enabled" : "Disabled"}</span>
+                  </strong>
+                </span>
+                <span className="session-detail-item">
                 <span>Charger</span>
-                <strong>{selectedChargerLabel}</strong>
+                  <strong className="table-truncate" title={selectedChargerLabel}>
+                    {selectedChargerLabel}
+                  </strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>UUID</span>
-                <strong className="mono">{tag.uuid}</strong>
+                  <strong className="mono table-truncate" title={tag.uuid}>
+                    {tag.uuid}
+                  </strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>Created</span>
                 <strong>{formatDateTime(tag.createdAt)}</strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>Last used here</span>
                 <strong>{formatDateTime(selectedChargerUsage?.lastUsedAt ?? null)}</strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>Last transaction here</span>
-                <strong>{selectedChargerUsage?.lastUsedTransactionId ?? "-"}</strong>
+                  <strong className="table-truncate" title={selectedChargerUsage?.lastUsedTransactionId ?? "-"}>
+                    {selectedChargerUsage?.lastUsedTransactionId ?? "-"}
+                  </strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>Last used globally</span>
                 <strong>{formatDateTime(tag.lastUsedAt ?? null)}</strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>Last charger globally</span>
-                <strong className="mono">{tag.lastUsedChargerId ?? "-"}</strong>
+                  <strong className="mono table-truncate" title={tag.lastUsedChargerId ?? "-"}>
+                    {tag.lastUsedChargerId ?? "-"}
+                  </strong>
               </span>
-              <span className="tag-access-detail-item">
+                <span className="session-detail-item">
                 <span>Last transaction globally</span>
-                <strong>{tag.lastUsedTransactionId ?? "-"}</strong>
+                  <strong className="table-truncate" title={tag.lastUsedTransactionId ?? "-"}>
+                    {tag.lastUsedTransactionId ?? "-"}
+                  </strong>
               </span>
+              </div>
             </div>
           </td>
         </tr>

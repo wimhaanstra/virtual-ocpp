@@ -1,4 +1,5 @@
-import { ArrowRight, Gauge, MessageSquareText } from "lucide-react";
+import { Fragment, useState } from "react";
+import { ArrowRight, ChevronDown, ChevronRight, Gauge, MessageSquareText } from "lucide-react";
 import { Button } from "./ui/button";
 import type {
   ActiveView,
@@ -34,6 +35,7 @@ export function DashboardView({
   onOpenCommunication,
   onOpenSessions
 }: DashboardViewProps) {
+  const [expandedChargingSessionId, setExpandedChargingSessionId] = useState<string | null>(null);
   const primaryActiveSession = chargingStats[0] ?? null;
   const primarySessionAwaitingMeterValues = primaryActiveSession?.latestSampleAt === null;
 
@@ -63,84 +65,118 @@ export function DashboardView({
             {chargingStatsStatus === "error" ? (
               <p className="status-copy">Live meter stats could not be loaded. Recent sessions may still show active charging state.</p>
             ) : chargingStats.length > 0 ? (
-              <div className="charging-session-stack">
-                {chargingStats.map((stats) => (
-                  <article className="charging-session-card dashboard-item" key={stats.sessionId}>
-                    <div className="charging-session-card__header dashboard-item__header">
-                      <div className="charging-session-card__heading dashboard-item__identity">
-                        <h4>Transaction {stats.transactionId}</h4>
-                        <p className="charging-session-card__meta">
-                          <span>{stats.chargerId}</span>
-                          <span>Connector {stats.connectorId}</span>
-                          <span>Started {formatDuration(stats.elapsedSeconds)} ago</span>
-                        </p>
-                      </div>
-                      <div className="dashboard-item__actions">
-                        <span className={`charging-state-badge ${stats.latestSampleAt === null ? "charging-state-badge-pending" : "charging-state-badge-live"}`}>Charging</span>
-                        <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
-                          <ArrowRight aria-hidden="true" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="dashboard-item__badges charging-session-badges">
-                      <div className="charging-session-summary">
-                        <div>
-                          <span>Tag</span>
-                          <strong>{stats.idTag ?? "None"}</strong>
-                        </div>
-                        <div>
-                          <span>Start meter</span>
-                          <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
-                        </div>
-                        {stats.latestSampleAt === null ? (
-                          <div>
-                            <span>MeterValues</span>
-                            <strong>Pending</strong>
-                          </div>
-                        ) : (
-                          <>
-                            <div>
-                              <span>Last sample</span>
-                              <strong>{formatDateTime(stats.latestSampleAt)}</strong>
-                            </div>
-                            <div>
-                              <span>Match</span>
-                              <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      <div className="charging-stats-grid">
-                        <div>
-                          <span>Energy used</span>
-                          <strong>{formatEnergyWh(stats.energyUsedWh)}</strong>
-                        </div>
-                        <div>
-                          <span>Charging power</span>
-                          <strong>{formatPowerW(stats.latestPowerW)}</strong>
-                        </div>
-                        <div>
-                          <span>Current</span>
-                          <strong>{formatDecimalUnit(stats.latestCurrentA, "A")}</strong>
-                        </div>
-                        <div>
-                          <span>Voltage</span>
-                          <strong>{formatDecimalUnit(stats.latestVoltageV, "V")}</strong>
-                        </div>
-                        <div>
-                          <span>Temperature</span>
-                          <strong>{formatDecimalUnit(stats.latestTemperatureC, "C")}</strong>
-                        </div>
-                        {stats.latestCurrentPhasesA ? (
-                          <div>
-                            <span>Phase current</span>
-                            <strong>{formatPhaseValues(stats.latestCurrentPhasesA, "A")}</strong>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
-                ))}
+              <div className="sessions-table-wrap charger-dashboard-table-wrap">
+                <table className="sessions-table charging-session-table">
+                  <thead>
+                    <tr>
+                      <th aria-label="Expand session details" />
+                      <th>Transaction</th>
+                      <th>Tag</th>
+                      <th>Connector</th>
+                      <th>Started</th>
+                      <th>Energy</th>
+                      <th>Power</th>
+                      <th>MeterValues</th>
+                      <th className="sessions-table__actions-heading" aria-label="Actions"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {chargingStats.map((stats) => {
+                      const expanded = expandedChargingSessionId === stats.sessionId;
+                      const toggleExpanded = () => setExpandedChargingSessionId(expanded ? null : stats.sessionId);
+
+                      return (
+                        <Fragment key={stats.sessionId}>
+                          <tr
+                            className="session-table-row"
+                            tabIndex={0}
+                            onClick={toggleExpanded}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                toggleExpanded();
+                              }
+                            }}
+                          >
+                            <td className="session-table-cell session-table-cell--expand">
+                              <Button
+                                type="button"
+                                className="button-secondary icon-button overview-icon-action session-expand-button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleExpanded();
+                                }}
+                                title={expanded ? "Hide session details" : "Show session details"}
+                                aria-label={`${expanded ? "Hide" : "Show"} details for session ${stats.transactionId}`}
+                              >
+                                {expanded ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+                              </Button>
+                            </td>
+                            <td>
+                              <div className="session-table-primary">
+                                <strong>Transaction {stats.transactionId}</strong>
+                              </div>
+                            </td>
+                            <td className="mono">{stats.idTag ?? "None"}</td>
+                            <td>{stats.connectorId}</td>
+                            <td>
+                              <div className="session-table-primary">
+                                <strong>{formatDuration(stats.elapsedSeconds)} ago</strong>
+                              </div>
+                            </td>
+                            <td>{formatEnergyWh(stats.energyUsedWh)}</td>
+                            <td>{formatPowerW(stats.latestPowerW)}</td>
+                            <td>
+                              <div className="session-table-primary">
+                                <strong>{stats.latestSampleAt === null ? "Pending" : formatDateTime(stats.latestSampleAt)}</strong>
+                                {stats.latestSampleAt === null ? <span>Awaiting sample</span> : null}
+                              </div>
+                            </td>
+                            <td className="session-table-cell session-table-cell--actions" onClick={(event) => event.stopPropagation()}>
+                              <Button type="button" className="button-secondary icon-button overview-icon-action" onClick={onOpenSessions} title="Open session" aria-label={`Open session ${stats.transactionId}`}>
+                                <ArrowRight aria-hidden="true" />
+                              </Button>
+                            </td>
+                          </tr>
+                          {expanded ? (
+                            <tr className="session-detail-table-row">
+                              <td colSpan={9}>
+                                <div className="session-detail-row">
+                                  <div className="session-detail-grid">
+                                    <span className="session-detail-item">
+                                      <span>Start meter</span>
+                                      <strong>{formatEnergyWh(stats.startMeterWh)}</strong>
+                                    </span>
+                                    <span className="session-detail-item">
+                                      <span>Current</span>
+                                      <strong>{formatDecimalUnit(stats.latestCurrentA ?? null, "A")}</strong>
+                                    </span>
+                                    <span className="session-detail-item">
+                                      <span>Voltage</span>
+                                      <strong>{formatDecimalUnit(stats.latestVoltageV ?? null, "V")}</strong>
+                                    </span>
+                                    <span className="session-detail-item">
+                                      <span>Temperature</span>
+                                      <strong>{formatDecimalUnit(stats.latestTemperatureC ?? null, "C")}</strong>
+                                    </span>
+                                    <span className="session-detail-item">
+                                      <span>Phase current</span>
+                                      <strong>{stats.latestCurrentPhasesA ? formatPhaseValues(stats.latestCurrentPhasesA, "A") : "-"}</strong>
+                                    </span>
+                                    <span className="session-detail-item">
+                                      <span>Sample match</span>
+                                      <strong>{formatSampleAssociation(stats.sampleAssociation)}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <p className="status-copy">Start a charging session to see live meter values from OCPP MeterValues.</p>
@@ -165,37 +201,54 @@ export function DashboardView({
         ) : proxyTargetHealth.length === 0 ? (
           <p className="dashboard-empty-state">No proxy targets configured for this charger.</p>
         ) : (
-          <div className="proxy-health-list">
-            {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
-              <article className="proxy-health-list-item dashboard-item" key={health.proxyTargetId}>
-                <div className="dashboard-item__header">
-                  <div className="dashboard-item__identity">
-                    <h3>{health.name}</h3>
-                    <p className="status-copy">{buildProxyHealthDetail(health)}</p>
-                  </div>
-                  <div className="proxy-health-actions dashboard-item__actions">
-                    <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
-                      {formatProxyHealthState(health.state)}
-                    </span>
-                    <Button
-                      type="button"
-                      className="button-secondary icon-button overview-icon-action"
-                      onClick={() => onOpenCommunication({ proxyTargetId: health.proxyTargetId })}
-                      title="Show proxy communication"
-                      aria-label={`Show communication for ${health.name}`}
-                    >
-                      <MessageSquareText aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="dashboard-item__badges proxy-health-badges">
-                  <div>
-                    <span>Upstream</span>
-                    <strong className="mono">{connectionUrl || health.upstreamIdentity || "No upstream identity"}</strong>
-                  </div>
-                </div>
-              </article>
-            ))}
+          <div className="sessions-table-wrap charger-dashboard-table-wrap">
+            <table className="sessions-table proxy-health-table">
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th>State</th>
+                  <th>Detail</th>
+                  <th>Upstream</th>
+                  <th>Last success</th>
+                  <th className="sessions-table__actions-heading" aria-label="Actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {proxyTargetHealth.map(({ target, health, connectionUrl }) => (
+                  <tr key={health.proxyTargetId}>
+                    <td>
+                      <div className="session-table-primary">
+                        <strong>{health.name}</strong>
+                        <span className="mono">{health.proxyTargetId}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`pill ${proxyHealthTone(health.state)}`} title={target ? undefined : "Target configuration is not loaded."}>
+                        {formatProxyHealthState(health.state)}
+                      </span>
+                    </td>
+                    <td>{buildProxyHealthDetail(health)}</td>
+                    <td>
+                      <span className="charger-dashboard-table-truncate mono" title={connectionUrl || health.upstreamIdentity || undefined}>
+                        {connectionUrl || health.upstreamIdentity || "No upstream identity"}
+                      </span>
+                    </td>
+                    <td>{formatDateTime(health.lastSuccessAt ?? health.lastConnectedAt ?? null)}</td>
+                    <td className="session-table-cell session-table-cell--actions">
+                      <Button
+                        type="button"
+                        className="button-secondary icon-button overview-icon-action"
+                        onClick={() => onOpenCommunication({ proxyTargetId: health.proxyTargetId })}
+                        title="Show proxy communication"
+                        aria-label={`Show communication for ${health.name}`}
+                      >
+                        <MessageSquareText aria-hidden="true" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

@@ -93,7 +93,7 @@ export function AppChrome({
   onThemeToggle
 }: AppChromeProps) {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-  const mobileMoreActive = mobileMoreNavItems.some((item) => item.view === activeView);
+  const mobileMoreActive = mobileMoreNavItems.some((item) => item.view === activeView || (item.view === "Settings" && activeView === "Access tokens"));
   const displayVersion = getDisplayVersion(appVersion);
 
   useEffect(() => {
@@ -172,7 +172,7 @@ export function AppChrome({
           <nav className="sidebar-nav sidebar-nav-global" aria-label="Global and admin pages">
             {globalNavItems.map((item) => {
               const Icon = item.icon;
-              const isActive = item.view === activeView;
+              const isActive = item.view === activeView || (item.view === "Settings" && activeView === "Access tokens");
 
               return (
                 <button
@@ -222,7 +222,7 @@ export function AppChrome({
 
       <section className="content">
         <header className="topbar">
-          <h1>{activeView === "Home" ? "Global dashboard" : activeView}</h1>
+          <h1>{activeView === "Home" ? "Global dashboard" : activeView === "Access tokens" ? "Settings" : activeView}</h1>
           <div className="topbar-actions">
             <span className={`live-indicator live-indicator-${liveStatus}`} title="Operator live update channel">
               {liveStatus === "live" ? "Live" : liveStatus === "stale" ? "Stale" : "Connecting"}
@@ -250,7 +250,7 @@ export function AppChrome({
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
         {mobilePrimaryNavItems.map((item) => {
           const Icon = item.icon;
-          const isActive = item.view === activeView;
+          const isActive = item.view === activeView || (item.view === "Settings" && activeView === "Access tokens");
 
           return (
             <button
@@ -290,7 +290,7 @@ export function AppChrome({
             <div className="mobile-more-menu__grid">
               {mobileMoreNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = item.view === activeView;
+                const isActive = item.view === activeView || (item.view === "Settings" && activeView === "Access tokens");
 
                 return (
                   <button

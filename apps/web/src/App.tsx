@@ -13,7 +13,6 @@ import {
 } from "./api/charger-commands";
 import { AppChrome } from "./components/AppChrome";
 import { AuthPage } from "./components/AuthPage";
-import { AccessTokensView } from "./components/AccessTokensView";
 import { ChargerOnboardingModal } from "./components/ChargerOnboardingModal";
 import { CommunicationPurgeModal } from "./components/CommunicationPurgeModal";
 import { CommunicationView } from "./components/CommunicationView";
@@ -24,7 +23,7 @@ import { GlobalDashboardView } from "./components/GlobalDashboardView";
 import { ProxyStopRecoveryModal } from "./components/ProxyStopRecoveryModal";
 import { ProxyTargetsView } from "./components/ProxyTargetsView";
 import { RemoteStopConfirmModal } from "./components/RemoteStopConfirmModal";
-import { SettingsView } from "./components/SettingsView";
+import { SettingsView, type SettingsTab } from "./components/SettingsView";
 import { TagAccessView } from "./components/TagAccessView";
 import { ChargerDeleteModal } from "./components/ChargerDeleteModal";
 import { ChargerLabelModal } from "./components/ChargerLabelModal";
@@ -142,6 +141,7 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>(() => getViewFromPath());
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>(() => (getViewFromPath() === "Access tokens" ? "tokens" : "general"));
   const [tags, setTags] = useState<Tag[]>([]);
   const [proxyTargets, setProxyTargets] = useState<ProxyTarget[]>([]);
   const [chargers, setChargers] = useState<ChargerRegistryRow[]>([]);
@@ -337,6 +337,7 @@ export default function App() {
     function handlePopState() {
       const nextView = getViewFromPath();
       setActiveView(nextView);
+      setSettingsTab(nextView === "Access tokens" ? "tokens" : "general");
       setSelectedChargerId(getSearchParam("chargerId"));
       if (nextView === "Communication") {
         setCommunicationFilters(getCommunicationFiltersFromSearch());
@@ -454,7 +455,9 @@ export default function App() {
     const response = await fetch("/api/auth/session", { credentials: "include" });
     if (!response.ok) return;
     setAuthenticated(true);
-    setActiveView(getViewFromPath());
+    const nextView = getViewFromPath();
+    setActiveView(nextView);
+    setSettingsTab(nextView === "Access tokens" ? "tokens" : "general");
     setMessage("");
     await loadAdminData(selectedChargerId);
   }
@@ -462,6 +465,8 @@ export default function App() {
   function navigateToView(view: ActiveView) {
     if (view === activeView) return;
     setActiveView(view);
+    if (view === "Settings") setSettingsTab("general");
+    if (view === "Access tokens") setSettingsTab("tokens");
     setTagModalOpen(false);
     setProxyTargetModalOpen(false);
     setChargerWizardOpen(false);
@@ -473,6 +478,15 @@ export default function App() {
     setChargerDeleteAdminPassword("");
     setChargerDeleteConfirmation("");
     window.history.pushState({}, "", buildViewUrl(view, selectedChargerId));
+  }
+
+  function changeSettingsTab(tab: SettingsTab) {
+    setSettingsTab(tab);
+    const nextView: ActiveView = tab === "tokens" ? "Access tokens" : "Settings";
+    if (nextView !== activeView) {
+      setActiveView(nextView);
+      window.history.pushState({}, "", buildViewUrl(nextView, selectedChargerId));
+    }
   }
 
   function selectChargerContext(chargerId: string) {
@@ -2349,10 +2363,11 @@ export default function App() {
             onEditLabel={(charger) => void startChargerLabelEdit(charger)}
             onRefresh={() => void loadChargers()}
           />
-        ) : activeView === "Settings" ? (
+        ) : activeView === "Settings" || activeView === "Access tokens" ? (
           <SettingsView
+            activeTab={settingsTab}
             busy={busy}
-            apiTokenCount={apiTokens.length}
+            apiTokens={apiTokens}
             apiTokensStatus={apiTokensStatus}
             communicationSettings={communicationSettings}
             communicationSettingsStatus={communicationSettingsStatus}
@@ -2360,24 +2375,17 @@ export default function App() {
             onboardingSettingsStatus={onboardingSettingsStatus}
             timeFormat={timeFormat}
             onCommunicationRetentionChange={(value) => void updateCommunicationRetentionHours(value)}
-            onNavigate={navigateToView}
-            onPurgeExpiredCommunication={() => void purgeExpiredCommunicationJournalFromSettings()}
-            onRefreshCommunicationSettings={() => void loadCommunicationSettings()}
-            onRefreshOnboarding={() => void loadOnboardingSettings()}
-            onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
-            onTimeFormatChange={updateTimeFormat}
-          />
-        ) : activeView === "Access tokens" ? (
-          <AccessTokensView
-            apiTokens={apiTokens}
-            apiTokensStatus={apiTokensStatus}
-            busy={busy}
-            onBackToSettings={() => navigateToView("Settings")}
             onCopyToken={(value) => void copyApiToken(value)}
             onCreateToken={(input) => createApiToken(input)}
-            onRefresh={() => void loadApiTokens()}
-            onRevoke={(tokenId) => void revokeApiToken(tokenId)}
-            onRotate={(tokenId) => rotateApiToken(tokenId)}
+            onPurgeExpiredCommunication={() => void purgeExpiredCommunicationJournalFromSettings()}
+            onRefreshCommunicationSettings={() => void loadCommunicationSettings()}
+            onRefreshTokens={() => void loadApiTokens()}
+            onRefreshOnboarding={() => void loadOnboardingSettings()}
+            onRevokeToken={(tokenId) => void revokeApiToken(tokenId)}
+            onRotateToken={(tokenId) => rotateApiToken(tokenId)}
+            onRunOnboarding={() => void openChargerWizard("manual-onboarding")}
+            onTabChange={changeSettingsTab}
+            onTimeFormatChange={updateTimeFormat}
           />
         ) : activeView === "Sessions" ? (
           <SessionsView

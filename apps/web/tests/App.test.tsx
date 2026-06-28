@@ -224,6 +224,41 @@ describe("App", () => {
     expect(screen.queryByRole("heading", { name: "Proxy targets" })).not.toBeInTheDocument();
   });
 
+  it("submits login when pressing enter in the password field", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url === "/api/auth/session") {
+        return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+      }
+
+      if (url === "/api/auth/login" && method === "POST") {
+        return new Response(JSON.stringify({ authenticated: true }), { status: 200 });
+      }
+
+      return emptyVisibilityResponses(url, method, init);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "admin" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct-password" } });
+    fireEvent.keyDown(screen.getByLabelText("Password"), { key: "Enter", code: "Enter" });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/auth/login",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ username: "admin", password: "correct-password" })
+        })
+      );
+    });
+  });
+
   it("shows the home dashboard with charger connection guidance after authentication", async () => {
     window.history.replaceState({}, "", "/?chargerId=SMART-EVSE-1");
 
@@ -452,7 +487,6 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Global dashboard" })).toBeInTheDocument();
     expect(screen.getByText(/Live|Connecting|Stale/, { selector: ".live-indicator" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Fleet status" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Runtime status" })).toBeInTheDocument();
     const sidebar = within(screen.getByRole("complementary", { name: "Main navigation" }));
     expect(within(sidebar.getByRole("navigation", { name: "Charger-scoped pages" })).getByRole("button", { name: "Dashboard" })).toBeInTheDocument();
@@ -491,14 +525,15 @@ describe("App", () => {
     expect(screen.queryByText("Chargers connected now")).not.toBeInTheDocument();
     expect(screen.queryByText("Recent registry rows")).not.toBeInTheDocument();
     expect(screen.queryByText("Enabled tags")).not.toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Transaction 42" })).toBeInTheDocument();
+    expect(await screen.findByText("Transaction 42")).toBeInTheDocument();
     expect(screen.getByText("1.65 kWh")).toBeInTheDocument();
     expect(screen.getByText("7.2 kW")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
     expect(screen.getByText("31.3 A")).toBeInTheDocument();
     expect(screen.getByText("230 V")).toBeInTheDocument();
     expect(screen.getByText("42 C")).toBeInTheDocument();
     expect(screen.getByText("L1 31.3 A / L2 0 A / L3 0 A")).toBeInTheDocument();
-    expect(screen.getByText(/connector\/time matched/)).toBeInTheDocument();
+    expect(screen.getByText("connector/time matched", { selector: ".session-detail-item strong" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Upstream targets" })).toBeInTheDocument();
     expect(screen.getByText("Tap Electric")).toBeInTheDocument();
     expect(screen.getAllByText("Connected").length).toBeGreaterThan(0);
@@ -827,16 +862,16 @@ describe("App", () => {
 
     expect(await screen.findByRole("heading", { name: "Charger dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Charging" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Transaction 42" })).toBeInTheDocument();
-    expect(screen.getByText("Connector 1")).toBeInTheDocument();
-    expect(screen.getByText(/Started .* ago/i)).toBeInTheDocument();
-    expect(screen.getByText("Tag")).toBeInTheDocument();
+    expect(screen.getByText("Transaction 42")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Connector" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Started" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Tag" })).toBeInTheDocument();
     expect(screen.getByText("TAG-1")).toBeInTheDocument();
-    expect(screen.getByText("Start meter")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for session 42" }));
+    expect(screen.getByText("Start meter", { selector: ".session-detail-item span" })).toBeInTheDocument();
     expect(screen.getByText("1.00 kWh")).toBeInTheDocument();
-    expect(screen.getByText("MeterValues")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "MeterValues" })).toBeInTheDocument();
     expect(screen.getByText("Pending")).toBeInTheDocument();
-    expect(screen.getByText("Charging", { selector: ".charging-state-badge" })).toBeInTheDocument();
     fireEvent.click(sidebar.getByRole("button", { name: "Diagnostics" }));
     await waitFor(() => expect(screen.getAllByRole("heading", { name: "Diagnostics", level: 1 }).length).toBeGreaterThan(0));
     expect(screen.getByText("1.50 kWh gap")).toBeInTheDocument();
@@ -1552,14 +1587,19 @@ describe("App", () => {
     fireEvent.click(sidebar.getByRole("button", { name: "Settings" }));
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByText("Completed", { selector: ".pill" })).toBeInTheDocument();
-    expect(screen.getAllByText("Connected", { selector: "dd" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("tab", { name: "General" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("radio", { name: "24 hour" })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("radio", { name: "12 hour" }));
     expect(screen.getByRole("radio", { name: "12 hour" })).toHaveAttribute("aria-checked", "true");
     expect(window.localStorage.getItem("virtual-ocpp-time-format")).toBe("12h");
-    expect(screen.getByRole("heading", { name: "Tokens" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Manage tokens" }));
+
+    fireEvent.click(screen.getByRole("tab", { name: "Onboarding" }));
+    expect(screen.getByRole("tab", { name: "Onboarding" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Completed", { selector: ".pill" })).toBeInTheDocument();
+    expect(screen.getAllByText("Connected", { selector: "dd" }).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Tokens" }));
+    expect(screen.getByRole("tab", { name: "Tokens" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("heading", { level: 2, name: "Access tokens" })).toBeInTheDocument();
     expect(screen.getByText("Existing diagnostics")).toBeInTheDocument();
     expect(screen.queryByText("token-existing")).not.toBeInTheDocument();
@@ -1592,7 +1632,7 @@ describe("App", () => {
       expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/access-tokens/token-created/revoke" && init?.method === "POST")).toBe(true);
     });
     await waitFor(() => expect(screen.queryByText("Codex diagnostics")).not.toBeInTheDocument());
-    fireEvent.click(screen.getAllByRole("button", { name: "Settings" }).at(-1)!);
+    fireEvent.click(screen.getByRole("tab", { name: "Journal" }));
     expect(screen.getByLabelText("Retention hours")).toHaveValue(24);
     expect(screen.getByText("Rows")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -1608,6 +1648,7 @@ describe("App", () => {
       expect(fetchMock.mock.calls.some(([input, init]) => String(input) === "/api/communication-journal/purge" && init?.method === "POST" && String(init.body).includes("retention"))).toBe(true);
     });
 
+    fireEvent.click(screen.getByRole("tab", { name: "Onboarding" }));
     fireEvent.click(screen.getByRole("button", { name: "Run onboarding" }));
 
     const wizard = await screen.findByRole("dialog", { name: "Add charger" });
