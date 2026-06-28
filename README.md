@@ -4,6 +4,13 @@ Virtual OCPP is a self-hosted OCPP service for connecting a Smart EVSE charger t
 
 This repository currently includes the project foundation, the first OCPP 1.6j local-primary server slice, global tag management with explicit per-charger access, charger-scoped proxy target management, per-proxy tag mapping, persistent outbound OCPP mirroring, charger connectivity warnings, live charging state that stays in `Charging` while waiting for the first `MeterValues`, SmartEVSE offline replay recovery for `StopTransaction` `transactionId = -1`, the OCPP charger simulator, protected global and charger-scoped dashboards, protected operator visibility pages with stale-session audit checks, runtime proxy health, a redacted communication journal for protocol troubleshooting, and a production Docker image.
 
+## Screenshots
+
+![Charger Dashboard](docs/images/charger-dashboard.png)
+![Charger Sessions](docs/images/charger-sessions.png)
+![Charger Proxy Targets](docs/images/charger-proxy-targets.png)
+![Charger Tags](docs/images/charger-tags.png)
+
 ## Stack
 
 - Backend: Node.js, TypeScript, Fastify

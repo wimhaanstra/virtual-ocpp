@@ -17,6 +17,7 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace=@virtual-ocpp/server",
+    "seed:demo": "npm run seed:demo --workspace=@virtual-ocpp/server --",
     "seed:sessions": "npm run seed:sessions --workspace=@virtual-ocpp/server --",
     "release:version": "node scripts/set-release-version.mjs",
     "docker:build": "npm run release:version && node scripts/docker-image.mjs build",

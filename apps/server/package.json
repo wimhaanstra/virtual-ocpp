@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "simulator": "node --import tsx scripts/simulator.ts",
+    "seed:demo": "node --import tsx scripts/seed-demo-data.ts",
     "seed:sessions": "node --import tsx scripts/seed-sessions.ts",
     "test": "vitest run --config vitest.config.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
