@@ -1,6 +1,6 @@
 {
   "name": "virtual-ocpp",
-  "version": "0.1.0-20260626",
+  "version": "0.1.0-20260628",
   "private": true,
   "type": "module",
   "workspaces": [
